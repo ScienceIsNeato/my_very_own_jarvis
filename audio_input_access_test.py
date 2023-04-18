@@ -1,4 +1,3 @@
-import os
 import sys
 import argparse
 import speech_recognition as sr
@@ -24,6 +23,7 @@ def test_audio_input(listen_dur_secs, device_index):
         print("Sample rate:", source.SAMPLE_RATE)
         print("Will listen for", listen_dur_secs, "seconds...")
         print("Channels:", channels)
+        print("Go!")
 
         audio = recognizer.listen(source, timeout=listen_dur_secs)
         print("Finished listening.")
@@ -46,7 +46,9 @@ def test_audio_input(listen_dur_secs, device_index):
         # Convert the WAV file to an MP3 file
         subprocess.call(['ffmpeg', '-i', 'recorded_audio.wav', '-acodec', 'libmp3lame', '-ab', '128k', 'recorded_audio.mp3'])
 
-        print("To playback the audio, run: vlc recorded_audio.mp3")
+        print("Playing recorded audio...")
+        # Play the recorded audio using ffplay
+        subprocess.call(['ffplay', '-nodisp', '-autoexit', 'recorded_audio.mp3'])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
