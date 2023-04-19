@@ -54,6 +54,9 @@ def sendQueryToServer(prompt, persona=None):
 
     message = response.choices[0].text.strip()
 
+    # Print the response to the terminal with the preface
+    print(f"chatGPT said: {message}")
+
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     with open(f"/tmp/chatgpt_output_{timestamp}.txt", "w") as file:
         file.write(message)
