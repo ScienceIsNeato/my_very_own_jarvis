@@ -4,11 +4,22 @@ import speech_recognition as sr
 import wave
 import pyaudio
 import subprocess
+import pytest
 
+@pytest.fixture
+def listen_dur_secs():
+    return 5
+
+@pytest.fixture
+def device_index():
+    return 0
+
+@pytest.mark.skip
 def test_audio_input(listen_dur_secs, device_index):
     print("Testing audio input access...")
     print("Using SpeechRecognition version: ", sr.__version__)
     print("Using PyAudio version: ", pyaudio.__version__)
+    print("Note - This test will fail if you don't talk into the microphone! Testing audio input access...")
 
     recognizer = sr.Recognizer()
 
@@ -44,7 +55,7 @@ def test_audio_input(listen_dur_secs, device_index):
         print("Audio saved to recorded_audio.wav")
 
         # Convert the WAV file to an MP3 file
-        subprocess.call(['ffmpeg', '-i', 'recorded_audio.wav', '-acodec', 'libmp3lame', '-ab', '128k', 'recorded_audio.mp3'])
+        subprocess.run(['ffmpeg', '-y', '-i', 'recorded_audio.wav', 'recorded_audio.mp3'])
 
         print("Playing recorded audio...")
         # Play the recorded audio using ffplay
