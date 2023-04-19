@@ -7,11 +7,18 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Jarvis - AI Assistant")
     parser.add_argument("-l", "--listen_dur_secs", type=int, default=5, help="Duration in seconds to listen for user input")
     parser.add_argument("-d", "--device_index", type=int, default=0, help="Index of the input device to use.")
+    parser.add_argument("-p", "--persona", type=str, default=None, help="Persona string for guiding the AI's behavior")
     return parser.parse_args()
+
 
 def main():
     global args
     args = parse_args()
+
+    if args.persona:
+        persona = args.persona
+    else:
+        persona = None
 
     print("Starting session with Jarvis. To stop, simply say \"Goodbye\"")
 
@@ -27,7 +34,7 @@ def main():
             playSpeechResponse(error_code, file_path)
             break
         else:
-            response = sendQueryToServer(prompt)
+            response = sendQueryToServer(prompt, persona)
             error_code, file_path = convertTextResponseToSpeech(response)
             playSpeechResponse(error_code, file_path)
 

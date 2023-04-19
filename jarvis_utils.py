@@ -38,39 +38,27 @@ def getDictatedInput(listen_dur_secs, device_index):
 
 
 
-def sendQueryToServer(prompt):
-    # Load the OpenAI API key from the environment variable
-    api_key = os.environ.get("OPENAI_API_KEY")
+def sendQueryToServer(prompt, persona=None):
+    # Prepend the persona to the prompt if it is provided
+    if persona:
+        prompt = f"Caller is providing the following persona: {persona}. As that persona, will you answer the following questions? {prompt}"
 
-    # Check if the API key is not loaded
-    if not api_key:
-        return "Error: OPENAI_API_KEY environment variable not found."
+    response = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=prompt,
+        max_tokens=100,
+        n=1,
+        stop=None,
+        temperature=0.5,
+    )
 
-    # Set the API key for OpenAI
-    openai.api_key = api_key
+    message = response.choices[0].text.strip()
 
-    try:
-        response = openai.Completion.create(
-            model="text-davinci-003",
-            prompt=prompt,
-            max_tokens=100,
-            n=1,
-            stop=None,
-            temperature=0.5,
-        )
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    with open(f"/tmp/chatgpt_output_{timestamp}.txt", "w") as file:
+        file.write(message)
 
-        message = response.choices[0].text.strip()
-
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        with open(f"/tmp/chatgpt_output_{timestamp}.txt", "w") as file:
-            file.write(message)
-
-        # Print the ChatGPT response to the terminal
-        print(f"ChatGPT response: {message}")
-
-        return message
-    except Exception as e:
-        return f"Error: {e}"
+    return message
     
 def convertTextResponseToSpeech(text):
     try:
