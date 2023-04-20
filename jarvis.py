@@ -19,7 +19,7 @@ def main():
         if prompt is None:
             continue
 
-        if prompt.strip().lower() == "goodbye":
+        if "goodbye" in prompt.strip().lower():
             response = "Ok, see you later!"
             error_code, file_path = tts.convert_text_to_speech(response)
             tts.play_speech_response(error_code, file_path)
