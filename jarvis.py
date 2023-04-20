@@ -1,14 +1,5 @@
-import argparse
-from jarvis_utils import getDictatedInput, sendQueryToServer, convertTextResponseToSpeech, playSpeechResponse
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Jarvis - AI Assistant")
-    parser.add_argument("-l", "--listen_dur_secs", type=int, default=5, help="Duration in seconds to listen for user input")
-    parser.add_argument("-d", "--device_index", type=int, default=0, help="Index of the input device to use.")
-    parser.add_argument("-p", "--persona", type=str, default=None, help="Persona string for guiding the AI's behavior")
-    return parser.parse_args()
-
+from jarvis_utils import getDictatedInput, sendQueryToServer
+from parse_inputs import parse_args, parse_tts_interface
 
 def main():
     global args
@@ -19,6 +10,8 @@ def main():
     else:
         persona = None
 
+    tts = parse_tts_interface(args.tts_interface)
+
     print("Starting session with Jarvis. To stop, simply say \"Goodbye\"")
 
     while True:
@@ -26,20 +19,17 @@ def main():
         if prompt is None:
             continue
 
-        # Check if the prompt contains the case-insensitive word "Goodbye" and has only one word
         if prompt.strip().lower() == "goodbye":
             response = "Ok, see you later!"
-            error_code, file_path = convertTextResponseToSpeech(response)
-            playSpeechResponse(error_code, file_path)
+            error_code, file_path = tts.convert_text_to_speech(response)
+            tts.play_speech_response(error_code, file_path)
             break
         else:
             response = sendQueryToServer(prompt, persona)
-            error_code, file_path = convertTextResponseToSpeech(response)
-            playSpeechResponse(error_code, file_path)
+            error_code, file_path = tts.convert_text_to_speech(response)
+            tts.play_speech_response(error_code, file_path)
 
-    # Print a fun exit message
     print("Thanks for chatting! Have a great day!")
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

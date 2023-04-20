@@ -5,9 +5,13 @@
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "cSpell.words": [
+        "Alexa",
         "chatgpt",
+        "davinci",
         "gtts",
         "openai",
-        "pydub"
+        "pydub",
+        "pyttsx",
+        "Siri"
     ]
 }
