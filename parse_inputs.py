@@ -16,7 +16,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Jarvis - AI Assistant")
     parser.add_argument("-l", "--listen_dur_secs", type=int, default=5, help="Duration in seconds to listen for user input")
     parser.add_argument("-d", "--device_index", type=int, default=0, help="Index of the input device to use.")
-    parser.add_argument("-p", "--persona", type=str, default=None, help="Persona string for guiding the AI's behavior")
+    parser.add_argument("-p", "--pre_prompt", type=str, default=None, help="Any context you want for the session (should take form of a prompt)")
     parser.add_argument(
         "-t",
         "--tts_interface",

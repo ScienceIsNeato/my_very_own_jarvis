@@ -5,10 +5,10 @@ def main():
     global args
     args = parse_args()
 
-    if args.persona:
-        persona = args.persona
+    if args.pre_prompt:
+        pre_prompt = args.pre_prompt
     else:
-        persona = None
+        pre_prompt = None
 
     tts = parse_tts_interface(args.tts_interface)
 
@@ -25,7 +25,7 @@ def main():
             tts.play_speech_response(error_code, file_path)
             break
         else:
-            response = sendQueryToServer(prompt, persona)
+            response = sendQueryToServer(prompt, pre_prompt)
             error_code, file_path = tts.convert_text_to_speech(response)
             tts.play_speech_response(error_code, file_path)
 

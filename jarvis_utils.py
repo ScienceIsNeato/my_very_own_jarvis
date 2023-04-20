@@ -34,10 +34,10 @@ def getDictatedInput(listen_dur_secs, device_index):
 
 
 
-def sendQueryToServer(prompt, persona=None):
-    # Prepend the persona to the prompt if it is provided
-    if persona:
-        prompt = f"You are to assume the following persona: {persona}. As that persona, will you answer the following question? {prompt}"
+def sendQueryToServer(prompt, pre_prompt=None):
+    # Prepend the pre-prompt to the prompt if it is provided
+    if pre_prompt:
+        prompt = f"Pre-Prompt: {pre_prompt}. Prompt: {prompt}"
 
     response = openai.Completion.create(
         engine="text-davinci-003",
