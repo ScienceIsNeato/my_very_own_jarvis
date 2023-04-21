@@ -12,6 +12,7 @@
         "openai",
         "pydub",
         "pyttsx",
+        "simpleaudio",
         "Siri"
     ]
 }

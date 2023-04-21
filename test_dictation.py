@@ -1,15 +1,12 @@
-from dictation import getDictatedInput
+import asyncio
+from new_script import main as new_main
 
-def main():
-    listen_duration = 5  # Adjust the listening duration in seconds as needed
-    device_index = 0  # Adjust the device index as needed
-    
-    result = getDictatedInput(listen_duration, device_index)
-
-    if result is None:
+async def test_main():
+    try:
+        await asyncio.to_thread(new_main)
         print("Test succeeded.")
-    else:
-        print(f"Test failed with an unexpected error: {result}")
+    except Exception as e:
+        print(f"Test failed with an unexpected error: {e}")
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(test_main())

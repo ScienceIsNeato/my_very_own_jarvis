@@ -27,9 +27,6 @@ dictation_result = ""
 listen_dur_secs = 400
 device_index = 3 # My External USB mic. Use the script in tools to find yours. 
 
-recognizer = sr.Recognizer()
-source = sr.Microphone(device_index=device_index)
-
 URL = "wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000"
 
 logging.basicConfig(level=logging.INFO)
@@ -82,8 +79,15 @@ def done_speaking(current_line):
 
 
 
-async def send_receive():
+async def send_receive(listen_dur_secs, device_index):
+    global is_done
     print(f'Connecting websocket to url {URL}')
+
+    # Put the recognizer and source creation inside the send_receive function
+    recognizer = sr.Recognizer()
+    source = sr.Microphone(device_index=device_index)
+
+
     async with websockets.connect(
         URL,
         extra_headers=(("Authorization", "9d9f9ecf616446fe8b39a23cd18b2cef"),),
@@ -95,12 +99,12 @@ async def send_receive():
         print(session_begins)
 
         async def send():
-            with source as s:
+            is_done = False
+            with sr.Microphone(device_index=device_index) as s:
                 recognizer.adjust_for_ambient_noise(s, duration=1)
                 logging.info("Start Talking!")
-                start_time = time.time()
 
-                while True:
+                while not is_done:
                     try:
                         audio = recognizer.record(s, duration=0.2)
                         data = callback(recognizer, audio)
@@ -115,13 +119,14 @@ async def send_receive():
                             print("Error in send:", e)
                         break
                     await asyncio.sleep(0.01)
-
-            return True
+            return is_done
 
         async def receive():
             global dictation_result
+            global initialized  # add this line
             dictation_result = []
             is_done = False
+            initialized = False  # add this line
 
             while not is_done:
                 try:
@@ -135,7 +140,6 @@ async def send_receive():
                         is_done = done_speaking(current_phrase)
                         if is_done:
                             logging.info("Finished listening.")
-                            await _ws.close()
                             break
                 except websockets.exceptions.ConnectionClosedError as e:
                     print(e)
@@ -151,15 +155,35 @@ async def send_receive():
                 print("\nDictation result: {}".format(list(final_phrases)))
             else:
                 print("\nNo phrases detected.")
-            return is_done
 
-        send_result, receive_result = await asyncio.gather(send(), receive(), return_exceptions=True)
+            return ' '.join(final_phrases)
+
+        send_task = asyncio.create_task(send())
+        receive_task = asyncio.create_task(receive())
+
+        done, pending = await asyncio.wait([send_task, receive_task], return_when=asyncio.FIRST_COMPLETED)
+        
+        for task in pending:
+            task.cancel()
+
+        if send_task in done:
+            send_result = send_task.result()
+        else:
+            send_result = None
+
+        if receive_task in done:
+            receive_result = receive_task.result()
+        else:
+            receive_result = None
 
         if isinstance(send_result, Exception):
             print("Error in send_result:", send_result)
 
         if isinstance(receive_result, Exception):
             print("Error in receive_result:", receive_result)
+
+        # Return the result from the receive() function
+        return receive_result
 
 def main():
     asyncio.run(send_receive())

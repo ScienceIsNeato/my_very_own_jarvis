@@ -1,8 +1,9 @@
-from dictation import getDictatedInput
+import asyncio
+from dictation import send_receive
 from jarvis_utils import sendQueryToServer
 from parse_inputs import parse_args, parse_tts_interface
 
-def main():
+async def main():
     global args
     args = parse_args()
 
@@ -16,7 +17,7 @@ def main():
     print("Starting session with Jarvis. To stop, simply say \"Goodbye\"")
 
     while True:
-        prompt = getDictatedInput(args.listen_dur_secs, args.device_index)
+        prompt = await send_receive(args.listen_dur_secs, args.device_index)
         if prompt is None:
             continue
 
@@ -33,4 +34,4 @@ def main():
     print("Thanks for chatting! Have a great day!")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
