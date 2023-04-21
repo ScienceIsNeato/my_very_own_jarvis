@@ -5,10 +5,11 @@ import json
 import time
 import speech_recognition as sr
 import logging
+import re
 
 FRAMES_PER_BUFFER = 3200
 RATE = 16000
-SILENCE_THRESHOLD = 0.75  # seconds
+SILENCE_THRESHOLD = 3.75  # seconds
 
 # globals
 last_call_time = time.time()
@@ -20,6 +21,8 @@ audio_detected = False
 initialized = False
 start_msg_printed = False
 first_audio_detected = False
+dictation_result = ""
+
 
 listen_dur_secs = 400
 device_index = None
@@ -41,6 +44,7 @@ def done_speaking(current_line):
     global last_line
     global duration_since_last_detected_change
     global initialized
+    global dictation_result
 
     done_speaking = False  # init
 
@@ -59,6 +63,7 @@ def done_speaking(current_line):
             # There has been a change in the input since the last call
             duration_since_last_detected_change = 0
             last_line = current_line
+            dictation_result.append(current_line)
         else:
             # New input! Reset duration_since_last_detected_change to 0
             duration_since_last_detected_change += current_time - last_call_time
@@ -114,7 +119,10 @@ async def send_receive():
             return True
 
         async def receive():
+            global dictation_result
+            dictation_result = []
             is_done = False
+
             while not is_done:
                 try:
                     result_str = await _ws.recv()
@@ -122,6 +130,7 @@ async def send_receive():
                         current_phrase = json.loads(result_str)['text']
                         if current_phrase:
                             print(current_phrase)
+
                         # Send the current phrase to the done_speaking method
                         is_done = done_speaking(current_phrase)
                         if is_done:
@@ -136,6 +145,12 @@ async def send_receive():
                     print("Error in receive:", e)
                     break
 
+            # Print the final set of complete phrases
+            if dictation_result:
+                final_phrases = {phrase for phrase in dictation_result if re.match(r'^[A-Z].*\.$', phrase)}
+                print("\nDictation result: {}".format(list(final_phrases)))
+            else:
+                print("\nNo phrases detected.")
             return is_done
 
         send_result, receive_result = await asyncio.gather(send(), receive(), return_exceptions=True)
