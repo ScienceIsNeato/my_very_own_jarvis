@@ -1,4 +1,5 @@
-from jarvis_utils import getDictatedInput, sendQueryToServer
+from dictation import getDictatedInput
+from jarvis_utils import sendQueryToServer
 from parse_inputs import parse_args, parse_tts_interface
 
 def main():

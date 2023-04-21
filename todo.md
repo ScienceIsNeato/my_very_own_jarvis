@@ -3,3 +3,6 @@
 - audio input for persona
 - audio prompt on startup unless skip flag provided
 - persistent sessions
+- fix the sped up audio recording
+- fix the readme
+- update requirements.txt
