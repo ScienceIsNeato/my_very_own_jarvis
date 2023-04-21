@@ -152,7 +152,7 @@ async def send_receive(listen_dur_secs, device_index):
             # Print the final set of complete phrases
             if dictation_result:
                 final_phrases = {phrase for phrase in dictation_result if re.match(r'^[A-Z].*\.$', phrase)}
-                print("\nDictation result: {}".format(list(final_phrases)))
+                #print("\nDictation result: {}".format(list(final_phrases)))
             else:
                 print("\nNo phrases detected.")
 
