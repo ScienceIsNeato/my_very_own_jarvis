@@ -25,7 +25,7 @@ dictation_result = ""
 
 
 listen_dur_secs = 400
-device_index = None
+device_index = 3 # My External USB mic. Use the script in tools to find yours. 
 
 recognizer = sr.Recognizer()
 source = sr.Microphone(device_index=device_index)
