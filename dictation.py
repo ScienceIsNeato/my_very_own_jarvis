@@ -18,6 +18,8 @@ duration_since_last_detected_change = 0.0
 silence_detected = False
 audio_detected = False
 initialized = False
+start_msg_printed = False
+first_audio_detected = False
 
 listen_dur_secs = 400
 device_index = None
@@ -37,60 +39,43 @@ def callback(recognizer, audio):
 def done_speaking(current_line):
     global last_call_time
     global last_line
-    global speech_started
     global duration_since_last_detected_change
-    global silence_detected
-    global audio_detected
     global initialized
 
+    done_speaking = False  # init
 
-    try:
-        # Record the current time
-        current_time = time.time()
+    # Record the current time
+    current_time = time.time()
 
-        if not initialized:
+    if not initialized:
+        if current_line != "":
             last_line = current_line
             last_call_time = current_time
             initialized = True
-
-        # If this is the first call with actual audio, set speech_started to true and last_call_time to the current time
-        if not speech_started and current_line:
-            speech_started = True
-            last_line = current_line
-            last_call_time = time.time()
-            logging.info("Initialized started speech detection...")
-
-        if not initialized or not speech_started:
-            # Either this is the first call or we haven't detected any audio yet
+            logging.info("Initialized and awaiting input...")
             return False
-
-        # Determine if the current input is identical to the previous input
-        if current_line == last_line:
-            # Increment duration_since_last_detected_change by the difference between the last call and this call
-            duration_since_last_detected_change += current_time - last_call_time
-            last_call_time = current_time
-        else:
-            # Reset duration_since_last_detected_change to 0
+    else:
+        if current_line != last_line:
+            # There has been a change in the input since the last call
             duration_since_last_detected_change = 0
-
-        # Determine if silence has been detected
-        if duration_since_last_detected_change >= SILENCE_THRESHOLD:
-            silence_detected = True
+            last_line = current_line
         else:
-            silence_detected = False
+            # New input! Reset duration_since_last_detected_change to 0
+            duration_since_last_detected_change += current_time - last_call_time
+
+        # Determine if done speaking
+        if (initialized and
+            current_line == "" and
+            duration_since_last_detected_change >= SILENCE_THRESHOLD):
+            done_speaking = True
 
         # Update the last_call_time and last_line global variables
         last_call_time = current_time
         last_line = current_line
 
-        if audio_detected:
-            logging.info(f"Time elapsed since last change: {current_time - last_call_time:.2f}")
+    return done_speaking
 
-        return silence_detected
 
-    except Exception as e:
-        logging.error(f"done_speaking error: {e}")
-        return False
 
 async def send_receive():
     print(f'Connecting websocket to url {URL}')
@@ -101,15 +86,13 @@ async def send_receive():
         ping_timeout=20
     ) as _ws:
         await asyncio.sleep(0.1)
-        print("Receiving SessionBegins ...")
         session_begins = await _ws.recv()
         print(session_begins)
-        print("Sending messages ...")
 
         async def send():
             with source as s:
                 recognizer.adjust_for_ambient_noise(s, duration=1)
-                print("Go!")
+                logging.info("Start Talking!")
                 start_time = time.time()
 
                 while True:
@@ -118,43 +101,50 @@ async def send_receive():
                         data = callback(recognizer, audio)
                         json_data = json.dumps({"audio_data": str(data)})
                         await _ws.send(json_data)
-
-                        if time.time() - start_time >= listen_dur_secs:
-                            print("Finished listening.")
-                            await _ws.close()
-                            break
                     except websockets.exceptions.ConnectionClosedError as e:
                         print(e)
                         assert e.code == 4008
                         break
                     except Exception as e:
-                        assert False, "Not a websocket 4008 error"
+                        if "(OK)" not in str(e):
+                            print("Error in send:", e)
+                        break
                     await asyncio.sleep(0.01)
 
             return True
 
         async def receive():
             is_done = False
-            while True:
+            while not is_done:
                 try:
                     result_str = await _ws.recv()
                     if result_str:
                         current_phrase = json.loads(result_str)['text']
                         if current_phrase:
                             print(current_phrase)
-                            # Send the current phrase to the done_speaking method
-                            is_done = done_speaking(current_phrase)
-
+                        # Send the current phrase to the done_speaking method
+                        is_done = done_speaking(current_phrase)
+                        if is_done:
+                            logging.info("Finished listening.")
+                            await _ws.close()
+                            break
                 except websockets.exceptions.ConnectionClosedError as e:
                     print(e)
                     assert e.code == 4008
                     break
                 except Exception as e:
-                    assert False, "Not a websocket 4008 error"
+                    print("Error in receive:", e)
+                    break
 
             return is_done
 
-        send_result, receive_result = await asyncio.gather(send(), receive())
+        send_result, receive_result = await asyncio.gather(send(), receive(), return_exceptions=True)
+
+        if isinstance(send_result, Exception):
+            print("Error in send_result:", send_result)
+
+        if isinstance(receive_result, Exception):
+            print("Error in receive_result:", receive_result)
 
 def main():
     asyncio.run(send_receive())
