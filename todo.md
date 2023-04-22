@@ -3,3 +3,4 @@
 - audio input for persona
 - audio prompt on startup unless skip flag provided
 - persistent sessions
+- deal with pylint issues. There's lots. 
