@@ -75,6 +75,18 @@ class LiveAssemblyAIDictation(Dictation):
     def callback(self, recognizer, audio):
         data = audio.get_raw_data(convert_rate=self.RATE, convert_width=2)
         return base64.b64encode(data).decode("utf-8")
+    
+    def speech_start_detected(self, current_line):
+        # True if the var is true
+        if self.speech_started:
+            return True
+        
+        # When var is false, up to us to decide!
+        if current_line:
+            # We have input
+            self.speech_started = True
+            print("Began detecting speech...")
+
 
     def done_speaking(self, current_line):
         global last_call_time
@@ -173,7 +185,12 @@ class LiveAssemblyAIDictation(Dictation):
                         if result_str:
                             current_phrase = json.loads(result_str)['text']
                             if current_phrase:
-                                print(current_phrase)
+                                # Check to see if we've started processing this input yet
+                                if not self.speech_started:
+                                    newly_started = self.speech_start_detected(current_phrase)
+                                
+                                if self.speech_started or newly_started:
+                                    print(current_phrase)
 
                             # Send the current phrase to the done_speaking method
                             is_done = self.done_speaking(current_phrase)
