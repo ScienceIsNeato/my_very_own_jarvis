@@ -6,12 +6,18 @@
     "python.testing.pytestEnabled": true,
     "cSpell.words": [
         "Alexa",
+        "assemblyai",
+        "autoexit",
         "chatgpt",
         "davinci",
+        "ffplay",
         "gtts",
+        "nodisp",
         "openai",
+        "pyaudio",
         "pydub",
         "pyttsx",
-        "Siri"
+        "Siri",
+        "websockets"
     ]
 }
