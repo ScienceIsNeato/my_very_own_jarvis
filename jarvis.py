@@ -1,4 +1,5 @@
-from jarvis_utils import getDictatedInput, sendQueryToServer
+from dictation import StaticGoogleDictation
+from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import parse_args, parse_tts_interface
 
 def main():
@@ -11,11 +12,13 @@ def main():
         pre_prompt = None
 
     tts = parse_tts_interface(args.tts_interface)
+    dictation = StaticGoogleDictation()
+    query_dispatcher = ChatGPTQueryDispatcher()
 
     print("Starting session with Jarvis. To stop, simply say \"Goodbye\"")
 
     while True:
-        prompt = getDictatedInput(args.listen_dur_secs, args.device_index)
+        prompt = dictation.getDictatedInput(args.listen_dur_secs, args.device_index)
         if prompt is None:
             continue
 
@@ -25,7 +28,7 @@ def main():
             tts.play_speech_response(error_code, file_path)
             break
         else:
-            response = sendQueryToServer(prompt, pre_prompt)
+            response = query_dispatcher.sendQuery(prompt, pre_prompt)
             error_code, file_path = tts.convert_text_to_speech(response)
             tts.play_speech_response(error_code, file_path)
 
