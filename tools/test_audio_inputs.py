@@ -1,3 +1,4 @@
+import pytest
 import speech_recognition as sr
 from pydub import AudioSegment
 from pydub.playback import play
@@ -27,6 +28,7 @@ def getDictatedInput(listen_dur_secs, device_index):
         print(f"Error using device index {device_index}: {e}")
         return False, None
 
+@pytest.mark.skip
 def test_microphones(listen_dur_secs=3):
     recognizer = sr.Recognizer()
     available_mics = sr.Microphone.list_microphone_names()

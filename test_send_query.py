@@ -1,11 +1,18 @@
-import pytest
-from jarvis_utils import sendQueryToServer
+from query_dispatch import ChatGPTQueryDispatcher
 
-def test_sendQueryToServer():
+def test_sendQuery():
+    expected_in_response = "Paris"
+    query_dispatcher = ChatGPTQueryDispatcher()
+
     test_prompt = "What is the capital of France?"
 
-    # Call the sendQueryToServer function without mocking
-    response = sendQueryToServer(test_prompt)
+    print("Query: ", test_prompt)
+
+    # Call the sendQuery function without mocking
+    response = query_dispatcher.sendQuery(test_prompt)
+
+    print("response: ", response)
+    print("expected_in_response: ", expected_in_response)
 
     # Assertions based on the expected response
-    assert "Paris" in response
+    assert expected_in_response in response

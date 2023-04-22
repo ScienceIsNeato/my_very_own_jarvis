@@ -1,5 +1,4 @@
 import argparse
-from jarvis_utils import getDictatedInput, sendQueryToServer
 from tts import TextToSpeech, GoogleTTS, NaturalReadersTTS
 
 def parse_tts_interface(tts_interface: str) -> TextToSpeech:
