@@ -18,7 +18,7 @@ async def main():
 
     while True:
         prompt = await send_receive(args.listen_dur_secs, args.device_index)
-        print("You said: ", prompt)
+        print("\nYou said: ", prompt)
         if prompt is None:
             continue
 

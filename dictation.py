@@ -4,7 +4,6 @@ import base64
 import json
 import time
 import speech_recognition as sr
-import logging
 import re
 
 FRAMES_PER_BUFFER = 3200
@@ -29,8 +28,6 @@ device_index = 3 # My External USB mic. Use the script in tools to find yours.
 
 URL = "wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000"
 
-logging.basicConfig(level=logging.INFO)
-
 def callback(recognizer, audio):
     data = audio.get_raw_data(convert_rate=RATE, convert_width=2)
     return base64.b64encode(data).decode("utf-8")
@@ -53,7 +50,7 @@ def done_speaking(current_line):
             last_line = current_line
             last_call_time = current_time
             initialized = True
-            logging.info("Initialized and awaiting input...")
+            print("Initialized and awaiting input...")
             return False
     else:
         if current_line != last_line:
@@ -81,7 +78,7 @@ def done_speaking(current_line):
 
 async def send_receive(listen_dur_secs, device_index):
     global is_done
-    print(f'Connecting websocket to url {URL}')
+    print("\nConnecting to live dictation service...")
 
     # Put the recognizer and source creation inside the send_receive function
     recognizer = sr.Recognizer()
@@ -96,13 +93,13 @@ async def send_receive(listen_dur_secs, device_index):
     ) as _ws:
         await asyncio.sleep(0.1)
         session_begins = await _ws.recv()
-        print(session_begins)
+        # print(session_begins)
 
         async def send():
             is_done = False
             with sr.Microphone(device_index=device_index) as s:
                 recognizer.adjust_for_ambient_noise(s, duration=1)
-                logging.info("Start Talking!")
+                print("Start Talking!")
 
                 while not is_done:
                     try:
@@ -139,7 +136,7 @@ async def send_receive(listen_dur_secs, device_index):
                         # Send the current phrase to the done_speaking method
                         is_done = done_speaking(current_phrase)
                         if is_done:
-                            logging.info("Finished listening.")
+                            print("Finished listening.")
                             break
                 except websockets.exceptions.ConnectionClosedError as e:
                     print(e)
