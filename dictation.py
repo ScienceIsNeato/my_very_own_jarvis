@@ -4,6 +4,7 @@ import websockets
 import asyncio
 import json
 import re
+import os
 import speech_recognition as sr
 from abc import ABC, abstractmethod
 
@@ -54,6 +55,7 @@ class StaticGoogleDictation(Dictation):
 class LiveAssemblyAIDictation(Dictation):
     FRAMES_PER_BUFFER = 3200
     RATE = 16000
+    ASSEMBLYAI_TOKEN = os.environ.get("ASSEMBLYAI_TOKEN")
 
     # TODO - make silence threshold configurable?
     SILENCE_THRESHOLD = 1.5  # seconds
@@ -70,18 +72,30 @@ class LiveAssemblyAIDictation(Dictation):
         self.initialized = False
         self.start_msg_printed = False
         self.first_audio_detected = False
-        self.dictation_result = ""
+        self.dictation_results = ""
 
     def callback(self, recognizer, audio):
         data = audio.get_raw_data(convert_rate=self.RATE, convert_width=2)
         return base64.b64encode(data).decode("utf-8")
+    
+    def speech_start_detected(self, current_line):
+        # True if the var is true
+        if self.speech_started:
+            return True
+        
+        # When var is false, up to us to decide!
+        if current_line:
+            # We have input
+            self.speech_started = True
+            print("Began detecting speech...")
+
 
     def done_speaking(self, current_line):
         global last_call_time
         global last_line
-        global duration_since_last_detected_change
         global initialized
-        global dictation_result
+        global dictation_results
+        global duration_since_last_detected_change
 
         done_speaking = False  # init
 
@@ -98,17 +112,17 @@ class LiveAssemblyAIDictation(Dictation):
         else:
             if current_line != last_line:
                 # There has been a change in the input since the last call
-                duration_since_last_detected_change = 0
+                self.duration_since_last_detected_change = 0
                 last_line = current_line
-                dictation_result.append(current_line)
+                dictation_results.append(current_line)
             else:
                 # New input! Reset duration_since_last_detected_change to 0
-                duration_since_last_detected_change += current_time - last_call_time
+                self.duration_since_last_detected_change += current_time - last_call_time
 
             # Determine if done speaking
             if (initialized and
                 current_line == "" and
-                duration_since_last_detected_change >= self.SILENCE_THRESHOLD):
+                self.duration_since_last_detected_change >= self.SILENCE_THRESHOLD):
                 done_speaking = True
 
             # Update the last_call_time and last_line global variables
@@ -128,7 +142,7 @@ class LiveAssemblyAIDictation(Dictation):
 
         async with websockets.connect(
             URL,
-            extra_headers=(("Authorization", "9d9f9ecf616446fe8b39a23cd18b2cef"),),
+            extra_headers=(("Authorization", self.ASSEMBLYAI_TOKEN),),
             ping_interval=5,
             ping_timeout=20
         ) as _ws:
@@ -160,9 +174,9 @@ class LiveAssemblyAIDictation(Dictation):
                 return is_done
 
             async def receive():
-                global dictation_result
+                global dictation_results
                 global initialized
-                dictation_result = []
+                dictation_results = []
                 is_done = False
                 initialized = False
                 final_phrases = set() 
@@ -173,7 +187,12 @@ class LiveAssemblyAIDictation(Dictation):
                         if result_str:
                             current_phrase = json.loads(result_str)['text']
                             if current_phrase:
-                                print(current_phrase)
+                                # Check to see if we've started processing this input yet
+                                if not self.speech_started:
+                                    newly_started = self.speech_start_detected(current_phrase)
+                                
+                                if self.speech_started or newly_started:
+                                    print(current_phrase)
 
                             # Send the current phrase to the done_speaking method
                             is_done = self.done_speaking(current_phrase)
@@ -189,13 +208,15 @@ class LiveAssemblyAIDictation(Dictation):
                         break
 
                 # Print the final set of complete phrases
-                if dictation_result:
-                    final_phrases = {phrase for phrase in dictation_result if re.match(r'^[A-Z].*\.$', phrase)}
-                    #print("\nDictation result: {}".format(list(final_phrases)))
+
+                # TODO: update this so it isn't a kludge
+                if dictation_results:
+                    final_phrases = {phrase for phrase in dictation_results if re.match(r'^[A-Z].*\.$', phrase)}
                 else:
-                    print("\nNo phrases detected.")
+                    print("nada")
                 
                 final_phrase = ' '.join(final_phrases)
+
                 print("You said: ", final_phrase)
                 return final_phrase
 
