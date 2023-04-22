@@ -1,4 +1,4 @@
-from dictation import StaticGoogleDictation
+from dictation import StaticGoogleDictation, LiveAssemblyAIDictation
 from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import parse_args, parse_tts_interface
 
@@ -12,7 +12,7 @@ def main():
         pre_prompt = None
 
     tts = parse_tts_interface(args.tts_interface)
-    dictation = StaticGoogleDictation()
+    dictation = LiveAssemblyAIDictation()
     query_dispatcher = ChatGPTQueryDispatcher()
 
     print("Starting session with Jarvis. To stop, simply say \"Goodbye\"")

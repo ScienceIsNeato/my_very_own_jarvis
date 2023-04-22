@@ -1,4 +1,3 @@
-import sys
 import argparse
 import speech_recognition as sr
 import wave
