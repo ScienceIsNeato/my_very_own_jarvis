@@ -5,21 +5,26 @@ from abc import ABC, abstractmethod
 
 class QueryDispatcher(ABC):
     @abstractmethod
-    def sendQuery(self, prompt, pre_prompt=None):
+    def sendQuery(self, current_input, static_response=False):
         pass
 
 class ChatGPTQueryDispatcher:
     openai.api_key = os.environ.get("OPENAI_API_KEY")
     conversation_history = ""
 
-    def __init__(self, pre_prompt=None):
+    def __init__(self, static_response=False, pre_prompt=None):
         self.pre_prompt = pre_prompt
+        self.static_response = static_response
 
-    def sendQuery(self, current_input):
+    def sendQuery(self, current_input, static_response=False):
         # Add the user's input to the conversation history
-        self.conversation_history += f"User: {current_input}\n"
+        if not self.static_response:
+            self.conversation_history += f"User: {current_input}\n"
 
-        prompt = f"Pre-Prompt: {self.pre_prompt}, ConversationHistory: {self.conversation_history}, Current-Prompt: {current_input}"
+        if self.static_response:
+            prompt = f"Pre-Prompt: {self.pre_prompt}, Current-Prompt: {current_input}"
+        else:
+            prompt = f"Pre-Prompt: {self.pre_prompt}, ConversationHistory: {self.conversation_history}, Current-Prompt: {current_input}"
 
         response = openai.Completion.create(
             engine="text-davinci-003",
@@ -33,7 +38,8 @@ class ChatGPTQueryDispatcher:
         message = response.choices[0].text.strip()
 
         # Add the model's response to the conversation history
-        self.conversation_history += f"Samantha: {message}\n"
+        if not self.static_response:
+            self.conversation_history += f"Samantha: {message}\n"
 
         print(f"Samantha said: {message}")
 
@@ -44,7 +50,9 @@ class ChatGPTQueryDispatcher:
         return message
 
 
+
+
 class BardQueryDispatcher(QueryDispatcher):
-    def sendQuery(self, prompt, pre_prompt=None):
+    def sendQuery(self, current_input, static_response=False):
         # Stubbed method, implement the actual functionality here
         pass

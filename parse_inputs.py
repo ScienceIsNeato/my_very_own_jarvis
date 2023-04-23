@@ -15,12 +15,17 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Jarvis - AI Assistant")
     parser.add_argument("-l", "--listen_dur_secs", type=int, default=5, help="Duration in seconds to listen for user input")
     parser.add_argument("-d", "--device_index", type=int, default=0, help="Index of the input device to use.")
-    parser.add_argument("-p", "--pre_prompt", type=str, default=None, help="Any context you want for the session (should take form of a prompt)")
+    parser.add_argument("--pre_prompt", type=str, default=None, help="Any context you want for the session (should take form of a prompt)")
     parser.add_argument(
         "-t",
         "--tts_interface",
         type=str,
         default="google",
         help="Text-to-speech interface to use. Available options: 'google', 'natural_reader'",
+    )
+    parser.add_argument(
+        "--static-response",
+        action="store_true",
+        help="Provide responses without conversation history (default: False)",
     )
     return parser.parse_args()
