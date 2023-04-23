@@ -28,7 +28,7 @@ def main():
             tts.play_speech_response(error_code, file_path)
             break
         else:
-            response = query_dispatcher.sendQuery(prompt, pre_prompt)
+            response = query_dispatcher.sendQuery(prompt)
             error_code, file_path = tts.convert_text_to_speech(response)
             tts.play_speech_response(error_code, file_path)
 
