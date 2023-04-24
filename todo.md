@@ -5,3 +5,5 @@
 - audio prompt on startup unless skip flag provided
 - persistent sessions
 - deal with pylint issues. There's lots. 
+- right now the order is 1) send to AI 2) get response 3) play input and reponse? if so - fix that
+- instead of hard coded exit message, , first pass the message to ai interface, then play response, then exit. 
