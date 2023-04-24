@@ -28,4 +28,9 @@ def parse_args():
         action="store_true",
         help="Provide responses without conversation history (default: False)",
     )
+    parser.add_argument(
+        "--suppress-session-logging",
+        action="store_true",
+        help="Disable session logging (default: False)",
+    )
     return parser.parse_args()
