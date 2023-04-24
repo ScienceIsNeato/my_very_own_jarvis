@@ -2,8 +2,7 @@
 - live rendering of dictation
 - audio input for persona
 - audio prompt on startup unless skip flag provided
-- persistent sessions
 - fix the sped up audio recording
-- fix the readme
 - update requirements.txt
 - use the jarvis audio example set you hae to train an ai voice with one of your ai accounts
+- deal with pylint issues. There's lots.
