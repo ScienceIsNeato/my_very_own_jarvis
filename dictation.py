@@ -42,7 +42,7 @@ class StaticGoogleDictation(Dictation):
 
             try:
                 text = recognizer.recognize_google(audio)
-                print("You said: ", text)
+                print("You: ", text)
                 return text
             except sr.UnknownValueError:
                 print("Google Speech Recognition could not understand the audio.")
@@ -213,11 +213,11 @@ class LiveAssemblyAIDictation(Dictation):
                 if dictation_results:
                     final_phrases = {phrase for phrase in dictation_results if re.match(r'^[A-Z].*\.$', phrase)}
                 else:
-                    print("nada")
+                    print("No dictation results collected")
                 
                 final_phrase = ' '.join(final_phrases)
 
-                print("You said: ", final_phrase)
+                print("You: ", final_phrase)
                 return final_phrase
 
             send_task = asyncio.create_task(send())

@@ -13,7 +13,7 @@ def main():
 
     tts = parse_tts_interface(args.tts_interface)
     dictation = LiveAssemblyAIDictation()
-    query_dispatcher = ChatGPTQueryDispatcher()
+    query_dispatcher = ChatGPTQueryDispatcher(static_response=args.static_response, pre_prompt=pre_prompt)
 
     print("Starting session with Jarvis. To stop, simply say \"Goodbye\"")
 
@@ -28,7 +28,7 @@ def main():
             tts.play_speech_response(error_code, file_path)
             break
         else:
-            response = query_dispatcher.sendQuery(prompt, pre_prompt)
+            response = query_dispatcher.sendQuery(prompt, static_response=args.static_response)
             error_code, file_path = tts.convert_text_to_speech(response)
             tts.play_speech_response(error_code, file_path)
 
