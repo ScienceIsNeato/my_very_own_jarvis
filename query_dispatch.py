@@ -3,6 +3,8 @@ import openai
 from datetime import datetime
 from abc import ABC, abstractmethod
 
+RESPONDER_NAME = "Them"
+
 class QueryDispatcher(ABC):
     @abstractmethod
     def sendQuery(self, current_input, static_response=False):
@@ -27,9 +29,7 @@ class ChatGPTQueryDispatcher:
         if self.pre_prompt and not self.conversation_history.endswith(self.pre_prompt):
             prompt += f"Pre-Prompt: {self.pre_prompt}, "
 
-        # Add the conversation history and current input to the prompt
-        if not self.static_response:
-            prompt += f"ConversationHistory: {self.conversation_history}, "
+        # Add the current input to the prompt
         prompt += f"Current-Prompt: {current_input}"
 
         response = openai.Completion.create(
@@ -41,22 +41,23 @@ class ChatGPTQueryDispatcher:
             temperature=0.1,
         )
 
-        message = response.choices[0].text.strip()
+        raw_message = response.choices[0].text.strip()
+        curated_message = f"{RESPONDER_NAME}: {raw_message}"
 
         # Add the model's response to the conversation history
         if not self.static_response:
-            self.conversation_history += f"Samantha: {message}\n"
+            self.conversation_history += f"{RESPONDER_NAME}: {raw_message}\n"
 
-        print(f"Samantha said: {message}")
+        print(f"{RESPONDER_NAME}: {raw_message}")
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        with open(f"/tmp/chatgpt_output_{timestamp}.txt", "w") as file:
-            file.write(message)
+        with open(f"/tmp/chatgpt_output_{timestamp}_raw.txt", "w") as file:
+            file.write(raw_message)
 
-        return message
+        with open(f"/tmp/chatgpt_output_{timestamp}_curated.txt", "w") as file:
+            file.write(curated_message)
 
-
-
+        return raw_message
 
 class BardQueryDispatcher(QueryDispatcher):
     def sendQuery(self, current_input, static_response=False):
