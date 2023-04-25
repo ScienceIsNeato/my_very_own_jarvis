@@ -2,11 +2,12 @@ from dictation import StaticGoogleDictation, LiveAssemblyAIDictation
 from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import parse_args, parse_tts_interface
 from session_logger import CLISessionLogger, SessionEvent
-from audio_turn_indicator import AudioTurnIndicator
+from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 import os
 import logging
 
-TURN_INDICATOR = AudioTurnIndicator(os.path.join("media", "zapsplat_multimedia_ui_window_minimize_short_swipe_whoosh_71502.mp3"), os.path.join("media", "zapsplat_multimedia_ui_window_maximize_short_swipe_whoosh_001_71500.mp3"))
+USER_TURN_INDICATOR = UserTurnIndicator(os.path.join("media", "zapsplat_multimedia_button_click_fast_short_004_79288.mp3"), os.path.join("media", "zapsplat_multimedia_button_click_bright_001_92098.mp3"))
+AI_TURN_INDICATOR = AiTurnIndicator(os.path.join("media", "zapsplat_multimedia_ui_window_minimize_short_swipe_whoosh_71502.mp3"), os.path.join("media", "zapsplat_multimedia_ui_window_maximize_short_swipe_whoosh_001_71500.mp3"))
 
 def main():
     global args
@@ -37,18 +38,18 @@ def main():
 
     while True:
         try:
-            TURN_INDICATOR.input_started() # indicate start of turn
+            USER_TURN_INDICATOR.input_in() # indicate start of user turn
             prompt = dictation.getDictatedInput(args.listen_dur_secs, args.device_index) if dictation else input()
-            TURN_INDICATOR.input_terminated() # indicate end of turn
+            USER_TURN_INDICATOR.input_out() # indicate end of user turn
             if prompt is None:
                 continue
 
             if "goodbye" in prompt.strip().lower():
                 response = "Ok, see you later!"
             else:
-                TURN_INDICATOR.input_started() # indicate start of turn
+                AI_TURN_INDICATOR.input_in() # indicate start of AI turn
                 response = query_dispatcher.sendQuery(prompt, static_response=args.static_response)
-                TURN_INDICATOR.input_terminated() # indicate end of turn
+                AI_TURN_INDICATOR.input_out() # indicate end of AI turn
 
             if tts:
                 error_code, file_path = tts.convert_text_to_speech(response)

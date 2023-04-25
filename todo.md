@@ -6,4 +6,11 @@
 - persistent sessions
 - deal with pylint issues. There's lots. 
 - right now the order is 1) send to AI 2) get response 3) play input and reponse? if so - fix that
-- instead of hard coded exit message, , first pass the message to ai interface, then play response, then exit. 
+- instead of hard coded exit message, , first pass the message to ai interface, then play response, then exit.
+- add an input option of a string
+- add an output option of a string
+- add option to suppress turn indicators
+- fix spot of first turn indicator
+- implement some sort of notion of Entities (these would be all of the abstracted steps like Verbalizer and Logger and whatnot) and a configuration file. The man page would spit out 
+- find out if there is a git hook that will automatically suggest updates to the README and/or unit tests upon attempt to merge
+- need to consider play testers who don't want to spend a dime to play. Need to have an input flag called --demo-mode that uses the best version of everything that doesn't require creds/$
