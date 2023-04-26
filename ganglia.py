@@ -15,7 +15,7 @@ def main():
     dictation = LiveAssemblyAIDictation()
     query_dispatcher = ChatGPTQueryDispatcher(static_response=args.static_response, pre_prompt=pre_prompt)
 
-    print("Starting session with Jarvis. To stop, simply say \"Goodbye\"")
+    print("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
 
     while True:
         prompt = dictation.getDictatedInput(args.listen_dur_secs, args.device_index)
