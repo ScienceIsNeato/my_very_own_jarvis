@@ -6,63 +6,66 @@ from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 import os
 import logging
 
-# Initialize UserTurnIndicator and AiTurnIndicator with default file paths
-USER_TURN_INDICATOR = UserTurnIndicator()
-AI_TURN_INDICATOR = AiTurnIndicator()
+def initialize_conversation(args):
+    USER_TURN_INDICATOR = None
+    AI_TURN_INDICATOR = None
+
+    if args.enable_turn_indicators:
+        USER_TURN_INDICATOR = UserTurnIndicator()
+        AI_TURN_INDICATOR = AiTurnIndicator()
+
+    tts = parse_tts_interface(args.tts_interface)
+    dictation = LiveAssemblyAIDictation()
+    query_dispatcher = ChatGPTQueryDispatcher(static_response=args.static_response, pre_prompt=args.pre_prompt)
+    session_logger = None if args.suppress_session_logging else CLISessionLogger()
+
+    print("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
+
+    return USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger
+
+def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
+    if USER_TURN_INDICATOR:
+        USER_TURN_INDICATOR.input_in()
+    prompt = dictation.getDictatedInput(args.listen_dur_secs, args.device_index) if dictation else input()
+    if USER_TURN_INDICATOR:
+        USER_TURN_INDICATOR.input_out()
+    return prompt
+
+def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger):
+    if AI_TURN_INDICATOR:
+        AI_TURN_INDICATOR.input_in()
+    response = query_dispatcher.sendQuery(prompt, static_response=args.static_response)
+    if AI_TURN_INDICATOR:
+        AI_TURN_INDICATOR.input_out()
+
+    if tts:
+        error_code, file_path = tts.convert_text_to_speech(response)
+        tts.play_speech_response(error_code, file_path)
+
+    if session_logger:
+        session_logger.log_session_interaction(SessionEvent(prompt, response))
+
+    return response
+
+def end_conversation(prompt):
+    return prompt and "goodbye" in prompt.strip().lower()
 
 def main():
     global args
     args = parse_args()
-
-    # TODO: this is getting to be a lot - should break it up into a loader that has error catching
-    try:
-        tts = parse_tts_interface(args.tts_interface)
-    except Exception as e:
-        logging.warning(f"Failed to initialize TTS interface: {str(e)}")
-        tts = None
-
-    try:
-        dictation = LiveAssemblyAIDictation()
-    except Exception as e:
-        logging.warning(f"Failed to initialize dictation: {str(e)}")
-        dictation = None
-
-    query_dispatcher = ChatGPTQueryDispatcher(static_response=args.static_response, pre_prompt=args.pre_prompt)
-
-    try:
-        session_logger = None if args.suppress_session_logging else CLISessionLogger()
-    except Exception as e:
-        logging.warning(f"Failed to initialize session logger: {str(e)}")
-        session_logger = None
-
-    print("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
+    USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
 
     while True:
         try:
-            USER_TURN_INDICATOR.input_in() # indicate start of user turn
-            prompt = dictation.getDictatedInput(args.listen_dur_secs, args.device_index) if dictation else input()
-            USER_TURN_INDICATOR.input_out() # indicate end of user turn
-            if prompt is None:
-                continue
-
-            if "goodbye" in prompt.strip().lower():
+            prompt = user_turn(None, dictation, USER_TURN_INDICATOR, args)
+            if end_conversation(prompt):
                 response = "Ok, see you later!"
-            else:
-                AI_TURN_INDICATOR.input_in() # indicate start of AI turn
-                response = query_dispatcher.sendQuery(prompt, static_response=args.static_response)
-                AI_TURN_INDICATOR.input_out() # indicate end of AI turn
+                break
 
-            if tts:
-                error_code, file_path = tts.convert_text_to_speech(response)
-                tts.play_speech_response(error_code, file_path)
+            response = ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
 
-            if session_logger:
-                session_logger.log_session_interaction(SessionEvent(prompt, response))
         except Exception as e:
             logging.warning(f"Exception occurred during main loop: {str(e)}")
-
-        if prompt and "goodbye" in prompt.strip().lower():
-            break
 
     if session_logger:
         session_logger.finalize_session()
