@@ -4,6 +4,7 @@ from parse_inputs import parse_args, parse_tts_interface
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 import logging
+import signal
 
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
@@ -46,13 +47,22 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logg
 
     return response
 
-def end_conversation(prompt):
+def end_conversation(prompt, force=False):
+    if force:
+        return True
     return prompt and "goodbye" in prompt.strip().lower()
+
+def signal_handler(sig, frame):
+    print("User killed program - exiting gracefully")
+    end_conversation(None, force=True)
+    exit(0)
 
 def main():
     global args
     args = parse_args()
     USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
+
+    signal.signal(signal.SIGINT, signal_handler)
 
     while True:
         try:
