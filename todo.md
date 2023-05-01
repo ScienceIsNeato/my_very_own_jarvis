@@ -18,5 +18,6 @@
 - fix spot of first turn indicator
 - implement some sort of notion of Entities (these would be all of the abstracted steps like Verbalizer and Logger and whatnot) and a configuration file. The man page would spit out 
 - find out if there is a git hook that will automatically suggest updates to the README and/or unit tests upon attempt to merge
+
 - need to consider play testers who don't want to spend a dime to play. Need to have an input flag called --demo-mode that uses the best version of everything that doesn't require creds
 - update this shit `❯ python ganglia.py --listen_dur_secs 150 -d 3 --pre_prompt "Assume the role of a 2nd grade math teacher. If you understand, please prepend future answers with [MATH]"` sso see a prompt like that? see how there;'s lots of boilerplate around `"Assume the role\" and \"If you understand\"? can you update it so that you only input the role and the description without all the rest of the boilerplate?

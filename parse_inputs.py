@@ -11,26 +11,13 @@ def parse_tts_interface(tts_interface: str) -> TextToSpeech:
             "Invalid TTS interface provided. Available options: 'google', 'natural_reader'"
         )
 
-def parse_args():
+def parse_args(args=None):
     parser = argparse.ArgumentParser(description="GANGLIA - AI Assistant")
-    parser.add_argument("-l", "--listen_dur_secs", type=int, default=5, help="Duration in seconds to listen for user input")
-    parser.add_argument("-d", "--device_index", type=int, default=0, help="Index of the input device to use.")
-    parser.add_argument("--pre_prompt", type=str, default=None, help="Any context you want for the session (should take form of a prompt)")
-    parser.add_argument(
-        "-t",
-        "--tts_interface",
-        type=str,
-        default="google",
-        help="Text-to-speech interface to use. Available options: 'google', 'natural_reader'",
-    )
-    parser.add_argument(
-        "--static-response",
-        action="store_true",
-        help="Provide responses without conversation history (default: False)",
-    )
-    parser.add_argument(
-        "--suppress-session-logging",
-        action="store_true",
-        help="Disable session logging (default: False)",
-    )
-    return parser.parse_args()
+    parser.add_argument("--listen-dur-secs", type=int, default=5, help="Duration in seconds to listen for user input")
+    parser.add_argument("--device-index", type=int, default=0, help="Index of the input device to use.")
+    parser.add_argument("--pre-prompt", type=str, default=None, help="Any context you want for the session (should take form of a prompt)")
+    parser.add_argument("--tts-interface", type=str, default="google", help="Text-to-speech interface to use. Available options: 'google', 'natural_reader'")
+    parser.add_argument("--static-response", action="store_true", help="Provide responses without conversation history (default: False)")
+    parser.add_argument("--suppress-session-logging", action="store_true", help="Disable session logging (default: False)")
+    parser.add_argument("--enable-turn-indicators", action="store_true", help="Enable turn indicators (default: False)")
+    return parser.parse_args(args)
