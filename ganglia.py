@@ -6,8 +6,9 @@ from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 import os
 import logging
 
-USER_TURN_INDICATOR = UserTurnIndicator(os.path.join("media", "zapsplat_multimedia_button_click_fast_short_004_79288.mp3"), os.path.join("media", "zapsplat_multimedia_button_click_bright_001_92098.mp3"))
-AI_TURN_INDICATOR = AiTurnIndicator(os.path.join("media", "zapsplat_multimedia_ui_window_minimize_short_swipe_whoosh_71502.mp3"), os.path.join("media", "zapsplat_multimedia_ui_window_maximize_short_swipe_whoosh_001_71500.mp3"))
+# Initialize UserTurnIndicator and AiTurnIndicator with default file paths
+USER_TURN_INDICATOR = UserTurnIndicator()
+AI_TURN_INDICATOR = AiTurnIndicator()
 
 def main():
     global args
