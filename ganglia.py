@@ -13,7 +13,7 @@ def main():
     query_dispatcher = ChatGPTQueryDispatcher(static_response=args.static_response, pre_prompt=args.pre_prompt)
     session_logger = None if args.suppress_session_logging else CLISessionLogger()
 
-    print("Starting session with Jarvis. To stop, simply say \"Goodbye\"")
+    print("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
 
     while True:
         prompt = dictation.getDictatedInput(args.listen_dur_secs, args.device_index)
