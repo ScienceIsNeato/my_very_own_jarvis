@@ -1,8 +1,17 @@
-# Jarvis
+# GANGLIA
 
-Jarvis is a highly modularized, generic personal assistant. Jarvis has been built in part by AI (monitored by software developers).
+GANGLIA:
+    General 
+    AI
+    Nurturing
+    Guided
+    Linguistic
+    Interface and
+    Automation (working title)
 
-Jarvis allows users to have natural language conversations with highly customizable AI and can be easily extended to incorporate additional functionality. Each component of Jarvis can be swapped or mocked, allowing developers to customize Jarvis to meet their specific needs.
+GANGLIA is a highly modularized, generic personal assistant. GANGLIA has been built in part by AI (monitored by software developers).
+
+GANGLIA allows users to have interface with AI using natural language conversations. It is highly customizable and can be easily extended to incorporate additional functionality. Each component of GANGLIA can be swapped or mocked, allowing developers to customize GANGLIA to meet their specific needs.
 
 Here's a table of possible modules, potential values, and defaults:
 
@@ -18,7 +27,7 @@ Note: This is not an exhaustive list and the table can be easily extended to inc
 
 ## Installation
 
-To use Jarvis, you will need to install Python 3.x and the following libraries:
+To use GANGLIA, you will need to install Python 3.x and the following libraries:
 
 - SpeechRecognition
 - PyAudio
@@ -30,13 +39,13 @@ pip install SpeechRecognition PyAudio openai
 
 ## Usage
 
-To start Jarvis, run the following command in your terminal:
+To start GANGLIA, run the following command in your terminal:
 
-python jarvis.py [-l LISTEN_DUR_SECS] [-d DEVICE_INDEX] [--pre_prompt PRE_PROMPT] [-t TTS_INTERFACE] [--static-response]
+python GANGLIA.py [-l LISTEN_DUR_SECS] [-d DEVICE_INDEX] [--pre_prompt PRE_PROMPT] [-t TTS_INTERFACE] [--static-response]
 
 Here's a description of each command-line argument:
 
-- `-l LISTEN_DUR_SECS` or `--listen_dur_secs LISTEN_DUR_SECS`: Sets the duration in seconds that Jarvis will listen for before automatically stopping. The default value is 5 seconds.
+- `-l LISTEN_DUR_SECS` or `--listen_dur_secs LISTEN_DUR_SECS`: Sets the duration in seconds that GANGLIA will listen for before automatically stopping. The default value is 5 seconds.
 - `-d DEVICE_INDEX` or `--device_index DEVICE_INDEX`: Sets the index of the input device to use. The default value is 0.
 - `--pre_prompt PRE_PROMPT`: Sets any context you want for the session (should take the form of a prompt). The default value is None.
 - `-t TTS_INTERFACE` or `--tts_interface TTS_INTERFACE`: Sets the text-to-speech interface to use. Available options are 'google' or 'natural_reader'. The default value is 'google'.
@@ -44,19 +53,19 @@ Here's a description of each command-line argument:
 - `--help` or `-h`: Displays usage instructions and a list of available options.
 
 
-Once Jarvis is running, it will listen for voice prompts. When you're ready to ask a question or make a request, simply speak into your microphone. Once you've finished speaking, Jarvis will generate a response using OpenAI's GPT-3 engine and speak it aloud using the pyttsx3 library.
+Once GANGLIA is running, it will listen for voice prompts. When you're ready to ask a question or make a request, simply speak into your microphone. Once you've finished speaking, GANGLIA will generate a response using OpenAI's GPT-3 engine and speak it aloud using the pyttsx3 library.
 
 ## Contributing
 
-If you would like to contribute to Jarvis, please fork the repository and submit a pull request with your changes.
+If you would like to contribute to GANGLIA, please fork the repository and submit a pull request with your changes.
 
 ## License
 
-Jarvis is licensed under the MIT License. See the LICENSE file for more information.
+GANGLIA is licensed under the MIT License. See the LICENSE file for more information.
 
 ## Credits
 
-Jarvis was created by William R Martin. It uses OpenAI's GPT-4 engine and several open source libraries, including:
+GANGLIA was created by William R Martin. It uses OpenAI's GPT-4 engine and several open source libraries, including:
 
 - SpeechRecognition
 - PyAudio
@@ -65,4 +74,4 @@ and more
 
 ## Contact
 
-If you have any questions or feedback about Jarvis, please contact Will Martin at unique dot will dot martin at gmail.
+If you have any questions or feedback about GANGLIA, please contact Will Martin at unique dot will dot martin at gmail.

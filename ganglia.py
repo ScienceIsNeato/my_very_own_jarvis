@@ -34,7 +34,7 @@ def main():
         logging.warning(f"Failed to initialize session logger: {str(e)}")
         session_logger = None
 
-    print("Starting session with Jarvis. To stop, simply say \"Goodbye\"")
+    print("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
 
     while True:
         try:
