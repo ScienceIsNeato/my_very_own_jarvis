@@ -3,21 +3,5 @@
         "."
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true,
-    "cSpell.words": [
-        "Alexa",
-        "assemblyai",
-        "autoexit",
-        "chatgpt",
-        "davinci",
-        "ffplay",
-        "gtts",
-        "nodisp",
-        "openai",
-        "pyaudio",
-        "pydub",
-        "pyttsx",
-        "Siri",
-        "websockets"
-    ]
+    "python.testing.pytestEnabled": true
 }
