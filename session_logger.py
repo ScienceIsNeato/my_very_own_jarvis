@@ -53,7 +53,7 @@ class CLISessionLogger(SessionLogger):
     def finalize_session(self):
             session = Session(self.session_id, self.timestamp, self.conversation)
             json_data = json.dumps(session.to_dict(), indent=2)
-            file_name = f"/tmp/Jarvis_session_{self.timestamp}.json"
+            file_name = f"/tmp/GANGLIA_session_{self.timestamp}.json"
             with open(file_name, "w") as f:
                 f.write(json_data)
             print(f"Session log saved as {file_name}")
