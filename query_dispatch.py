@@ -1,6 +1,7 @@
 import os
 import openai
 from datetime import datetime
+from dotenv import load_dotenv
 from abc import ABC, abstractmethod
 
 RESPONDER_NAME = "Them"
@@ -11,7 +12,9 @@ class QueryDispatcher(ABC):
         pass
 
 class ChatGPTQueryDispatcher:
+    load_dotenv()
     openai.api_key = os.environ.get("OPENAI_API_KEY")
+
     conversation_history = ""
 
     def __init__(self, static_response=False, pre_prompt=None):
