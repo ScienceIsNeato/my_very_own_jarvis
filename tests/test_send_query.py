@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 from query_dispatch import ChatGPTQueryDispatcher
 
 def test_sendQuery():

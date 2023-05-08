@@ -1,8 +1,10 @@
-from dictation import StaticGoogleDictation, LiveAssemblyAIDictation
 from query_dispatch import ChatGPTQueryDispatcher
-from parse_inputs import parse_args, parse_tts_interface
+from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
+from dotenv import load_dotenv
+import os
+
 import logging
 import signal
 
@@ -15,7 +17,7 @@ def initialize_conversation(args):
         AI_TURN_INDICATOR = AiTurnIndicator()
 
     tts = parse_tts_interface(args.tts_interface)
-    dictation = LiveAssemblyAIDictation()
+    dictation = parse_dictation_type(args.dictation_type)
     query_dispatcher = ChatGPTQueryDispatcher(static_response=args.static_response, pre_prompt=args.pre_prompt)
     session_logger = None if args.suppress_session_logging else CLISessionLogger()
 
@@ -59,6 +61,7 @@ def signal_handler(sig, frame):
 
 def main():
     global args
+
     args = parse_args()
     USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
 

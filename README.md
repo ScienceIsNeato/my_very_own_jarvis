@@ -1,23 +1,23 @@
 # GANGLIA
 
 GANGLIA:
-    General 
-    AI
-    Nurturing
-    Guided
-    Linguistic
-    Interface and
-    Automation (working title)
+- <b>G</b>eneral
+- <b>A</b>I
+- <b>N</b>urturing
+- <b>G</b>uided
+- <b>L</b>inguistic
+- <b>I</b>nterface and
+- <b>A</b>Automation (working title)
 
 GANGLIA is a highly modularized, generic personal assistant. GANGLIA has been built in part by AI (monitored by software developers).
 
-GANGLIA allows users to have interface with AI using natural language conversations. It is highly customizable and can be easily extended to incorporate additional functionality. Each component of GANGLIA can be swapped or mocked, allowing developers to customize GANGLIA to meet their specific needs.
+GANGLIA allows users to have multi-modal interactions with AI using natural language conversations. It is highly customizable and can be easily extended to incorporate additional functionality. Each component of GANGLIA can be swapped or mocked, allowing developers to customize GANGLIA to meet their specific needs.
 
 Here's a table of possible modules, potential values, and defaults:
 
 Module              | Possible Values                              | Default Value
 ------------------- | ------------------------------------------- | -------------
-Speech Recognition  | AssemblyAI, Google Cloud Speech-to-Text      | AssemblyAI
+Speech Recognition  | AssemblyAI, Google Cloud Speech-to-Text      | Google Cloud Speech-to-Text
 Text To Speech      | Google Text-to-Speech, Natural Reader (Unavailable), Amazon Polly (Unavailable) | Google Text-to-Speech
 AI Backend          | GPT-3.5 (Unavailable), GPT-4, Bard (Unavailable)             | GPT-4
 Response Visualizer | cli, NaturalReaderUI (Unavailable)           | cli
@@ -32,10 +32,24 @@ To use GANGLIA, you will need to install Python 3.x and the following libraries:
 - SpeechRecognition
 - PyAudio
 - OpenAI
+- DotEnv
 
 You can install these libraries using pip by running the following command:
 
-pip install SpeechRecognition PyAudio openai
+`pip install SpeechRecognition PyAudio openai python-dotenv`
+
+## Setting up API keys (Optional)
+
+GANGLIA can be used without API keys for certain features. However, if you want to utilize features that require API keys, you'll need to set up your API keys for the respective services.
+
+To set up the API keys, copy the `.env.template` file in the root directory of the project and rename it to `.env`. Then, update the values for the features you want to use.
+
+Here's a table of features, their implementation names, and the corresponding environment variable names for the `.env` file:
+
+| Feature            | Implementation Name | Environment Variable      |
+|--------------------|---------------------|---------------------------|
+| Speech Recognition | AssemblyAI          | ASSEMBLYAI_TOKEN          |
+| AI Backend         | OpenAI GPT-4        | OPENAI_API_KEY            |
 
 ## Usage
 
