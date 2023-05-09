@@ -2,6 +2,7 @@ from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
+from conversation_history import ConversationHistory
 from dotenv import load_dotenv
 import os
 
@@ -23,7 +24,8 @@ def initialize_conversation(args):
 
     print("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
 
-    return USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger
+    conversation_history = ConversationHistory()
+    return USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, conversation_history
 
 def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
     if USER_TURN_INDICATOR:
@@ -63,7 +65,7 @@ def main():
     global args
 
     args = parse_args()
-    USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
+    USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, conversation_history = initialize_conversation(args)
 
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -75,6 +77,10 @@ def main():
                 break
 
             response = ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
+
+            # Add the user's prompt and the AI's response to the conversation history
+            conversation_history.add_message(prompt, "user")
+            conversation_history.add_message(response, "ai")
 
         except Exception as e:
             logging.warning(f"Exception occurred during main loop: {str(e)}")
