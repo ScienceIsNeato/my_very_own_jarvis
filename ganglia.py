@@ -3,23 +3,46 @@ from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 from dotenv import load_dotenv
-import os
-
-import logging
+import sys
 import signal
+
 
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
     AI_TURN_INDICATOR = None
+    session_logger = None if args.suppress_session_logging else CLISessionLogger()
 
     if args.enable_turn_indicators:
-        USER_TURN_INDICATOR = UserTurnIndicator()
-        AI_TURN_INDICATOR = AiTurnIndicator()
+        try:
+            USER_TURN_INDICATOR = UserTurnIndicator()
+            AI_TURN_INDICATOR = AiTurnIndicator()
+            print("Turn Indicators initialized successfully.")
+        except Exception as e:
+            print(f"Failed to initialize Turn Indicators: {e}")
+            sys.exit("Initialization failed. Exiting program...")
 
-    tts = parse_tts_interface(args.tts_interface)
-    dictation = parse_dictation_type(args.dictation_type)
-    query_dispatcher = ChatGPTQueryDispatcher(static_response=args.static_response, pre_prompt=args.pre_prompt)
-    session_logger = None if args.suppress_session_logging else CLISessionLogger()
+    try:
+        tts = parse_tts_interface(args.tts_interface)
+        if tts == None:
+            sys.exit("ERROR - couldn't load tts sinterface")
+        print("Text-to-Speech interface initialized successfully. TTS: ", tts)
+    except Exception as e:
+        print(f"Failed to initialize Text-to-Speech interface: {e}")
+        sys.exit("Initialization failed. Exiting program...")
+
+    try:
+        dictation = parse_dictation_type(args.dictation_type)
+        print("Dictation type parsed successfully.")
+    except Exception as e:
+        print(f"Failed to parse Dictation type: {e}")
+        sys.exit("Initialization failed. Exiting program...")
+
+    try:
+        query_dispatcher = ChatGPTQueryDispatcher(static_response=args.static_response, pre_prompt=args.pre_prompt)
+        print("Query Dispatcher initialized successfully.")
+    except Exception as e:
+        print(f"Failed to initialize Query Dispatcher: {e}")
+        sys.exit("Initialization failed. Exiting program...")
 
     print("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
 
@@ -63,18 +86,31 @@ def main():
     global args
 
     args = parse_args()
+
+    print("Parsed arguments: %s", args)
+
     USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
+
+    print("USER_TURN_INDICATOR: %s", USER_TURN_INDICATOR)
+    print("AI_TURN_INDICATOR: %s", AI_TURN_INDICATOR)
+    print("tts: %s", tts)
+    print("dictation: %s", dictation)
+    print("query_dispatcher: %s", query_dispatcher)
+    print("session_logger: %s", session_logger)
 
     signal.signal(signal.SIGINT, signal_handler)
 
     while True:
         try:
             prompt = user_turn(None, dictation, USER_TURN_INDICATOR, args)
+            print("User prompt: ", prompt)
+
             if end_conversation(prompt):
                 response = "Ok, see you later!"
                 break
 
             response = ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
+            print("AI response: ", response)
 
         except Exception as e:
             logging.warning(f"Exception occurred during main loop: {str(e)}")
