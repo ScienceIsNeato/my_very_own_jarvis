@@ -113,7 +113,7 @@ def main():
             print("AI response: ", response)
 
         except Exception as e:
-            logging.warning(f"Exception occurred during main loop: {str(e)}")
+            print(f"Exception occurred during main loop: {str(e)}")
 
     if session_logger:
         session_logger.finalize_session()
