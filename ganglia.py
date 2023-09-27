@@ -1,3 +1,4 @@
+import time
 from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
@@ -108,7 +109,6 @@ def main():
                 break
 
             response = ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
-            print("AI response: ", response)
 
             # Add the user's prompt and the AI's response to the conversation history
             conversation_history.add_message(prompt, "user")

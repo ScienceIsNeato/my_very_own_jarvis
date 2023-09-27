@@ -26,19 +26,12 @@ class ChatGPTQueryDispatcher:
         if not self.static_response:
             self.conversation_history += f"User: {current_input}\n"
 
-        prompt = ""
-
-        # Add the pre-prompt to the prompt if it hasn't already been added to the conversation history
-        if self.pre_prompt and not self.conversation_history.endswith(self.pre_prompt):
-            prompt += f"Pre-Prompt: {self.pre_prompt}, "
-
-        # Add the current input to the prompt
-        prompt += f"Current-Prompt: {current_input}"
+        prompt = f"Current-Prompt: {current_input}"
 
         response = openai.Completion.create(
             engine="text-davinci-003",
             prompt=prompt,
-            max_tokens=100,
+            max_tokens=3500,
             n=1,
             stop=None,
             temperature=0.1,
