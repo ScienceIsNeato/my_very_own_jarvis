@@ -127,13 +127,9 @@ class CoquiTTS(TextToSpeech):
                 futures = [executor.submit(self.fetch_audio, chunk, payload, headers, index) for chunk, payload, headers, index in payloads_headers]
 
                 for future in concurrent.futures.as_completed(futures):
-                    file_path, idx, start_time, end_time = future.result()
+                    file_path, idx, _, _ = future.result()
                     if file_path:
                         files[idx] = file_path
-
-            start_times, end_times = zip(*[(start_time, end_time) for _, _, start_time, end_time in map(lambda f: f.result(), futures)])
-            total_duration_seconds = (max(end_times) - min(start_times)).total_seconds()
-            #print(f"Total time for all subprocesses: {total_duration_seconds:.4f}s")
 
             files = [file for file in files if file] # Removing None values, if any
 

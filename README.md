@@ -38,6 +38,12 @@ You can install these libraries using pip by running the following command:
 
 `pip install SpeechRecognition PyAudio openai python-dotenv`
 
+## Prerequisites (for google speech to text)
+- Google cloud cli
+    - pip install google-cloud-speech
+    - https://cloud.google.com/docs/authentication/provide-credentials-adc#how-to
+        - this is also tell you how to setup Google CLI if you haven't already
+
 ## Setting up API keys (Optional)
 
 GANGLIA can be used without API keys for certain features. However, if you want to utilize features that require API keys, you'll need to set up your API keys for the respective services.

@@ -1,9 +1,13 @@
 import json
-import requests
 import time
-import subprocess
 import sys
+import os
+
 from typing import Dict, Any
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from tts import CoquiTTS
 
 class Config:
     def __init__(self, api_url: str, bearer_token: str, voice_id: str):
@@ -16,62 +20,26 @@ def read_config() -> Config:
         data = json.load(file)
         return Config(data["api_url"], data["bearer_token"], data["voice_id"])
 
-def prepare_payload(voice_id: str, text: str) -> Dict[str, Any]:
-    return {
-        "name": "my test sample",
-        "voice_id": voice_id,
-        "text": text,
-    }
-
-def prepare_request(api_url: str, bearer_token: str, payload: Dict[str, Any]) -> requests.Request:
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {bearer_token}",
-        "Accept": "application/json"
-    }
-    return requests.Request("POST", api_url, headers=headers, json=payload)
-
-def call_api(req: requests.Request) -> Dict[str, Any]:
-    session = requests.Session()
-    resp = session.send(req.prepare())
-    resp.raise_for_status()
-    return resp.json()
-
-def parse_response(body: Dict[str, Any]) -> str:
-    audio_url = body.get("audio_url")
-    if not audio_url:
-        raise Exception("No audio url found in the response")
-    return audio_url
-
-def play_audio(audio_url: str) -> None:
-    subprocess.run(["ffplay", "-nodisp", "-autoexit", audio_url], check=True)
-
-def main(text: str) -> None:
+def main() -> None:
     timings = {}
+    text = "If you are hearing playback, then this is working, my fiend."
     config = read_config()
 
     start = time.time()
-    timings["Start"] = start
 
-    payload = prepare_payload(config.voice_id, text)
-    timings["Payload Prepared"] = time.time()
+    tts = CoquiTTS(config.api_url, config.bearer_token, config.voice_id)
+    timings["TTS Initialized"] = time.time()
 
-    req = prepare_request(config.api_url, config.bearer_token, payload)
-    timings["Request Prepared"] = time.time()
+    error_code, filepath = tts.convert_text_to_speech(text)
 
-    body = call_api(req)
-    timings["API Called"] = time.time()
+    if error_code != 0:
+        raise Exception(f"Error converting text to speech: {error_code}")
 
-    audio_url = parse_response(body)
-    timings["Response Parsed"] = time.time()
-
-    play_audio(audio_url)
+    tts.play_speech_response(filepath)
     timings["Audio Played"] = time.time()
 
     for event, timestamp in timings.items():
         print(f"{event}: {timestamp - start}s")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        sys.exit("You must provide exactly one argument: the text to speechify")
-    main(sys.argv[1])
+    main()
