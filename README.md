@@ -63,7 +63,6 @@ Here's a description of each command-line argument:
 - `-d DEVICE_INDEX` or `--device_index DEVICE_INDEX`: Sets the index of the input device to use. The default value is 0.
 - `--pre_prompt PRE_PROMPT`: Sets any context you want for the session (should take the form of a prompt). The default value is None.
 - `-t TTS_INTERFACE` or `--tts_interface TTS_INTERFACE`: Sets the text-to-speech interface to use. Available options are 'google' or 'natural_reader'. The default value is 'google'.
-- `--static-response`: Sets whether to provide responses without conversation history. The default value is False.
 - `--help` or `-h`: Displays usage instructions and a list of available options.
 
 
