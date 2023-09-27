@@ -65,7 +65,7 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logg
 
     if tts:
         error_code, file_path = tts.convert_text_to_speech(response)
-        tts.play_speech_response(error_code, file_path)
+        tts.play_speech_response(file_path)
 
     if session_logger:
         session_logger.log_session_interaction(SessionEvent(prompt, response))
@@ -91,20 +91,19 @@ def main():
 
     USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
 
-    print("USER_TURN_INDICATOR: %s", USER_TURN_INDICATOR)
-    print("AI_TURN_INDICATOR: %s", AI_TURN_INDICATOR)
-    print("tts: %s", tts)
-    print("dictation: %s", dictation)
-    print("query_dispatcher: %s", query_dispatcher)
-    print("session_logger: %s", session_logger)
+    # TODO fix this
+    # print("USER_TURN_INDICATOR: %s", USER_TURN_INDICATOR)
+    # print("AI_TURN_INDICATOR: %s", AI_TURN_INDICATOR)
+    # print("tts: %s", tts)
+    # print("dictation: %s", dictation)
+    # print("query_dispatcher: %s", query_dispatcher)
+    # print("session_logger: %s", session_logger)
 
     signal.signal(signal.SIGINT, signal_handler)
 
     while True:
         try:
             prompt = user_turn(None, dictation, USER_TURN_INDICATOR, args)
-            print("User prompt: ", prompt)
-
             if end_conversation(prompt):
                 response = "Ok, see you later!"
                 break
