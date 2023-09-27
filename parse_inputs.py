@@ -1,36 +1,73 @@
 import argparse
-from tts import TextToSpeech, GoogleTTS, NaturalReadersTTS
+import json
+from tts import TextToSpeech, GoogleTTS, NaturalReadersTTS, CoquiTTS
+from dictation import Dictation, StaticGoogleDictation, LiveAssemblyAIDictation
+import sys
+
+def load_coqui_config():
+    """
+    Load configuration from coqui_config.json.
+    Returns a tuple containing (api_url, bearer_token, voice_id) or
+    exits the program in case of errors.
+    """
+    try:
+        # Load configuration from coqui_config.json
+        with open('coqui_config.json', 'r') as config_file:
+            coqui_config = json.load(config_file)
+
+        if "api_url" not in coqui_config or "bearer_token" not in coqui_config or "voice_id" not in coqui_config:
+            raise ValueError("Missing one or more required keys in coqui_config.json")
+
+        print("Successfully loaded coqui config")
+        return coqui_config["api_url"], coqui_config["bearer_token"], coqui_config["voice_id"]
+
+    except FileNotFoundError:
+        print("Error: coqui_config.json file not found in the current directory.", file=sys.stderr)
+        sys.exit(1)
+    except json.JSONDecodeError:
+        print("Error: coqui_config.json file contains invalid JSON.", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as ve:
+        print(f"Error: {ve}", file=sys.stderr)
+        sys.exit(1)
+
 
 def parse_tts_interface(tts_interface: str) -> TextToSpeech:
     if tts_interface.lower() == "natural_reader":
         return NaturalReadersTTS()
     elif tts_interface.lower() == "google":
         return GoogleTTS()
+    elif tts_interface.lower() == "coqui":
+        try:
+            api_url, bearer_token, voice_id = load_coqui_config()
+            print("api_url: ", api_url)
+            return CoquiTTS(api_url, bearer_token, voice_id)
+        except Exception as e:
+            print(f"Error initializing CoquiTTS: {str(e)}", file=sys.stderr)
+            raise ValueError("Unable to load coqui config.")
     else:
         raise ValueError(
-            "Invalid TTS interface provided. Available options: 'google', 'natural_reader'"
+            "Invalid TTS interface provided. Available options: 'google', 'natural_reader', 'coqui'"
         )
 
-def parse_args():
+def parse_dictation_type(dictation_type: str) -> Dictation:
+    if dictation_type.lower() == "static_google":
+        return StaticGoogleDictation()
+    elif dictation_type.lower() == "live_assemblyai":
+        return LiveAssemblyAIDictation()
+    else:
+        raise ValueError(
+            "Invalid dictation type provided. Available options: 'static_google', 'live_assemblyai'"
+        )
+
+def parse_args(args=None):
     parser = argparse.ArgumentParser(description="GANGLIA - AI Assistant")
-    parser.add_argument("-l", "--listen_dur_secs", type=int, default=5, help="Duration in seconds to listen for user input")
-    parser.add_argument("-d", "--device_index", type=int, default=0, help="Index of the input device to use.")
-    parser.add_argument("--pre_prompt", type=str, default=None, help="Any context you want for the session (should take form of a prompt)")
-    parser.add_argument(
-        "-t",
-        "--tts_interface",
-        type=str,
-        default="google",
-        help="Text-to-speech interface to use. Available options: 'google', 'natural_reader'",
-    )
-    parser.add_argument(
-        "--static-response",
-        action="store_true",
-        help="Provide responses without conversation history (default: False)",
-    )
-    parser.add_argument(
-        "--suppress-session-logging",
-        action="store_true",
-        help="Disable session logging (default: False)",
-    )
-    return parser.parse_args()
+    parser.add_argument("--listen-dur-secs", type=int, default=5, help="Duration in seconds to listen for user input")
+    parser.add_argument("--device-index", type=int, default=0, help="Index of the input device to use.")
+    parser.add_argument("--pre-prompt", type=str, default=None, help="Any context you want for the session (should take form of a prompt)")
+    parser.add_argument("--tts-interface", type=str, default="google", help="Text-to-speech interface to use. Available options: 'google', 'natural_reader'")
+    parser.add_argument("--suppress-session-logging", action="store_true", help="Disable session logging (default: False)")
+    parser.add_argument("--enable-turn-indicators", action="store_true", help="Enable turn indicators (default: False)")
+    parser.add_argument("--dictation-type", type=str, default="static_google", choices=["static_google", "live_assemblyai"], help="Dictation type to use. Available options: 'static_google', 'live_assemblyai'")
+
+    return parser.parse_args(args)

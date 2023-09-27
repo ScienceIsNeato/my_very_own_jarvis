@@ -1,3 +1,7 @@
 **/__pycache__/
 **/__pycache__/*
 recorded_audio.*
+.env
+/output
+concat_list.txt
+coqui_config.json
