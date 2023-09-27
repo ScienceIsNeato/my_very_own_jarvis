@@ -69,6 +69,23 @@ Here's a description of each command-line argument:
 
 Once GANGLIA is running, it will listen for voice prompts. When you're ready to ask a question or make a request, simply speak into your microphone. Once you've finished speaking, GANGLIA will generate a response using OpenAI's GPT-3 engine and speak it aloud using the pyttsx3 library.
 
+## TTS (Text To Speech)
+- there are a few options for how to render the AI's text response as audio. One option is to use the coqui api.
+
+#### Setting up Coqui TTS Configuration
+
+If you want to use Coqui as your Text To Speech interface, you need to provide the necessary configurations for the Coqui TTS API. 
+
+Create a file named `coqui_config.json` in the root directory with the following format:
+
+```json
+{
+    "api_url": "https://app.coqui.ai/api/v2/samples",
+    "bearer_token": "<your_token>",
+    "voice_id": "<your_voice_id>"
+}
+```
+
 ## Contributing
 
 If you would like to contribute to GANGLIA, please fork the repository and submit a pull request with your changes.

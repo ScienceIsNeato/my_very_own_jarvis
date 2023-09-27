@@ -1,0 +1,7 @@
+
+{
+    "api_url": "https://app.coqui.ai/api/v2/samples",
+    "bearer_token": "<token>",
+    "voice_id": "<id>"
+}
+

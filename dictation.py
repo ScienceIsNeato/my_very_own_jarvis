@@ -170,7 +170,12 @@ class LiveAssemblyAIDictation(Dictation):
                             if "(OK)" not in str(e):
                                 print("Error in send:", e)
                             break
-                        await asyncio.sleep(0.01)
+                        try:
+                            await asyncio.sleep(0.01)
+                        except Exception as e:
+                            print("cancelled:", e)
+                            is_done = True
+                            break
                 return is_done
 
             async def receive():
