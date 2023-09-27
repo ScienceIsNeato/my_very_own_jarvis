@@ -1,8 +1,8 @@
+import time
 from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
-from dotenv import load_dotenv
 import sys
 import signal
 
@@ -38,7 +38,7 @@ def initialize_conversation(args):
         sys.exit("Initialization failed. Exiting program...")
 
     try:
-        query_dispatcher = ChatGPTQueryDispatcher(static_response=args.static_response, pre_prompt=args.pre_prompt)
+        query_dispatcher = ChatGPTQueryDispatcher(pre_prompt=args.pre_prompt)
         print("Query Dispatcher initialized successfully.")
     except Exception as e:
         print(f"Failed to initialize Query Dispatcher: {e}")
@@ -59,7 +59,7 @@ def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
 def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger):
     if AI_TURN_INDICATOR:
         AI_TURN_INDICATOR.input_in()
-    response = query_dispatcher.sendQuery(prompt, static_response=args.static_response)
+    response = query_dispatcher.sendQuery(prompt)
     if AI_TURN_INDICATOR:
         AI_TURN_INDICATOR.input_out()
 
@@ -86,9 +86,6 @@ def main():
     global args
 
     args = parse_args()
-
-    print("Parsed arguments: %s", args)
-
     USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
 
     # TODO fix this
@@ -105,12 +102,8 @@ def main():
         try:
             prompt = user_turn(None, dictation, USER_TURN_INDICATOR, args)
             if end_conversation(prompt):
-                response = "Ok, see you later!"
                 break
-
-            response = ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
-            print("AI response: ", response)
-
+            ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
         except Exception as e:
             print(f"Exception occurred during main loop: {str(e)}")
 
