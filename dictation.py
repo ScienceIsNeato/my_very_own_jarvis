@@ -5,8 +5,11 @@ import asyncio
 import json
 import re
 import os
+import pyaudio
 import speech_recognition as sr
 from abc import ABC, abstractmethod
+from google.cloud import speech_v1p1beta1 as speech
+from threading import Timer
 
 listen_dur_secs = 400
 device_index = 3 # My External USB mic. Use the script in tools to find yours. 
@@ -51,6 +54,89 @@ class StaticGoogleDictation(Dictation):
 
     def done_speaking(self, current_line):
         pass
+
+class LiveGoogleDictation(Dictation):
+    SILENCE_THRESHOLD = 1.5  # seconds
+
+    def __init__(self):
+        self.listening = True
+        self.client = speech.SpeechClient()
+        self.audio_stream = pyaudio.PyAudio().open(
+            format=pyaudio.paInt16,
+            channels=1,
+            rate=16000,
+            input=True,
+            frames_per_buffer=1024
+        )
+
+    def get_config(self):
+        return speech.StreamingRecognitionConfig(
+            config=speech.RecognitionConfig(
+                encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+                sample_rate_hertz=16000,
+                language_code="en-US",
+                enable_automatic_punctuation=True,
+                use_enhanced=True
+            ),
+            interim_results=True,
+        )
+
+    def generate_audio_chunks(self):
+        while self.listening == True:
+            yield self.audio_stream.read(1024, exception_on_overflow=False)
+
+    def done_speaking(self):
+            self.listening = False
+
+    def transcribe_stream(self, stream):
+        done_speaking_timer = None
+        self.state = 'START'
+        finalized_transcript = ''
+
+        # The generator function will continuously yield audio data
+        requests = (speech.StreamingRecognizeRequest(audio_content=chunk) for chunk in stream)
+        responses = self.client.streaming_recognize(self.get_config(), requests)
+
+        # This block only gets called if speech is found in audio buffer from request above
+        for response in responses:
+
+            # Ensure that we have data to process
+            if not response.results:
+                continue
+            result = response.results[0]
+            if not result.alternatives:
+                continue
+
+            # If we recieve any new input, cancel the done_speaking_timer
+            if done_speaking_timer is not None:
+                done_speaking_timer.cancel()
+
+            # This is set when the algo has stopped listening for the current utterance
+            is_final = result.is_final
+
+            # Now process the results from the microphone input
+            if self.state == 'START':
+                print(f'\033[K{result.alternatives[0].transcript.strip()}\r', end='', flush=True)
+                self.state = 'LISTENING'
+
+            elif is_final:
+                finalized_transcript += f"{result.alternatives[0].transcript.strip()} "
+                print(f'\033[K{result.alternatives[0].transcript.strip()}', flush=True)
+                self.state = 'START'
+                done_speaking_timer = Timer(self.SILENCE_THRESHOLD, self.done_speaking)
+                done_speaking_timer.start()
+
+            elif self.state == 'LISTENING':
+                print(f'\033[K{result.alternatives[0].transcript.strip()}', end='\r', flush=True)
+
+        return finalized_transcript
+
+    def getDictatedInput(self, listen_dur_secs, device_index):
+        # Async function to transcribe speech
+        self.listening = True
+        transcript = self.transcribe_stream(self.generate_audio_chunks())
+        print("You: ", transcript)
+        return transcript
 
 class LiveAssemblyAIDictation(Dictation):
     FRAMES_PER_BUFFER = 3200
