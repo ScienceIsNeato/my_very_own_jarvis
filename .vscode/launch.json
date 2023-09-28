@@ -10,7 +10,7 @@
             "args": [
                 "--listen-dur-secs", "150",
                 "--tts-interface", "coqui",
-                "--dictation-type", "live_assemblyai",
+                "--dictation-type", "live_google",
                 "--device-index", "3",
                 "--enable-turn-indicators"
             ],

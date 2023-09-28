@@ -105,6 +105,10 @@ class CoquiTTS(TextToSpeech):
     def convert_text_to_speech(self, text: str):
         try:
             chunks = self.split_text(text)
+            if not chunks:
+                # If text was a single character or something, just use original text
+                chunks = [text]
+
             files = [None] * len(chunks)  # To maintain the order of responses
             payloads_headers = []
 
