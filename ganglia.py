@@ -5,6 +5,7 @@ from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 import sys
 import signal
+from logger import Logger
 
 
 def initialize_conversation(args):
@@ -16,35 +17,35 @@ def initialize_conversation(args):
         try:
             USER_TURN_INDICATOR = UserTurnIndicator()
             AI_TURN_INDICATOR = AiTurnIndicator()
-            print("Turn Indicators initialized successfully.")
+            Logger.print_debug("Turn Indicators initialized successfully.")
         except Exception as e:
-            print(f"Failed to initialize Turn Indicators: {e}")
+            Logger.print_error(f"Failed to initialize Turn Indicators: {e}")
             sys.exit("Initialization failed. Exiting program...")
 
     try:
         tts = parse_tts_interface(args.tts_interface)
         if tts == None:
             sys.exit("ERROR - couldn't load tts sinterface")
-        print("Text-to-Speech interface initialized successfully. TTS: ", tts)
+        Logger.print_debug("Text-to-Speech interface initialized successfully. TTS: ", tts)
     except Exception as e:
-        print(f"Failed to initialize Text-to-Speech interface: {e}")
+        Logger.print_error(f"Failed to initialize Text-to-Speech interface: {e}")
         sys.exit("Initialization failed. Exiting program...")
 
     try:
         dictation = parse_dictation_type(args.dictation_type)
-        print("Dictation type parsed successfully.")
+        Logger.print_debug("Dictation type parsed successfully.")
     except Exception as e:
-        print(f"Failed to parse Dictation type: {e}")
+        Logger.print_error(f"Failed to parse Dictation type: {e}")
         sys.exit("Initialization failed. Exiting program...")
 
     try:
         query_dispatcher = ChatGPTQueryDispatcher(pre_prompt=args.pre_prompt)
-        print("Query Dispatcher initialized successfully.")
+        Logger.print_debug("Query Dispatcher initialized successfully.")
     except Exception as e:
-        print(f"Failed to initialize Query Dispatcher: {e}")
+        Logger.print_error(f"Failed to initialize Query Dispatcher: {e}")
         sys.exit("Initialization failed. Exiting program...")
 
-    print("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
+    Logger.print_info("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
 
     return USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger
 
@@ -78,7 +79,7 @@ def end_conversation(prompt, force=False):
     return prompt and "goodbye" in prompt.strip().lower()
 
 def signal_handler(sig, frame):
-    print("User killed program - exiting gracefully")
+    Logger.print_info("User killed program - exiting gracefully")
     end_conversation(None, force=True)
     exit(0)
 
@@ -96,6 +97,8 @@ def main():
     # print("query_dispatcher: %s", query_dispatcher)
     # print("session_logger: %s", session_logger)
 
+    Logger.print_legend()
+
     signal.signal(signal.SIGINT, signal_handler)
 
     while True:
@@ -105,12 +108,12 @@ def main():
                 break
             ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
         except Exception as e:
-            print(f"Exception occurred during main loop: {str(e)}")
+            Logger.print_error(f"Exception occurred during main loop: {str(e)}")
 
     if session_logger:
         session_logger.finalize_session()
 
-    print("Thanks for chatting! Have a great day!")
+    Logger.print_info("Thanks for chatting! Have a great day!")
 
 if __name__ == "__main__":
     main()

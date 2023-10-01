@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from uuid import uuid4
 from typing import List
 from datetime import datetime
+from logger import Logger
 
 class SessionEvent:
     def __init__(self, user_input: str, response_output: str):
@@ -71,4 +72,4 @@ class CLISessionLogger:
 
     def finalize_session(self):
         self.write_to_disk()
-        print(f"Session log saved as {self.file_name}")
+        Logger.print_info(f"Session log saved as {self.file_name}")

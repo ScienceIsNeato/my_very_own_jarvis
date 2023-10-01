@@ -10,6 +10,7 @@ import subprocess
 from urllib.parse import urlparse
 import requests
 from datetime import datetime
+from logger import Logger
 
 class TextToSpeech(ABC):
     @abstractmethod
@@ -45,7 +46,7 @@ class TextToSpeech(ABC):
             audio_url = response.json().get("audio_url")
             
             if not audio_url:
-                print(f"No audio url found in the response for chunk {index}: {chunk}")
+                Logger.print_debug(f"No audio url found in the response for chunk {index}: {chunk}")
                 return None, index
 
             file_path = os.path.abspath(f"/tmp/chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}_{index}.mp3")
@@ -54,7 +55,7 @@ class TextToSpeech(ABC):
                 audio_file.write(audio_response.content)
             return file_path, index, start_time, end_time
         except Exception as e:
-            print(f"Error fetching audio for chunk {index}: {e}")
+            Logger.print_error(f"Error fetching audio for chunk {index}: {e}")
             return None, index, None, None
 
     def play_speech_response(self, file_path):
@@ -72,13 +73,13 @@ class TextToSpeech(ABC):
             else: # Assume audio file
                 duration_command = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
                 duration_output = subprocess.run(duration_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode('utf-8')
-                print(f"(A Demonic Voice Echos) Audio Duration: {float(duration_output.strip()):.1f} seconds.")
+                Logger.print_demon_output(f"(A Demonic Voice Echos) Audio Duration: {float(duration_output.strip()):.1f} seconds.")
                 play_command = ["ffplay", "-nodisp", "-af", "volume=5", "-autoexit", file_path]
 
             with open(os.devnull, "wb") as devnull:
                 subprocess.run(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL) # Wait for completion
         except Exception as e:
-            print(f"Error playing the speech response: {e}")
+            Logger.print_error(f"Error playing the speech response: {e}")
 
 class GoogleTTS(TextToSpeech):
     def convert_text_to_speech(self, text: str):
@@ -88,7 +89,7 @@ class GoogleTTS(TextToSpeech):
             tts.save(file_path)
             return 0, file_path
         except Exception as e:
-            print(f"Error converting text to speech: {e}")
+            Logger.print_error(f"Error converting text to speech: {e}")
             return 1, None
 
 class NaturalReadersTTS(TextToSpeech):
@@ -144,5 +145,5 @@ class CoquiTTS(TextToSpeech):
 
             return 0, list_file_path
         except Exception as e:
-            print(f"Error converting text to speech: {e}")
+            Logger.print_error(f"Error converting text to speech: {e}")
             return 1, None

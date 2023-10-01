@@ -10,6 +10,8 @@ import speech_recognition as sr
 from abc import ABC, abstractmethod
 from google.cloud import speech_v1p1beta1 as speech
 from threading import Timer
+from logger import Logger
+
 
 listen_dur_secs = 400
 device_index = 3 # My External USB mic. Use the script in tools to find yours. 
@@ -28,29 +30,29 @@ class Dictation(ABC):
 
 class StaticGoogleDictation(Dictation):
     def getDictatedInput(self, listen_dur_secs, device_index):
-        print("Testing audio input access...")
+        Logger.print_debug("Testing audio input access...")
         recognizer = sr.Recognizer()
 
         with sr.Microphone(device_index=device_index) as source:
-            print("Microphone detected.")
-            print("Will listen for", listen_dur_secs, "seconds...")
-            print("Calibrating microphone...")
+            Logger.print_info("Microphone detected.")
+            Logger.print_info("Will listen for", listen_dur_secs, "seconds...")
+            Logger.print_info("Calibrating microphone...")
 
             recognizer.adjust_for_ambient_noise(source, duration=1)
 
-            print("Go!")
+            Logger.print_info("Go!")
 
             audio = recognizer.listen(source, timeout=listen_dur_secs, phrase_time_limit=50000)
-            print("Finished listening.")
+            Logger.print_info("Finished listening.")
 
             try:
                 text = recognizer.recognize_google(audio)
-                print("You: ", text)
+                Logger.print_user_input("You: ", text)
                 return text
             except sr.UnknownValueError:
-                print("Google Speech Recognition could not understand the audio.")
+                Logger.print_error("Google Speech Recognition could not understand the audio.")
             except sr.RequestError as e:
-                print(f"Could not request results from Google Speech Recognition service; {e}")
+                Logger.print_error(f"Could not request results from Google Speech Recognition service; {e}")
 
     def done_speaking(self, current_line):
         pass
@@ -116,18 +118,18 @@ class LiveGoogleDictation(Dictation):
 
             # Now process the results from the microphone input
             if self.state == 'START':
-                print(f'\033[K{result.alternatives[0].transcript.strip()}\r', end='', flush=True)
+                Logger.print_user_input(f'\033[K{result.alternatives[0].transcript.strip()}\r', end='', flush=True)
                 self.state = 'LISTENING'
 
             elif is_final:
                 finalized_transcript += f"{result.alternatives[0].transcript.strip()} "
-                print(f'\033[K{result.alternatives[0].transcript.strip()}', flush=True)
+                Logger.print_user_input(f'\033[K{result.alternatives[0].transcript.strip()}', flush=True)
                 self.state = 'START'
                 done_speaking_timer = Timer(self.SILENCE_THRESHOLD, self.done_speaking)
                 done_speaking_timer.start()
 
             elif self.state == 'LISTENING':
-                print(f'\033[K{result.alternatives[0].transcript.strip()}', end='\r', flush=True)
+                Logger.print_user_input(f'\033[K{result.alternatives[0].transcript.strip()}', end='\r', flush=True)
 
         return finalized_transcript
 
@@ -135,7 +137,7 @@ class LiveGoogleDictation(Dictation):
         # Async function to transcribe speech
         self.listening = True
         transcript = self.transcribe_stream(self.generate_audio_chunks())
-        print("You: ", transcript)
+        Logger.print_user_input("You: ", transcript)
         return transcript
 
 class LiveAssemblyAIDictation(Dictation):
@@ -173,7 +175,7 @@ class LiveAssemblyAIDictation(Dictation):
         if current_line:
             # We have input
             self.speech_started = True
-            print("Began detecting speech...")
+            Logger.print_debug("Began detecting speech...")
 
 
     def done_speaking(self, current_line):
@@ -193,7 +195,7 @@ class LiveAssemblyAIDictation(Dictation):
                 last_line = current_line
                 last_call_time = current_time
                 initialized = True
-                print("Initialized and awaiting input...")
+                Logger.print_debug("Initialized and awaiting input...")
                 return False
         else:
             if current_line != last_line:
@@ -219,7 +221,7 @@ class LiveAssemblyAIDictation(Dictation):
 
     async def send_receive(self, listen_dur_secs, device_index):
         global is_done
-        print("\nConnecting to live dictation service...")
+        Logger.print_info("\nConnecting to live dictation service...")
 
         # Put the recognizer and source creation inside the send_receive function
         recognizer = sr.Recognizer()
@@ -240,7 +242,7 @@ class LiveAssemblyAIDictation(Dictation):
                 is_done = False
                 with sr.Microphone(device_index=device_index) as s:
                     recognizer.adjust_for_ambient_noise(s, duration=1)
-                    print("Start Talking!")
+                    Logger.print_info("Start Talking!")
 
                     while not is_done:
                         try:
@@ -249,17 +251,17 @@ class LiveAssemblyAIDictation(Dictation):
                             json_data = json.dumps({"audio_data": str(data)})
                             await _ws.send(json_data)
                         except websockets.exceptions.ConnectionClosedError as e:
-                            print(e)
+                            Logger.print_error(e)
                             assert e.code == 4008
                             break
                         except Exception as e:
                             if "(OK)" not in str(e):
-                                print("Error in send:", e)
+                                Logger.print_error("Error in send:", e)
                             break
                         try:
                             await asyncio.sleep(0.01)
                         except Exception as e:
-                            print("cancelled:", e)
+                            Logger.print_error("cancelled:", e)
                             is_done = True
                             break
                 return is_done
@@ -283,19 +285,19 @@ class LiveAssemblyAIDictation(Dictation):
                                     newly_started = self.speech_start_detected(current_phrase)
                                 
                                 if self.speech_started or newly_started:
-                                    print(current_phrase)
+                                    Logger.print_user_input(current_phrase)
 
                             # Send the current phrase to the done_speaking method
                             is_done = self.done_speaking(current_phrase)
                             if is_done:
-                                print("Finished listening.")
+                                Logger.print_info("Finished listening.")
                                 break
                     except websockets.exceptions.ConnectionClosedError as e:
-                        print(e)
+                        Logger.print_error(e)
                         assert e.code == 4008
                         break
                     except Exception as e:
-                        print("Error in receive:", e)
+                        Logger.print_error("Error in receive:", e)
                         break
 
                 # Print the final set of complete phrases
@@ -304,11 +306,11 @@ class LiveAssemblyAIDictation(Dictation):
                 if dictation_results:
                     final_phrases = {phrase for phrase in dictation_results if re.match(r'^[A-Z].*\.$', phrase)}
                 else:
-                    print("No dictation results collected")
+                    Logger.print_info("No dictation results collected")
                 
                 final_phrase = ' '.join(final_phrases)
 
-                print("You: ", final_phrase)
+                Logger.print_user_input("You: ", final_phrase)
                 return final_phrase
 
             send_task = asyncio.create_task(send())
@@ -330,10 +332,10 @@ class LiveAssemblyAIDictation(Dictation):
                 receive_result = None
 
             if isinstance(send_result, Exception):
-                print("Error in send_result:", send_result)
+                Logger.print_error("Error in send_result:", send_result)
 
             if isinstance(receive_result, Exception):
-                print("Error in receive_result:", receive_result)
+                Logger.print_error("Error in receive_result:", receive_result)
 
             # Return the result from the receive() function
             return receive_result

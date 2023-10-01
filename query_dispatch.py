@@ -3,6 +3,7 @@ import openai
 from datetime import datetime
 from dotenv import load_dotenv
 from abc import ABC, abstractmethod
+from logger import Logger
 
 RESPONDER_NAME = "Them"
 
@@ -33,7 +34,7 @@ class ChatGPTQueryDispatcher:
         raw_message = response.choices[0].text.strip()
         curated_message = f"{RESPONDER_NAME}: {raw_message}"
 
-        print(f"{RESPONDER_NAME}: {raw_message}")
+        Logger.print_demon_output(f"{RESPONDER_NAME}: {raw_message}")
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         with open(f"/tmp/chatgpt_output_{timestamp}_raw.txt", "w") as file:
