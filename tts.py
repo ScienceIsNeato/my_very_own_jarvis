@@ -11,6 +11,10 @@ from urllib.parse import urlparse
 import requests
 from datetime import datetime
 from logger import Logger
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import concurrent.futures
+import time
+from logger import Logger
 
 class TextToSpeech(ABC):
     @abstractmethod
@@ -58,7 +62,7 @@ class TextToSpeech(ABC):
             Logger.print_error(f"Error fetching audio for chunk {index}: {e}")
             return None, index, None, None
 
-    def play_speech_response(self, file_path):
+    def play_speech_response(self, file_path, raw_response):
         try:
             if file_path.endswith('.txt'): # Concatenate and play if it's a text file containing paths
                 output_file = "combined_audio.mp3"
@@ -73,8 +77,10 @@ class TextToSpeech(ABC):
             else: # Assume audio file
                 duration_command = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
                 duration_output = subprocess.run(duration_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode('utf-8')
-                Logger.print_demon_output(f"(A Demonic Voice Echos) Audio Duration: {float(duration_output.strip()):.1f} seconds.")
                 play_command = ["ffplay", "-nodisp", "-af", "volume=5", "-autoexit", file_path]
+
+            Logger.print_demon_output(f"\nA Demonic Voice Echos (Audio Duration: {float(duration_output.strip()):.1f} seconds. Playing... ")
+            Logger.print_demon_output(raw_response)
 
             with open(os.devnull, "wb") as devnull:
                 subprocess.run(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL) # Wait for completion
@@ -99,18 +105,23 @@ class NaturalReadersTTS(TextToSpeech):
 
 class CoquiTTS(TextToSpeech):
     def __init__(self, api_url, bearer_token, voice_id):
+        Logger.print_info("Initializing CoquiTTS...")
+
         self.api_url = api_url
         self.bearer_token = bearer_token
         self.voice_id = voice_id
 
     def convert_text_to_speech(self, text: str):
         try:
+            Logger.print_info("\nConverting text to speech...")
+            start_time = time.time()
+            
             chunks = self.split_text(text)
             if not chunks:
-                # If text was a single character or something, just use original text
+                Logger.print_debug("Tried to split text into phrase chunks, but no chunks were found. Returning original text.")
                 chunks = [text]
 
-            files = [None] * len(chunks)  # To maintain the order of responses
+            files = [None] * len(chunks)
             payloads_headers = []
 
             for index, chunk in enumerate(chunks):
@@ -127,23 +138,33 @@ class CoquiTTS(TextToSpeech):
                 }
 
                 payloads_headers.append((chunk, payload, headers, index))
+            
+            Logger.print_debug(f"Splitting oriignal text into {len(chunks)} phrases and converting to speech in parallel...")
+
+            spinner = "|/-\\"
+            spinner_idx = 0
 
             with ThreadPoolExecutor() as executor:
                 futures = [executor.submit(self.fetch_audio, chunk, payload, headers, index) for chunk, payload, headers, index in payloads_headers]
 
-                for future in concurrent.futures.as_completed(futures):
+                for future in as_completed(futures):
+                    Logger.print_debug(f"\rWaiting for responses... {spinner[spinner_idx % len(spinner)]}", end='', flush=True)
+                    spinner_idx += 1
+
                     file_path, idx, _, _ = future.result()
                     if file_path:
                         files[idx] = file_path
 
-            files = [file for file in files if file] # Removing None values, if any
+            Logger.print_info(f"\nText-to-speech conversion completed in {time.time() - start_time:.5f} seconds.")
 
-            # Write the list of files to a temporary file
+            files = [file for file in files if file]
+
             list_file_path = "/tmp/concat_list.txt"
             with open(list_file_path, 'w') as list_file:
                 list_file.write('\n'.join(f"file '{file}'" for file in files))
 
             return 0, list_file_path
+
         except Exception as e:
             Logger.print_error(f"Error converting text to speech: {e}")
             return 1, None

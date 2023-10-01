@@ -66,7 +66,7 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logg
 
     if tts:
         error_code, file_path = tts.convert_text_to_speech(response)
-        tts.play_speech_response(file_path)
+        tts.play_speech_response(file_path, response)
 
     if session_logger:
         session_logger.log_session_interaction(SessionEvent(prompt, response))

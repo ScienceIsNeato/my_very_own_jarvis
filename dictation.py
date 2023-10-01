@@ -61,6 +61,7 @@ class LiveGoogleDictation(Dictation):
     SILENCE_THRESHOLD = 1.5  # seconds
 
     def __init__(self):
+        Logger.print_debug("Initializing LiveGoogleDictation...")
         self.listening = True
         self.client = speech.SpeechClient()
         self.audio_stream = pyaudio.PyAudio().open(
@@ -70,6 +71,7 @@ class LiveGoogleDictation(Dictation):
             input=True,
             frames_per_buffer=1024
         )
+        Logger.print_info("Audio stream opened.")
 
     def get_config(self):
         return speech.StreamingRecognitionConfig(
@@ -94,6 +96,8 @@ class LiveGoogleDictation(Dictation):
         done_speaking_timer = None
         self.state = 'START'
         finalized_transcript = ''
+
+        Logger.print_info("Listening...")
 
         # The generator function will continuously yield audio data
         requests = (speech.StreamingRecognizeRequest(audio_content=chunk) for chunk in stream)

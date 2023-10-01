@@ -35,7 +35,7 @@ def main() -> None:
     if error_code != 0:
         raise Exception(f"Error converting text to speech: {error_code}")
 
-    tts.play_speech_response(filepath)
+    tts.play_speech_response(filepath, text)
     timings["Audio Played"] = time.time()
 
     for event, timestamp in timings.items():
