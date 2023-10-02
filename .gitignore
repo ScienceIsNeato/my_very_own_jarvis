@@ -1,7 +1,9 @@
 **/__pycache__/
 **/__pycache__/*
+.DS_Store
 recorded_audio.*
 .env
 /output
 concat_list.txt
 coqui_config.json
+config/chatgpt_session_config.json

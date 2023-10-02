@@ -7,6 +7,7 @@ from logger import Logger
 from threading import Thread
 from time import sleep
 from time import time
+import json
 
 
 RESPONDER_NAME = "Them"
@@ -20,16 +21,28 @@ class ChatGPTQueryDispatcher:
     load_dotenv()
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-    def __init__(self, pre_prompt=None):
-        self.pre_prompt = pre_prompt
-        self.messages = [ {"role": "system", "content": self.pre_prompt} ]
-        self.messages.append({"role": "system", "content": "keep answers brief"})
-        self.messages.append({"role": "system", "content": "intersperse answer with demonic utterances and laughter in the style of stephen king"})
-        self.messages.append({"role": "system", "content": "try not to be repetitive or boring"})
-        self.messages.append({"role": "system", "content": "try not to steer the conversation"})
-        self.messages.append({"role": "system", "content": "you are oddly obsessed with steven segal"})
+    def __init__(self):
+        self.config_file_path = "config/chatgpt_session_config.json"
+        self.messages = []
+        self.load_config()
 
+    def load_config(self):
+        try:
+            with open(self.config_file_path) as f:
+                config = json.load(f)
+            
+            pre_prompts = config.get("pre_prompts")
+            if pre_prompts:
+                # Each line here represents a rule that the AI will attempt to follow when generating responses
+                for prompt in pre_prompts:
+                    self.messages.append({"role": "system", "content": prompt})
+            Logger.print_debug("Loaded pre-prompts from config file: ", pre_prompts)
 
+        except FileNotFoundError:
+            Logger.print_error("Error: Config file `config/chatgpt_session_config.json` not found")
+
+        except json.JSONDecodeError:
+            Logger.print_error("Error: Invalid JSON in config file: `config/chatgpt_session_config.json`")
 
     def sendQuery(self, current_input):
         self.messages.append({"role": "user", "content": current_input})

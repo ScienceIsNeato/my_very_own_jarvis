@@ -39,7 +39,7 @@ def initialize_conversation(args):
         sys.exit("Initialization failed. Exiting program...")
 
     try:
-        query_dispatcher = ChatGPTQueryDispatcher(pre_prompt=args.pre_prompt)
+        query_dispatcher = ChatGPTQueryDispatcher()
         Logger.print_debug("Query Dispatcher initialized successfully.")
     except Exception as e:
         Logger.print_error(f"Failed to initialize Query Dispatcher: {e}")

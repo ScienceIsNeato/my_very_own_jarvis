@@ -81,6 +81,7 @@ class TextToSpeech(ABC):
 
             Logger.print_demon_output(f"\nA Demonic Voice Echos (Audio Duration: {float(duration_output.strip()):.1f} seconds. Playing... ")
             Logger.print_demon_output(raw_response)
+            # TODO - save the audio to disk here. Also see if we can save the input audio to disk as well?
 
             with open(os.devnull, "wb") as devnull:
                 subprocess.run(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL) # Wait for completion

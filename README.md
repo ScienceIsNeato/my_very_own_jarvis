@@ -91,6 +91,12 @@ Create a file named `coqui_config.json` in the root directory with the following
 }
 ```
 
+### AI Session Tuning
+
+- when using chatgpt, the persona of the AI can be tweaked by modifying the config file:
+    - `config/chatgpt_session_config.json`
+    - see `config/chatgpt_session_config.json.template` for examples and explanations. 
+
 ## Contributing
 
 If you would like to contribute to GANGLIA, please fork the repository and submit a pull request with your changes.
