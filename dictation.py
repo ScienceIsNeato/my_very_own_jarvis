@@ -12,7 +12,6 @@ from google.cloud import speech_v1p1beta1 as speech
 from threading import Timer
 from logger import Logger
 
-
 listen_dur_secs = 400
 device_index = 3 # My External USB mic. Use the script in tools to find yours. 
 
@@ -71,7 +70,7 @@ class LiveGoogleDictation(Dictation):
             input=True,
             frames_per_buffer=1024
         )
-        Logger.print_info("Audio stream opened.")
+        Logger.print_info("Audio stream opened successfully")
 
     def get_config(self):
         return speech.StreamingRecognitionConfig(
@@ -121,6 +120,7 @@ class LiveGoogleDictation(Dictation):
             is_final = result.is_final
 
             # Now process the results from the microphone input
+            # (the fancy escape sequeces are for terminal cursor and feed control)
             if self.state == 'START':
                 Logger.print_user_input(f'\033[K{result.alternatives[0].transcript.strip()}\r', end='', flush=True)
                 self.state = 'LISTENING'

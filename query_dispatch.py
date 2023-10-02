@@ -51,7 +51,6 @@ class ChatGPTQueryDispatcher:
 
         return raw_message
 
-
 class BardQueryDispatcher(QueryDispatcher):
     def sendQuery(self, current_input):
         # Stubbed method, implement the actual functionality here
