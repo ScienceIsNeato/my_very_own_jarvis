@@ -3,6 +3,11 @@ import openai
 from datetime import datetime
 from dotenv import load_dotenv
 from abc import ABC, abstractmethod
+from logger import Logger
+from threading import Thread
+from time import sleep
+from time import time
+
 
 RESPONDER_NAME = "Them"
 
@@ -27,8 +32,18 @@ class ChatGPTQueryDispatcher:
 
 
     def sendQuery(self, current_input):
-        self.messages.append(
-            {"role": "user", "content": current_input},
+        self.messages.append({"role": "user", "content": current_input})
+        start_time = time()
+        Logger.print_debug("Sending query to AI server...")
+        prompt = f"Current-Prompt: {current_input}"
+
+        response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=prompt,
+            max_tokens=3500,
+            n=1,
+            stop=None,
+            temperature=0.1,
         )
         chat = openai.ChatCompletion.create(
             model="gpt-3.5-turbo", 
@@ -38,7 +53,10 @@ class ChatGPTQueryDispatcher:
         self.messages.append({"role": "assistant", "content": reply})
         curated_message = f"{RESPONDER_NAME}: {reply}"
 
-        print(f"{RESPONDER_NAME}: {reply}")
+        Logger.print_info(f"AI response received in {time() - start_time:.5f} seconds.")
+
+        raw_message = response.choices[0].text.strip()
+        curated_message = f"{RESPONDER_NAME}: {raw_message}"
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         with open(f"/tmp/chatgpt_output_{timestamp}_raw.txt", "w") as file:

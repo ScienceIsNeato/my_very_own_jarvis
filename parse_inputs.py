@@ -3,6 +3,7 @@ import json
 from tts import TextToSpeech, GoogleTTS, NaturalReadersTTS, CoquiTTS
 from dictation import Dictation, StaticGoogleDictation, LiveGoogleDictation, LiveAssemblyAIDictation
 import sys
+from logger import Logger
 
 def load_coqui_config():
     """
@@ -18,17 +19,17 @@ def load_coqui_config():
         if "api_url" not in coqui_config or "bearer_token" not in coqui_config or "voice_id" not in coqui_config:
             raise ValueError("Missing one or more required keys in coqui_config.json")
 
-        print("Successfully loaded coqui config")
+        Logger.print_info("Successfully loaded coqui config")
         return coqui_config["api_url"], coqui_config["bearer_token"], coqui_config["voice_id"]
 
     except FileNotFoundError:
-        print("Error: coqui_config.json file not found in the current directory.", file=sys.stderr)
+        Logger.print_error("Error: coqui_config.json file not found in the current directory.", file=sys.stderr)
         sys.exit(1)
     except json.JSONDecodeError:
-        print("Error: coqui_config.json file contains invalid JSON.", file=sys.stderr)
+        Logger.print_error("Error: coqui_config.json file contains invalid JSON.", file=sys.stderr)
         sys.exit(1)
     except ValueError as ve:
-        print(f"Error: {ve}", file=sys.stderr)
+        Logger.print_error(f"Error: {ve}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -40,10 +41,10 @@ def parse_tts_interface(tts_interface: str) -> TextToSpeech:
     elif tts_interface.lower() == "coqui":
         try:
             api_url, bearer_token, voice_id = load_coqui_config()
-            print("api_url: ", api_url)
+            Logger.print_debug("api_url: ", api_url)
             return CoquiTTS(api_url, bearer_token, voice_id)
         except Exception as e:
-            print(f"Error initializing CoquiTTS: {str(e)}", file=sys.stderr)
+            Logger.print_error(f"Error initializing CoquiTTS: {str(e)}", file=sys.stderr)
             raise ValueError("Unable to load coqui config.")
     else:
         raise ValueError(
