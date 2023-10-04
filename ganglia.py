@@ -11,7 +11,7 @@ from logger import Logger
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
     AI_TURN_INDICATOR = None
-    session_logger = None if args.suppress_session_logging else CLISessionLogger()
+    session_logger = None if args.suppress_session_logging else CLISessionLogger(args)
 
     if args.enable_turn_indicators:
         try:
