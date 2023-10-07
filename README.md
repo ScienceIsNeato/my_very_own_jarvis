@@ -7,38 +7,33 @@ GANGLIA:
 - <b>G</b>uided
 - <b>L</b>inguistic
 - <b>I</b>nterface and
-- <b>A</b>Automation (working title)
+- <b>A</b>utomation (working title)
 
-GANGLIA is a highly modularized, generic personal assistant. GANGLIA has been built in part by AI (monitored by software developers).
+GANGLIA is a highly modularized, generic personal assistant. Built partially by AI (supervised by software developers), GANGLIA allows users to have multi-modal interactions with AI through natural language conversations. Its flexible architecture allows each component to be replaced or mocked, enabling developers to tailor GANGLIA to their specific needs.
 
-GANGLIA allows users to have multi-modal interactions with AI using natural language conversations. It is highly customizable and can be easily extended to incorporate additional functionality. Each component of GANGLIA can be swapped or mocked, allowing developers to customize GANGLIA to meet their specific needs.
+## Modules Overview
 
-Here's a table of possible modules, potential values, and defaults:
+| Module              | Possible Values | Default |
+|---------------------|-----------------|---------|
+| Speech Recognition  | AssemblyAI, Static Google Cloud Speech-to-Text | Live Google Cloud Speech-to-Text |
+| Text To Speech      | Google, Natural Reader (Unavailable), Amazon Polly (Unavailable) | Google |
+| AI Backend          | GPT-3.5 (Unavailable), GPT-4 | GPT-4 |
+| Response Visualizer | CLI, NaturalReaderUI (Unavailable) | CLI |
 
-Module              | Possible Values                              | Default Value
-------------------- | ------------------------------------------- | -------------
-Speech Recognition  | AssemblyAI, Google Cloud Speech-to-Text      | Google Cloud Speech-to-Text
-Text To Speech      | Google Text-to-Speech, Natural Reader (Unavailable), Amazon Polly (Unavailable) | Google Text-to-Speech
-AI Backend          | GPT-3.5 (Unavailable), GPT-4, Bard (Unavailable)             | GPT-4
-Response Visualizer | cli, NaturalReaderUI (Unavailable)           | cli
+**Note**: This list is non-exhaustive and can be expanded as needed.
 
+## Getting Started
 
-Note: This is not an exhaustive list and the table can be easily extended to incorporate additional modules as needed.
+### Installation
 
-## Installation
-
-To use GANGLIA, you will need to install Python 3.x and the following libraries:
-
-- SpeechRecognition
-- PyAudio
-- OpenAI
-- DotEnv
-
-You can install these libraries using pip by running the following command:
-
-`pip install SpeechRecognition PyAudio openai python-dotenv`
+1. Install Python 3.x.
+2. Install the necessary libraries using:
+```bash
+pip install -r requirements.txt
+```
 
 ## Prerequisites (for google speech to text)
+
 - Google cloud cli
     - pip install google-cloud-speech
     - https://cloud.google.com/docs/authentication/provide-credentials-adc#how-to
@@ -61,21 +56,25 @@ Here's a table of features, their implementation names, and the corresponding en
 
 To start GANGLIA, run the following command in your terminal:
 
-python GANGLIA.py [-l LISTEN_DUR_SECS] [-d DEVICE_INDEX] [--pre_prompt PRE_PROMPT] [-t TTS_INTERFACE] [--static-response]
+python GANGLIA.py [-d DEVICE_INDEX] [-t TTS_INTERFACE] [--static-response]
 
 Here's a description of each command-line argument:
 
-- `-l LISTEN_DUR_SECS` or `--listen_dur_secs LISTEN_DUR_SECS`: Sets the duration in seconds that GANGLIA will listen for before automatically stopping. The default value is 5 seconds.
 - `-d DEVICE_INDEX` or `--device_index DEVICE_INDEX`: Sets the index of the input device to use. The default value is 0.
-- `--pre_prompt PRE_PROMPT`: Sets any context you want for the session (should take the form of a prompt). The default value is None.
 - `-t TTS_INTERFACE` or `--tts_interface TTS_INTERFACE`: Sets the text-to-speech interface to use. Available options are 'google' or 'natural_reader'. The default value is 'google'.
 - `--help` or `-h`: Displays usage instructions and a list of available options.
-
 
 Once GANGLIA is running, it will listen for voice prompts. When you're ready to ask a question or make a request, simply speak into your microphone. Once you've finished speaking, GANGLIA will generate a response using OpenAI's GPT-3 engine and speak it aloud using the pyttsx3 library.
 
 ## TTS (Text To Speech)
+
 - there are a few options for how to render the AI's text response as audio. One option is to use the coqui api.
+
+- `--tts-interface google` [DEFAULT] (only prints input at end of sample collection)
+    - the free, simple female google tts voice
+- `--tts-interface coqui` (live update of text input as it is being heard)
+    - coqui is an incredible voice synthesis service that offers endless options for speechification
+    - when using Coqui as TTS, set up the coqui_config.json in the project root (see section below)
 
 #### Setting up Coqui TTS Configuration
 
@@ -107,12 +106,7 @@ GANGLIA is licensed under the MIT License. See the LICENSE file for more informa
 
 ## Credits
 
-GANGLIA was created by William R Martin. It uses OpenAI's GPT-4 engine and several open source libraries, including:
-
-- SpeechRecognition
-- PyAudio
-- pyttsx3
-and more
+GANGLIA was created by William R Martin.
 
 ## Contact
 

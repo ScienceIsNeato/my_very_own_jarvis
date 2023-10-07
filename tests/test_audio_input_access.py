@@ -6,15 +6,11 @@ import subprocess
 import pytest
 
 @pytest.fixture
-def listen_dur_secs():
-    return 5
-
-@pytest.fixture
 def device_index():
     return 0
 
 @pytest.mark.skip
-def test_audio_input(listen_dur_secs, device_index):
+def test_audio_input(device_index):
     print("Testing audio input access...")
     print("Using SpeechRecognition version: ", sr.__version__)
     print("Using PyAudio version: ", pyaudio.__version__)
@@ -31,11 +27,10 @@ def test_audio_input(listen_dur_secs, device_index):
         print("Device index:", device_index)
         print("Format:", source.format)
         print("Sample rate:", source.SAMPLE_RATE)
-        print("Will listen for", listen_dur_secs, "seconds...")
         print("Channels:", channels)
         print("Go!")
 
-        audio = recognizer.listen(source, timeout=listen_dur_secs)
+        audio = recognizer.listen(source)
         print("Finished listening.")
 
         try:
@@ -62,9 +57,7 @@ def test_audio_input(listen_dur_secs, device_index):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--listen_dur_secs', type=int, default=5,
-                        help='Number of seconds to listen.')
     parser.add_argument('--device_index', type=int, default=0,
                         help='Index of the input device to use.')
     args = parser.parse_args()
-    test_audio_input(args.listen_dur_secs, args.device_index)
+    test_audio_input(args.device_index)
