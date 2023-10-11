@@ -8,6 +8,7 @@ from threading import Thread
 from time import sleep
 from time import time
 import json
+import tempfile
 
 
 RESPONDER_NAME = "Them"
@@ -22,7 +23,7 @@ class ChatGPTQueryDispatcher:
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
     def __init__(self):
-        self.config_file_path = "config/chatgpt_session_config.json"
+        self.config_file_path = os.path.join("config", "chatgpt_session_config.json")
         self.messages = []
         self.load_config()
 
@@ -39,10 +40,11 @@ class ChatGPTQueryDispatcher:
             Logger.print_debug("Loaded pre-prompts from config file: ", pre_prompts)
 
         except FileNotFoundError:
-            Logger.print_error("Error: Config file `config/chatgpt_session_config.json` not found")
+            Logger.print_error(f"Error: Config file `{self.config_file_path}` not found")
 
         except json.JSONDecodeError:
-            Logger.print_error("Error: Invalid JSON in config file: `config/chatgpt_session_config.json`")
+            Logger.print_error(f"Error: Invalid JSON in config file: `{self.config_file_path}`")
+
 
     def sendQuery(self, current_input):
         self.messages.append({"role": "user", "content": current_input})
@@ -72,10 +74,13 @@ class ChatGPTQueryDispatcher:
         curated_message = f"{RESPONDER_NAME}: {raw_message}"
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        with open(f"/tmp/chatgpt_output_{timestamp}_raw.txt", "w") as file:
+
+        temp_dir = tempfile.gettempdir()
+
+        with open(os.path.join(temp_dir, f"chatgpt_output_{timestamp}_raw.txt"), "w") as file:
             file.write(reply)
 
-        with open(f"/tmp/chatgpt_output_{timestamp}_curated.txt", "w") as file:
+        with open(os.path.join(temp_dir, f"chatgpt_output_{timestamp}_curated.txt"), "w") as file:
             file.write(curated_message)
 
         return reply

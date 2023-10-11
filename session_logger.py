@@ -6,6 +6,7 @@ from uuid import uuid4
 from typing import List
 from datetime import datetime
 from logger import Logger
+import tempfile
 
 class SessionEvent:
     def __init__(self, user_input: str, response_output: str):
@@ -56,7 +57,7 @@ class CLISessionLogger:
     def __init__(self):
         self.session_id = str(uuid4())
         self.timestamp = time.strftime("%Y-%m-%dT%H:%M:%S")
-        self.file_name = f"/tmp/GANGLIA_session_{self.timestamp}.json"
+        self.file_name = os.path.join(tempfile.gettempdir(), f"GANGLIA_session_{self.timestamp}.json")
         self.conversation = []
 
     def log_session_interaction(self, session_event: SessionEvent):
