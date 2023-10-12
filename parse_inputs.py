@@ -71,5 +71,6 @@ def parse_args(args=None):
     parser.add_argument("--suppress-session-logging", action="store_true", help="Disable session logging (default: False)")
     parser.add_argument("--enable-turn-indicators", action="store_true", help="Enable turn indicators (default: False)")
     parser.add_argument("--dictation-type", type=str, default="static_google", choices=["static_google", "live_google", "live_assemblyai"], help="Dictation type to use. Available options: 'static_google', 'live_google', 'live_assemblyai'")
+    parser.add_argument("--store-logs", action="store_true", help="Enable storing logs in the cloud (default: False)")
 
     return parser.parse_args(args)
