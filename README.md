@@ -108,6 +108,10 @@ Create a file named `coqui_config.json` in the root directory with the following
    - `GCP_BUCKET_NAME=<your_bucket_name>`
    - `GCP_PROJECT_NAME=<your_project_name>`
 
+## Windows Support
+
+- this program should work on windows. If you don't want the console output to look wierd, download Windows Console and use that to run the program
+
 ## Contributing
 
 If you would like to contribute to GANGLIA, please fork the repository and submit a pull request with your changes.

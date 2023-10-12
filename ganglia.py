@@ -26,7 +26,7 @@ def initialize_conversation(args):
         tts = parse_tts_interface(args.tts_interface)
         if tts == None:
             sys.exit("ERROR - couldn't load tts sinterface")
-        Logger.print_debug("Text-to-Speech interface initialized successfully. TTS: ", tts)
+        Logger.print_debug("Text-to-Speech interface initialized successfully. TTS: ", args.tts_interface)
     except Exception as e:
         Logger.print_error(f"Failed to initialize Text-to-Speech interface: {e}")
         sys.exit("Initialization failed. Exiting program...")
