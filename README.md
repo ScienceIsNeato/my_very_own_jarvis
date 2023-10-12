@@ -94,7 +94,19 @@ Create a file named `coqui_config.json` in the root directory with the following
 
 - when using chatgpt, the persona of the AI can be tweaked by modifying the config file:
     - `config/chatgpt_session_config.json`
-    - see `config/chatgpt_session_config.template` for examples and explanations. 
+    - see `config/chatgpt_session_config.template` for examples and explanations.
+
+## Setting up Session Logging to the Cloud (Optional)
+
+- If you want store the session events to gcp, use the `--store-logs` command-line flag when running GANGLIA
+
+#### Setup:
+
+1. Install Google Cloud SDK if you haven't already, and authenticate using `gcloud auth application-default login`. 
+2. Make sure that you have a Google Cloud Storage bucket where the logs will be stored. Take note of the bucket name and your project name.
+3. Update the `.env` file in your project root directory to include the following:
+   - `GCP_BUCKET_NAME=<your_bucket_name>`
+   - `GCP_PROJECT_NAME=<your_project_name>`
 
 ## Contributing
 

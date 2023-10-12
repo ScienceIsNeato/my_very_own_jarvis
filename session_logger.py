@@ -1,5 +1,7 @@
 import json
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import time
 from abc import ABC, abstractmethod
 from uuid import uuid4
@@ -7,6 +9,7 @@ from typing import List
 from datetime import datetime
 from logger import Logger
 import tempfile
+from google.cloud import storage
 
 class SessionEvent:
     def __init__(self, user_input: str, response_output: str):
@@ -54,11 +57,14 @@ class SessionLogger(ABC):
 
 
 class CLISessionLogger:
-    def __init__(self):
+    def __init__(self, options):
         self.session_id = str(uuid4())
         self.timestamp = time.strftime("%Y-%m-%dT%H:%M:%S")
         self.file_name = os.path.join(tempfile.gettempdir(), f"GANGLIA_session_{self.timestamp}.json")
         self.conversation = []
+        self.bucket_name = os.getenv('GCP_BUCKET_NAME')
+        self.project_name = os.getenv('GCP_PROJECT_NAME')
+        self.options = options  # Store the options structure
 
     def log_session_interaction(self, session_event: SessionEvent):
         self.conversation.append(session_event)
@@ -67,10 +73,19 @@ class CLISessionLogger:
     def write_to_disk(self):
         session = Session(self.session_id, self.timestamp, self.conversation)
         json_data = json.dumps(session.to_dict(), indent=2)
-        file_name = self.file_name
-        with open(file_name, "w") as f:
+        with open(self.file_name, "w") as f:
             f.write(json_data)
+
+    def store_in_cloud(self):
+        storage_client = storage.Client(project=self.project_name)
+        bucket = storage_client.get_bucket(self.bucket_name)
+        blob = bucket.blob(os.path.basename(self.file_name))
+        blob.upload_from_filename(self.file_name)
 
     def finalize_session(self):
         self.write_to_disk()
-        Logger.print_info(f"Session log saved as {self.file_name}")
+        if self.options.store_logs:  # Check the flag from the options
+            self.store_in_cloud()
+            Logger.print_info(f"Session log saved as {self.file_name} and stored in {self.bucket_name}.")
+        else:
+            Logger.print_info(f"Session log saved as {self.file_name}.")
