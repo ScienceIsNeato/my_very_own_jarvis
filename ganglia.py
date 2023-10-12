@@ -52,7 +52,7 @@ def initialize_conversation(args):
 def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
     if USER_TURN_INDICATOR:
         USER_TURN_INDICATOR.input_in()
-    prompt = dictation.getDictatedInput(args.listen_dur_secs, args.device_index) if dictation else input()
+    prompt = dictation.getDictatedInput(args.device_index) if dictation else input()
     if USER_TURN_INDICATOR:
         USER_TURN_INDICATOR.input_out()
     return prompt
@@ -108,7 +108,13 @@ def main():
                 break
             ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
         except Exception as e:
-            Logger.print_error(f"Exception occurred during main loop: {str(e)}")
+            if 'Exceeded maximum allowed stream duration' in str(e):
+                Logger.print_info('Stream exceeded max duration. Refreshing convo...')
+                continue
+
+            else:
+                Logger.print_error(f"Exception in main loop: {str(e)}")
+
 
     if session_logger:
         session_logger.finalize_session()

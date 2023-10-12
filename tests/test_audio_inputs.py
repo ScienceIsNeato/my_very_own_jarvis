@@ -15,13 +15,13 @@ def play_phrase(phrase="Testing microphone, please listen.", repetitions=3, dura
         repeated_phrase = phrase_audio * repetitions
         play(repeated_phrase[:duration])
 
-def getDictatedInput(listen_dur_secs, device_index):
+def getDictatedInput(device_index):
     recognizer = sr.Recognizer()
 
     try:
         with sr.Microphone(device_index=device_index) as source:
             recognizer.adjust_for_ambient_noise(source, duration=1)
-            audio = recognizer.listen(source, timeout=listen_dur_secs, phrase_time_limit=listen_dur_secs*1000)
+            audio = recognizer.listen(source)
             text = recognizer.recognize_google(audio)
             return True, text
     except Exception as e:
@@ -29,7 +29,7 @@ def getDictatedInput(listen_dur_secs, device_index):
         return False, None
 
 @pytest.mark.skip
-def test_microphones(listen_dur_secs=3):
+def test_microphones():
     recognizer = sr.Recognizer()
     available_mics = sr.Microphone.list_microphone_names()
 
@@ -39,10 +39,10 @@ def test_microphones(listen_dur_secs=3):
         print(f"Testing microphone {index}: {mic_name}")
 
         # Play the phrase in a separate thread for each input
-        phrase_thread = threading.Thread(target=play_phrase, args=("Testing microphone, please listen.", 3, listen_dur_secs * 1000))
+        phrase_thread = threading.Thread(target=play_phrase, args=("Testing microphone, please listen.", 3))
         phrase_thread.start()
 
-        is_available, text = getDictatedInput(listen_dur_secs, device_index=index)
+        is_available, text = getDictatedInput(device_index=index)
         status = "Available" if is_available else "N/A"
         results.append((index, mic_name, status))
 

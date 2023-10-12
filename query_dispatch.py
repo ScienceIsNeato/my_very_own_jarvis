@@ -47,7 +47,7 @@ class ChatGPTQueryDispatcher:
     def sendQuery(self, current_input):
         self.messages.append({"role": "user", "content": current_input})
         start_time = time()
-        Logger.print_debug("Sending query to AI server...")
+        Logger.print_debug("Sending query to AI server (takes 2-20 secs depending on length of response)...")
         prompt = f"Current-Prompt: {current_input}"
 
         response = openai.Completion.create(

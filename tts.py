@@ -48,10 +48,13 @@ class TextToSpeech(ABC):
             response = requests.post(self.api_url, json=payload, headers=headers, timeout=30)
             end_time = datetime.now()  # Record end time
             audio_url = response.json().get("audio_url")
-            
+
+            if response.status_code != 200 and response.status_code != 201:
+                raise Exception(f"Error {response.status_code} fetching audio: {response.text}")
+
             if not audio_url:
                 Logger.print_debug(f"No audio url found in the response for chunk {index}: {chunk}")
-                return None, index
+                return None, index, None, None
 
             file_path = os.path.abspath(f"/tmp/chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}_{index}.mp3")
             audio_response = requests.get(audio_url, timeout=30)
@@ -129,7 +132,9 @@ class CoquiTTS(TextToSpeech):
                 payload = {
                     "name": "GANGLIA",
                     "voice_id": self.voice_id,
-                    "text": chunk
+                    "text": chunk,
+                     "speed": 1,
+                    "language": "en",
                 }
 
                 headers = {
@@ -140,16 +145,16 @@ class CoquiTTS(TextToSpeech):
 
                 payloads_headers.append((chunk, payload, headers, index))
             
-            Logger.print_debug(f"Splitting oriignal text into {len(chunks)} phrases and converting to speech in parallel...")
+            Logger.print_debug(f"Splitting orignal text into {len(chunks)} phrases and converting to speech in parallel...")
 
             spinner = "|/-\\"
             spinner_idx = 0
 
             with ThreadPoolExecutor() as executor:
                 futures = [executor.submit(self.fetch_audio, chunk, payload, headers, index) for chunk, payload, headers, index in payloads_headers]
+                Logger.print_debug(f"\rWaiting for responses (usually takes 2-5 seconds, regardless of response length)... {spinner[spinner_idx % len(spinner)]}", end='', flush=True)
 
                 for future in as_completed(futures):
-                    Logger.print_debug(f"\rWaiting for responses... {spinner[spinner_idx % len(spinner)]}", end='', flush=True)
                     spinner_idx += 1
 
                     file_path, idx, _, _ = future.result()
