@@ -12,14 +12,13 @@ from google.cloud import speech_v1p1beta1 as speech
 from threading import Timer
 from logger import Logger
 
-listen_dur_secs = 400
 device_index = 3 # My External USB mic. Use the script in tools to find yours. 
 
 URL = "wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000"
 
 class Dictation(ABC):
     @abstractmethod
-    def getDictatedInput(self, listen_dur_secs, device_index):
+    def getDictatedInput(self, device_index):
         pass
 
     @abstractmethod
@@ -28,20 +27,19 @@ class Dictation(ABC):
 
 
 class StaticGoogleDictation(Dictation):
-    def getDictatedInput(self, listen_dur_secs, device_index):
+    def getDictatedInput(self, device_index):
         Logger.print_debug("Testing audio input access...")
         recognizer = sr.Recognizer()
 
         with sr.Microphone(device_index=device_index) as source:
             Logger.print_info("Microphone detected.")
-            Logger.print_info("Will listen for", listen_dur_secs, "seconds...")
             Logger.print_info("Calibrating microphone...")
 
             recognizer.adjust_for_ambient_noise(source, duration=1)
 
             Logger.print_info("Go!")
 
-            audio = recognizer.listen(source, timeout=listen_dur_secs, phrase_time_limit=50000)
+            audio = recognizer.listen(source, phrase_time_limit=50000)
             Logger.print_info("Finished listening.")
 
             try:
@@ -137,7 +135,7 @@ class LiveGoogleDictation(Dictation):
 
         return finalized_transcript
 
-    def getDictatedInput(self, listen_dur_secs, device_index):
+    def getDictatedInput(self, device_index):
         # Async function to transcribe speech
         self.listening = True
         transcript = self.transcribe_stream(self.generate_audio_chunks())
@@ -223,7 +221,7 @@ class LiveAssemblyAIDictation(Dictation):
 
         return done_speaking
 
-    async def send_receive(self, listen_dur_secs, device_index):
+    async def send_receive(self, device_index):
         global is_done
         Logger.print_info("\nConnecting to live dictation service...")
 
@@ -344,6 +342,6 @@ class LiveAssemblyAIDictation(Dictation):
             # Return the result from the receive() function
             return receive_result
 
-    def getDictatedInput(self, listen_dur_secs, device_index):
-        result = asyncio.run(self.send_receive(listen_dur_secs, device_index))
+    def getDictatedInput(self, device_index):
+        result = asyncio.run(self.send_receive(device_index))
         return result

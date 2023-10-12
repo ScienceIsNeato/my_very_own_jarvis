@@ -1,0 +1,8 @@
+248a78a8-9c2c-4ec6-9b48-54ab208967c4 <-- nice and deep and howell-like. no gaps or pauses <-- https://coqui-prod-creator-app-synthesized-samples.s3.amazonaws.com/editor_takes/eba0fc204b80b70bac477cdd6f506b087668b8b1e885cbbf544a2d78eb2b0b40.wav
+1859da04-a244-4e95-b256-0012314a4379 <-- very natural sounding and a bit sad <-- "https://coqui-prod-creator-app-synthesized-samples.s3.amazonaws.com/editor_takes/519277b3cfa067d9976c29dcc00a8e53a27de946936ce6a89064d577adea5287.wav
+bb90d3ff-f36c-4910-b2ee-cd15504ebad1 <-- more natural sounding brit, but not really ominous <-- https://coqui-prod-creator-app-synthesized-samples.s3.amazonaws.com/editor_takes/0f1c9c351121352025c921c6fcd237ac7ef5e6340e8fb62c9271c8106f352d5a.wav
+425e70af-1eb5-4f59-8c65-3e9ba24ce0f0 <-- original ghoul 
+2c827451-4abd-47da-a4fe-6e27f86e20ec <-- this is a solid thin old brittish voice. a couple weirdnesses, but not many
+2433c930-70b5-4efd-97b4-996d7eb78265 <-- this one has lots of gaps and pauses
+
+  "audio_url": "https://coqui-prod-creator-app-synthesized-samples.s3.amazonaws.com/editor_takes/5af3bf23dd4ef8f837d3a0b4402d23b25b16d78fde6e2c9c9fb7f40c768f8710.wav"

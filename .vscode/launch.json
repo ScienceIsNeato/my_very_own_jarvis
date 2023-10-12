@@ -8,7 +8,6 @@
             "program": "${workspaceFolder}/ganglia.py",
             "console": "integratedTerminal",
             "args": [
-                "--listen-dur-secs", "150",
                 "--tts-interface", "coqui",
                 "--dictation-type", "live_google",
                 "--device-index", "3",
