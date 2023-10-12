@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import concurrent.futures
 import time
 from logger import Logger
+import tempfile
 
 class TextToSpeech(ABC):
     @abstractmethod
@@ -56,7 +57,7 @@ class TextToSpeech(ABC):
                 Logger.print_debug(f"No audio url found in the response for chunk {index}: {chunk}")
                 return None, index, None, None
 
-            file_path = os.path.abspath(f"/tmp/chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}_{index}.mp3")
+            file_path = os.path.abspath(os.path.join(tempfile.gettempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}_{index}.mp3"))
             audio_response = requests.get(audio_url, timeout=30)
             with open(file_path, 'wb') as audio_file:
                 audio_file.write(audio_response.content)
@@ -95,7 +96,7 @@ class GoogleTTS(TextToSpeech):
     def convert_text_to_speech(self, text: str):
         try:
             tts = gTTS(text=text, lang="en-uk",)
-            file_path = f"/tmp/chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3"
+            file_path = os.path.join(tempfile.gettempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
             tts.save(file_path)
             return 0, file_path
         except Exception as e:
@@ -133,7 +134,7 @@ class CoquiTTS(TextToSpeech):
                     "name": "GANGLIA",
                     "voice_id": self.voice_id,
                     "text": chunk,
-                     "speed": 1,
+                     "speed": 1.2,
                     "language": "en",
                 }
 
@@ -165,7 +166,7 @@ class CoquiTTS(TextToSpeech):
 
             files = [file for file in files if file]
 
-            list_file_path = "/tmp/concat_list.txt"
+            list_file_path = os.path.join(tempfile.gettempdir(), "concat_list.txt")
             with open(list_file_path, 'w') as list_file:
                 list_file.write('\n'.join(f"file '{file}'" for file in files))
 

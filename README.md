@@ -70,9 +70,9 @@ Once GANGLIA is running, it will listen for voice prompts. When you're ready to 
 
 - there are a few options for how to render the AI's text response as audio. One option is to use the coqui api.
 
-- `--tts-interface google` [DEFAULT] (only prints input at end of sample collection)
+- `--tts-interface google` [DEFAULT]
     - the free, simple female google tts voice
-- `--tts-interface coqui` (live update of text input as it is being heard)
+- `--tts-interface coqui`
     - coqui is an incredible voice synthesis service that offers endless options for speechification
     - when using Coqui as TTS, set up the coqui_config.json in the project root (see section below)
 
