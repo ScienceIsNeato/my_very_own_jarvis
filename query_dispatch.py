@@ -73,7 +73,7 @@ class ChatGPTQueryDispatcher:
         self.messages.append({"role": "assistant", "content": reply})
         curated_message = f"{RESPONDER_NAME}: {reply}"
 
-        Logger.print_info(f"AI response received in {time() - start_time:.5f} seconds.")
+        Logger.print_info(f"AI response received in {time() - start_time:.1f} seconds.")
 
         raw_message = response.choices[0].text.strip()
         curated_message = f"{RESPONDER_NAME}: {raw_message}"

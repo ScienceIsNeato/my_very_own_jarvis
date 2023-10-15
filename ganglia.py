@@ -76,7 +76,7 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logg
 def end_conversation(prompt, force=False):
     if force:
         return True
-    return prompt and "goodbye" in prompt.strip().lower()
+    return prompt and "goodbye" in prompt.strip().lower() and "override" in prompt.strip().lower()
 
 def signal_handler(sig, frame):
     Logger.print_info("User killed program - exiting gracefully")
@@ -111,7 +111,6 @@ def main():
             ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
         except Exception as e:
             if 'Exceeded maximum allowed stream duration' in str(e):
-                Logger.print_info('Stream exceeded max duration. Refreshing convo...')
                 continue
 
             else:

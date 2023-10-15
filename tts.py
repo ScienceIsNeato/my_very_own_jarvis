@@ -162,7 +162,7 @@ class CoquiTTS(TextToSpeech):
                     if file_path:
                         files[idx] = file_path
 
-            Logger.print_info(f"\nText-to-speech conversion completed in {time.time() - start_time:.5f} seconds.")
+            Logger.print_info(f"\nText-to-speech conversion completed in {time.time() - start_time:2f} seconds.")
 
             files = [file for file in files if file]
 

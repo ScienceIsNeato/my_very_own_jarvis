@@ -31,7 +31,7 @@ class SessionEvent:
         return {
             "user_input": self.user_input,
             "response_output": self.response_output,
-            "time_logged": self.time_logged
+            "time_logged": self.timestamp
         }
 
 class Session:
@@ -71,6 +71,13 @@ class CLISessionLogger:
     def log_session_interaction(self, session_event: SessionEvent):
         self.conversation.append(session_event)
         self.write_to_disk()
+
+        # TODO: don't upload every time
+        if self.options.store_logs:  # Check the flag from the options
+            self.store_in_cloud()
+            #Logger.print_info(f"Session log saved as {self.file_name} and stored in {self.bucket_name}.")
+        #else:
+            #Logger.print_info(f"Session log saved as {self.file_name}.")
 
     def write_to_disk(self):
         session = Session(self.session_id, self.timestamp, self.conversation)
