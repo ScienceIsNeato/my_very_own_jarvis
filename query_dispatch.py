@@ -29,9 +29,11 @@ class ChatGPTQueryDispatcher:
 
     def load_config(self):
         try:
+            Logger.print_debug("DEBUG FP: ", self.config_file_path)
             with open(self.config_file_path) as f:
                 config = json.load(f)
             
+            Logger.print_debug("DEBUG CONFIG: ", config)
             pre_prompts = config.get("pre_prompts")
             if pre_prompts:
                 # Each line here represents a rule that the AI will attempt to follow when generating responses
@@ -99,9 +101,6 @@ class ChatGPTQueryDispatcher:
         for message in self.messages:
             total_tokens += len(message["content"].split())
 
-        # Log current history length
-        Logger.print_debug(f"Current history length: {total_tokens} tokens")
-
         # Define max tokens allowed
         MAX_TOKENS = 4097 # this should be defaulted to this value and loaded from a config
 
@@ -112,8 +111,7 @@ class ChatGPTQueryDispatcher:
             total_tokens -= removed_length
             
             # Log removed message and new length
-            Logger.print_debug(f"Removed message: {removed_message['content']} ({removed_length} tokens)")
-            Logger.print_debug(f"New history length: {total_tokens} tokens")
+            Logger.print_debug(f"Conversation history getting long - dropping oldest content: {removed_message['content']} ({removed_length} tokens)")
 
 class BardQueryDispatcher(QueryDispatcher):
     def sendQuery(self, current_input):

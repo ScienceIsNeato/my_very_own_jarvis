@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 import time
@@ -23,7 +24,8 @@ class SessionEvent:
         dt_object = datetime.fromtimestamp(time_logged_unix)
 
         # Format it as an ISO 8601 string
-        self.time_logged = dt_object.strftime('%Y-%m-%dT%H:%M:%S')
+        self.timestamp = time.strftime("%Y-%m-%dT%H.%M.%S")
+
 
     def to_dict(self):
         return {
@@ -73,8 +75,9 @@ class CLISessionLogger:
     def write_to_disk(self):
         session = Session(self.session_id, self.timestamp, self.conversation)
         json_data = json.dumps(session.to_dict(), indent=2)
-        with open(self.file_name, "w") as f:
-            f.write(json_data)
+
+        file_path = Path(self.file_name)  # Use pathlib.Path
+        file_path.write_text(json_data)  # Use write_text method
 
     def store_in_cloud(self):
         storage_client = storage.Client(project=self.project_name)

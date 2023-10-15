@@ -58,17 +58,21 @@ class LiveGoogleDictation(Dictation):
     SILENCE_THRESHOLD = 1.5  # seconds
 
     def __init__(self):
-        Logger.print_debug("Initializing LiveGoogleDictation...")
-        self.listening = True
-        self.client = speech.SpeechClient()
-        self.audio_stream = pyaudio.PyAudio().open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=16000,
-            input=True,
-            frames_per_buffer=1024
-        )
-        Logger.print_info("Audio stream opened successfully")
+        try:
+            Logger.print_debug("Initializing LiveGoogleDictation...")
+            self.listening = True
+            self.client = speech.SpeechClient()
+            self.audio_stream = pyaudio.PyAudio().open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=1024
+            )
+            Logger.print_info("Audio stream opened successfully")
+        except Exception as e:
+            Logger.print_error(f"Error initializing LiveGoogleDictation: {e}")
+            raise
 
     def get_config(self):
         return speech.StreamingRecognitionConfig(

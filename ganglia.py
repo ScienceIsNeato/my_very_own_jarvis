@@ -87,15 +87,17 @@ def main():
     global args
 
     args = parse_args()
-    USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
 
-    # TODO fix this
-    # print("USER_TURN_INDICATOR: %s", USER_TURN_INDICATOR)
-    # print("AI_TURN_INDICATOR: %s", AI_TURN_INDICATOR)
-    # print("tts: %s", tts)
-    # print("dictation: %s", dictation)
-    # print("query_dispatcher: %s", query_dispatcher)
-    # print("session_logger: %s", session_logger)
+    initialization_failed = True
+
+    # If there's some spurious problem initializing, wait a bit and try again
+    while initialization_failed:
+        try:
+            USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
+            initialization_failed = False
+        except Exception as e:
+            Logger.print_error(f"Error initializing conversation: {e}")
+            time.sleep(20)
 
     Logger.print_legend()
 

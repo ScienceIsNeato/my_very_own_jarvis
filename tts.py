@@ -153,7 +153,7 @@ class CoquiTTS(TextToSpeech):
 
             with ThreadPoolExecutor() as executor:
                 futures = [executor.submit(self.fetch_audio, chunk, payload, headers, index) for chunk, payload, headers, index in payloads_headers]
-                Logger.print_debug(f"\rWaiting for responses (usually takes 2-5 seconds, regardless of response length)... {spinner[spinner_idx % len(spinner)]}", end='', flush=True)
+                Logger.print_debug(f"\rWaiting for responses (typicall takes between 2 and 8 seconds)... {spinner[spinner_idx % len(spinner)]}", end='', flush=True)
 
                 for future in as_completed(futures):
                     spinner_idx += 1

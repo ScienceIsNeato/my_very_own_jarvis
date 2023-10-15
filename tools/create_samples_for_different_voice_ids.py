@@ -22,7 +22,7 @@ url = 'https://app.coqui.ai/api/v2/samples/xtts/render/'
 # Headers for API call
 headers = {
     'accept': 'application/json',
-    'authorization': 'Bearer bX0Y3Q89TVUuHukiZICHs0o9NtFyOEns5GdydC0MKQ90u6TJyNkTHTXeHRyqIUpW',
+    'authorization': '<bearer token>',
     'content-type': 'application/json',
 }
 

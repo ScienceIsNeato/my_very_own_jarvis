@@ -19,6 +19,12 @@ class Logger:
         print(f"{term.white}", end="", flush=True)
 
     @staticmethod
+    def print_halloween_narrator(*args, **kwargs):
+        print(f"{term.pumpkin}", end="")
+        print(*args, **kwargs)
+        print(f"{term.white}", end="", flush=True)
+
+    @staticmethod
     def print_error(*args, **kwargs):
         print(f"{term.yellow}", end="")
         print(*args, **kwargs)
