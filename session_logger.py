@@ -61,7 +61,7 @@ class SessionLogger(ABC):
 class CLISessionLogger:
     def __init__(self, options):
         self.session_id = str(uuid4())
-        self.timestamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+        self.timestamp = time.strftime("%Y-%m-%dT%H.%M.%S")
         self.file_name = os.path.join(tempfile.gettempdir(), f"GANGLIA_session_{self.timestamp}.json")
         self.conversation = []
         self.bucket_name = os.getenv('GCP_BUCKET_NAME')
