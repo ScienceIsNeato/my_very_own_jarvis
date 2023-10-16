@@ -134,7 +134,7 @@ class CoquiTTS(TextToSpeech):
                     "name": "GANGLIA",
                     "voice_id": self.voice_id,
                     "text": chunk,
-                     "speed": 1.2,
+                     "speed": 1.0,
                     "language": "en",
                 }
 
