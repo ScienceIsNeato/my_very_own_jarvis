@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from google.cloud import speech_v1p1beta1 as speech
 from threading import Timer
 from logger import Logger
+import random
 
 device_index = 3 # My External USB mic. Use the script in tools to find yours. 
 
@@ -55,20 +56,25 @@ class StaticGoogleDictation(Dictation):
         pass
 
 class LiveGoogleDictation(Dictation):
-    SILENCE_THRESHOLD = 1.5  # seconds
+    SILENCE_THRESHOLD = 2.5  # seconds
+    COUNTER = 0
 
     def __init__(self):
-        Logger.print_debug("Initializing LiveGoogleDictation...")
-        self.listening = True
-        self.client = speech.SpeechClient()
-        self.audio_stream = pyaudio.PyAudio().open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=16000,
-            input=True,
-            frames_per_buffer=1024
-        )
-        Logger.print_info("Audio stream opened successfully")
+        try:
+            Logger.print_debug("Initializing LiveGoogleDictation...")
+            self.listening = True
+            self.client = speech.SpeechClient()
+            self.audio_stream = pyaudio.PyAudio().open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=1024
+            )
+            Logger.print_info("Audio stream opened successfully")
+        except Exception as e:
+            Logger.print_error(f"Error initializing LiveGoogleDictation: {e}")
+            raise
 
     def get_config(self):
         return speech.StreamingRecognitionConfig(
@@ -89,12 +95,71 @@ class LiveGoogleDictation(Dictation):
     def done_speaking(self):
             self.listening = False
 
+    def generate_random_phrase(self):
+        if self.COUNTER % 10 == 0:
+            phrases = ["I hear you from the other side...",
+            "Speak, mortal.",
+            "Whisper your query into the abyss...",
+            "I await in the shadows...",
+            "Your words echo in the void...",
+            "What secrets do you hold?",
+            "Your voice summons me...",
+            "Dare you speak more?",
+            "The darkness listens...",
+            "My ears are a portal to the unknown...",
+            "Speak, and enter the abyss...",
+            "Listening... or maybe lurking.",
+            "The night is young, proceed...",
+            "You summon me...",
+            "I'm lurking in the dark...",
+            "Don't be shy, I'm here...",
+            "Proceed, if you dare...",
+            "What's your dark wish?",
+            "I listen as the clock strikes midnight...",
+            "Ahh, fresh souls to listen to...",
+            "Speak, but tread carefully...",
+            "The crypt is open, speak...",
+            "Ready for your incantation...",
+            "Silence is eerie, isn't it?",
+            "Your words echo in my realm...",
+            "Listening from the depths...",
+            "Speak, I thirst for your words...",
+            "I'm right behind you, speak...",
+            "The dead don't sleep, neither do I...",
+            "Your utterance intrigues me...",
+            "I hear you, as does the void...",
+            "Echo your words in the eternal darkness...",
+            "I'm all fangs, go ahead...",
+            "Proceed, I'm dying to hear you...",
+            "What's the matter, cat got your tongue?",
+            "My ears are as keen as a bat's...",
+            "Listening, but not alone...",
+            "Speak, for the night wanes...",
+            "Dwell deeper, and speak...",
+            "Your words are an offering...",
+            "The spirits are listening too...",
+            "Time waits for no one, speak...",
+            "Your voice is a beacon in the dark...",
+            "Listening, just a shadow away...",
+            "Don't keep me hanging...",
+            "I'm all eyes and ears...",
+            "What does the night have in store?",
+            "Words or screams, I listen to both...",
+            "Awaken me with your voice...",
+            "I hear you, as does the night..."]
+
+            self.COUNTER += 1
+            return random.choice(phrases)
+        else:
+            self.COUNTER += 1
+            return "..."
+
     def transcribe_stream(self, stream):
         done_speaking_timer = None
         self.state = 'START'
         finalized_transcript = ''
 
-        Logger.print_info("Listening...")
+        Logger.print_info(self.generate_random_phrase())
 
         # The generator function will continuously yield audio data
         requests = (speech.StreamingRecognizeRequest(audio_content=chunk) for chunk in stream)
@@ -139,7 +204,6 @@ class LiveGoogleDictation(Dictation):
         # Async function to transcribe speech
         self.listening = True
         transcript = self.transcribe_stream(self.generate_audio_chunks())
-        Logger.print_user_input("You: ", transcript)
         return transcript
 
 class LiveAssemblyAIDictation(Dictation):
@@ -311,8 +375,6 @@ class LiveAssemblyAIDictation(Dictation):
                     Logger.print_info("No dictation results collected")
                 
                 final_phrase = ' '.join(final_phrases)
-
-                Logger.print_user_input("You: ", final_phrase)
                 return final_phrase
 
             send_task = asyncio.create_task(send())

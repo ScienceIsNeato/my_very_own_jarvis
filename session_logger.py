@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 import time
@@ -23,13 +24,14 @@ class SessionEvent:
         dt_object = datetime.fromtimestamp(time_logged_unix)
 
         # Format it as an ISO 8601 string
-        self.time_logged = dt_object.strftime('%Y-%m-%dT%H:%M:%S')
+        self.timestamp = time.strftime("%Y-%m-%dT%H.%M.%S")
+
 
     def to_dict(self):
         return {
             "user_input": self.user_input,
             "response_output": self.response_output,
-            "time_logged": self.time_logged
+            "time_logged": self.timestamp
         }
 
 class Session:
@@ -59,7 +61,7 @@ class SessionLogger(ABC):
 class CLISessionLogger:
     def __init__(self, options):
         self.session_id = str(uuid4())
-        self.timestamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+        self.timestamp = time.strftime("%Y-%m-%dT%H.%M.%S")
         self.file_name = os.path.join(tempfile.gettempdir(), f"GANGLIA_session_{self.timestamp}.json")
         self.conversation = []
         self.bucket_name = os.getenv('GCP_BUCKET_NAME')
@@ -70,11 +72,19 @@ class CLISessionLogger:
         self.conversation.append(session_event)
         self.write_to_disk()
 
+        # TODO: don't upload every time
+        if self.options.store_logs:  # Check the flag from the options
+            self.store_in_cloud()
+            #Logger.print_info(f"Session log saved as {self.file_name} and stored in {self.bucket_name}.")
+        #else:
+            #Logger.print_info(f"Session log saved as {self.file_name}.")
+
     def write_to_disk(self):
         session = Session(self.session_id, self.timestamp, self.conversation)
         json_data = json.dumps(session.to_dict(), indent=2)
-        with open(self.file_name, "w") as f:
-            f.write(json_data)
+
+        file_path = Path(self.file_name)  # Use pathlib.Path
+        file_path.write_text(json_data)  # Use write_text method
 
     def store_in_cloud(self):
         storage_client = storage.Client(project=self.project_name)
