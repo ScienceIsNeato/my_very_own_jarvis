@@ -83,7 +83,7 @@ class TextToSpeech(ABC):
                 duration_output = subprocess.run(duration_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode('utf-8')
                 play_command = ["ffplay", "-nodisp", "-af", "volume=5", "-autoexit", file_path]
 
-            Logger.print_demon_output(f"\nA Demonic Voice Echos (Audio Duration: {float(duration_output.strip()):.1f} seconds. Playing... ")
+            Logger.print_demon_output(f"\nA Demonic Voice Echos (Audio Duration: {float(duration_output.strip()):.1f} seconds)\n Playing... ")
             Logger.print_demon_output(raw_response)
             # TODO - save the audio to disk here. Also see if we can save the input audio to disk as well?
 
@@ -153,7 +153,7 @@ class CoquiTTS(TextToSpeech):
 
             with ThreadPoolExecutor() as executor:
                 futures = [executor.submit(self.fetch_audio, chunk, payload, headers, index) for chunk, payload, headers, index in payloads_headers]
-                Logger.print_debug(f"\rWaiting for responses (typicall takes between 2 and 8 seconds)... {spinner[spinner_idx % len(spinner)]}", end='', flush=True)
+                Logger.print_debug(f"\rWaiting for responses (~2 to 8 sec or so)... {spinner[spinner_idx % len(spinner)]}", end='', flush=True)
 
                 for future in as_completed(futures):
                     spinner_idx += 1
@@ -162,7 +162,7 @@ class CoquiTTS(TextToSpeech):
                     if file_path:
                         files[idx] = file_path
 
-            Logger.print_info(f"\nText-to-speech conversion completed in {time.time() - start_time:2f} seconds.")
+            Logger.print_info(f"\nText-to-speech conversion completed in {time.time() - start_time:.1f} seconds.")
 
             files = [file for file in files if file]
 

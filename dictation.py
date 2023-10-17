@@ -204,7 +204,6 @@ class LiveGoogleDictation(Dictation):
         # Async function to transcribe speech
         self.listening = True
         transcript = self.transcribe_stream(self.generate_audio_chunks())
-        Logger.print_user_input("You: ", transcript)
         return transcript
 
 class LiveAssemblyAIDictation(Dictation):
@@ -376,8 +375,6 @@ class LiveAssemblyAIDictation(Dictation):
                     Logger.print_info("No dictation results collected")
                 
                 final_phrase = ' '.join(final_phrases)
-
-                Logger.print_user_input("You: ", final_phrase)
                 return final_phrase
 
             send_task = asyncio.create_task(send())
