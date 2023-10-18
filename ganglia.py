@@ -6,7 +6,7 @@ from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 import sys
 import signal
 from logger import Logger
-
+from hotwords import HotwordManager
 
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
@@ -45,9 +45,16 @@ def initialize_conversation(args):
         Logger.print_error(f"Failed to initialize Query Dispatcher: {e}")
         sys.exit("Initialization failed. Exiting program...")
 
+    hotword_manager = None
+    try:
+        hotword_manager = HotwordManager('config/hotwords.json')  # Initialize the class
+        Logger.print_debug("HotwordManager initialized successfully.")
+    except Exception as e:
+        Logger.print_error(f"Failed to initialize HotwordManager: {e}")
+
     Logger.print_info("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
 
-    return USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger
+    return USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, hotword_manager
 
 def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
     if USER_TURN_INDICATOR:
@@ -57,21 +64,30 @@ def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
         USER_TURN_INDICATOR.input_out()
     return prompt
 
-def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger):
+def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger):
+
+    hotword_detected, hotword_phrase = hotword_manager.detect_hotwords(prompt)
+
     if AI_TURN_INDICATOR:
         AI_TURN_INDICATOR.input_in()
-    response = query_dispatcher.sendQuery(prompt)
+
+    if hotword_detected:
+        # Hotword detected, skip query dispatcher
+        response = hotword_phrase
+    else:
+        response = query_dispatcher.sendQuery(prompt)
+
     if AI_TURN_INDICATOR:
         AI_TURN_INDICATOR.input_out()
 
     if tts:
+        # Generate speech response
         error_code, file_path = tts.convert_text_to_speech(response)
         tts.play_speech_response(file_path, response)
 
     if session_logger:
+        # Log interaction
         session_logger.log_session_interaction(SessionEvent(prompt, response))
-
-    return response
 
 def end_conversation(prompt, force=False):
     if force:
@@ -93,7 +109,7 @@ def main():
     # If there's some spurious problem initializing, wait a bit and try again
     while initialization_failed:
         try:
-            USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger = initialize_conversation(args)
+            USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, hotword_manager = initialize_conversation(args)
             initialization_failed = False
         except Exception as e:
             Logger.print_error(f"Error initializing conversation: {e}")
@@ -108,7 +124,7 @@ def main():
             prompt = user_turn(None, dictation, USER_TURN_INDICATOR, args)
             if end_conversation(prompt):
                 break
-            ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, tts, session_logger)
+            ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
         except Exception as e:
             if 'Exceeded maximum allowed stream duration' in str(e):
                 continue
