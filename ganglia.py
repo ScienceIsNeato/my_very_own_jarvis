@@ -4,6 +4,7 @@ from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 import sys
+import os
 import signal
 from logger import Logger
 from hotwords import HotwordManager
@@ -82,9 +83,15 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
 
     if tts:
         # Generate speech response
-        error_code, file_path = tts.convert_text_to_speech(response)
+        _, file_path = tts.convert_text_to_speech(response)
         tts.play_speech_response(file_path, response)
 
+        # If this response is coming from a hotword, then we want to clear the screen shortly afterwards (scavenger hunt mode)
+        if hotword_detected:
+            output = "To avoid spoilers for other players, clearning screen. Repeat magic word if necessary. Congrats again, fiend!"
+            _, file_path = tts.convert_text_to_speech(output)
+            tts.play_speech_response(file_path, output)
+            os.system('cls' if os.name == 'nt' else 'clear')
     if session_logger:
         # Log interaction
         session_logger.log_session_interaction(SessionEvent(prompt, response))
