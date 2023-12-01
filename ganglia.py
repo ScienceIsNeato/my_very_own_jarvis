@@ -88,10 +88,8 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
 
         # If this response is coming from a hotword, then we want to clear the screen shortly afterwards (scavenger hunt mode)
         if hotword_detected:
-            output = "To avoid spoilers for other players, clearning screen. Repeat magic word if necessary. Congrats again, fiend!"
-            _, file_path = tts.convert_text_to_speech(output)
-            tts.play_speech_response(file_path, output)
-            os.system('cls' if os.name == 'nt' else 'clear')
+            clear_screen_after_hotword(tts)
+
     if session_logger:
         # Log interaction
         session_logger.log_session_interaction(SessionEvent(prompt, response))
@@ -105,6 +103,12 @@ def signal_handler(sig, frame):
     Logger.print_info("User killed program - exiting gracefully")
     end_conversation(None, force=True)
     exit(0)
+
+def clear_screen_after_hotword(tts):
+    output = "hotword detected - clearning response from screen after playback"
+    _, file_path = tts.convert_text_to_speech(output)
+    tts.play_speech_response(file_path, output)
+    os.system('cls' if os.name == 'nt' else 'clear')
 
 def main():
     global args

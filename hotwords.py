@@ -20,7 +20,7 @@ class HotwordManager:
                 for hotword in lowercase_hotwords:
                     Logger.print_info(f"Loaded hotword: {hotword}")
 
-                return lowercase_hotwords  # Return the loaded configuration
+                return lowercase_hotwords
 
         except FileNotFoundError:
             Logger.print_error(f"Hotword config file not found at: {config_file_path}")
