@@ -120,11 +120,19 @@ class CoquiTTS(TextToSpeech):
         try:
             Logger.print_info("\nConverting text to speech...")
             start_time = time.time()
-            
+
             chunks = self.split_text(text)
             if not chunks:
                 Logger.print_debug("Tried to split text into phrase chunks, but no chunks were found. Returning original text.")
                 chunks = [text]
+            else:
+                # Reconstruct the last chunk if it doesn't contain the remaining text
+                last_chunk = chunks[-1]
+                remaining_text = text[len(" ".join(chunks)):]
+                if remaining_text and remaining_text not in last_chunk:
+                    chunks.pop()  # Remove the incomplete last chunk
+                    chunks.append(last_chunk + remaining_text)  # Add the remaining text as a new chunk
+                    # TODO we have the split text method - this shit should be in there
 
             files = [None] * len(chunks)
             payloads_headers = []
@@ -134,7 +142,7 @@ class CoquiTTS(TextToSpeech):
                     "name": "GANGLIA",
                     "voice_id": self.voice_id,
                     "text": chunk,
-                     "speed": 1.0,
+                     "speed": 1.1,
                     "language": "en",
                 }
 
@@ -175,3 +183,21 @@ class CoquiTTS(TextToSpeech):
         except Exception as e:
             Logger.print_error(f"Error converting text to speech: {e}")
             return 1, None
+
+    def convert_text_to_chunks(text):
+        chunks = split_text_to_phrases(text)
+
+        if not chunks:
+            return [text]
+
+        reconstructed_chunks = []
+        remaining_text = text
+
+        for chunk in chunks:
+            reconstructed_chunks.append(chunk)
+            remaining_text = remaining_text[len(chunk):]
+
+        if remaining_text:
+            reconstructed_chunks.append(remaining_text)
+
+        return reconstructed_chunks

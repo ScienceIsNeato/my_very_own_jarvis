@@ -39,19 +39,6 @@ pip install -r requirements.txt
     - https://cloud.google.com/docs/authentication/provide-credentials-adc#how-to
         - this is also tell you how to setup Google CLI if you haven't already
 
-## Setting up API keys (Optional)
-
-GANGLIA can be used without API keys for certain features. However, if you want to utilize features that require API keys, you'll need to set up your API keys for the respective services.
-
-To set up the API keys, copy the `.env.template` file in the root directory of the project and rename it to `.env`. Then, update the values for the features you want to use.
-
-Here's a table of features, their implementation names, and the corresponding environment variable names for the `.env` file:
-
-| Feature            | Implementation Name | Environment Variable      |
-|--------------------|---------------------|---------------------------|
-| Speech Recognition | AssemblyAI          | ASSEMBLYAI_TOKEN          |
-| AI Backend         | OpenAI GPT-4        | OPENAI_API_KEY            |
-
 ## Usage
 
 To start GANGLIA, run the following command in your terminal:
@@ -65,6 +52,19 @@ Here's a description of each command-line argument:
 - `--help` or `-h`: Displays usage instructions and a list of available options.
 
 Once GANGLIA is running, it will listen for voice prompts. When you're ready to ask a question or make a request, simply speak into your microphone. Once you've finished speaking, GANGLIA will generate a response using OpenAI's GPT-3 engine and speak it aloud using the pyttsx3 library.
+
+## Setting up API keys (Optional)
+
+GANGLIA can be used without API keys for certain features. However, if you want to utilize features that require API keys, you'll need to set up your API keys for the respective services.
+
+To set up the API keys, copy the `.env.template` file in the root directory of the project and rename it to `.env`. Then, update the values for the features you want to use.
+
+Here's a table of features, their implementation names, and the corresponding environment variable names for the `.env` file:
+
+| Feature            | Implementation Name | Environment Variable      |
+|--------------------|---------------------|---------------------------|
+| Speech Recognition | AssemblyAI          | ASSEMBLYAI_TOKEN          |
+| AI Backend         | OpenAI GPT-4        | OPENAI_API_KEY            |
 
 ## TTS (Text To Speech)
 
@@ -107,6 +107,12 @@ Create a file named `coqui_config.json` in the root directory with the following
 3. Update the `.env` file in your project root directory to include the following:
    - `GCP_BUCKET_NAME=<your_bucket_name>`
    - `GCP_PROJECT_NAME=<your_project_name>`
+
+## Hotwords
+
+- GANGLIA can be configured to listen for a hotword (a word or phrase that triggers GANGLIA to generate a pre-determined response)
+- see example hotword config in `config/hotword_config.json.template`
+- copy your input/output pairs to `config/hotword_config.json` and try saying them during a chat session. You should observe GANGLIA responding to the hotword with the output you've provided right away.
 
 ## Windows Support
 
