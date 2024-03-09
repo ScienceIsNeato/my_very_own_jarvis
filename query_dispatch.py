@@ -52,19 +52,10 @@ class ChatGPTQueryDispatcher:
         self.messages.append({"role": "user", "content": current_input})
         start_time = time()
 
-        self.rotate_session_history() # Ensure history stays under the max length
+        self.rotate_session_history()  # Ensure history stays under the max length
 
         Logger.print_debug("Sending query to AI server (takes 2-20 secs depending on length of response)...")
-        prompt = f"Current-Prompt: {current_input}"
 
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=prompt,
-            max_tokens=3500,
-            n=1,
-            stop=None,
-            temperature=0.1,
-        )
         chat = openai.ChatCompletion.create(
             model="gpt-3.5-turbo", 
             messages=self.messages
@@ -75,18 +66,11 @@ class ChatGPTQueryDispatcher:
 
         Logger.print_info(f"AI response received in {time() - start_time:.1f} seconds.")
 
-        raw_message = response.choices[0].text.strip()
-        curated_message = f"{RESPONDER_NAME}: {raw_message}"
-
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-
         temp_dir = tempfile.gettempdir()
 
         with open(os.path.join(temp_dir, f"chatgpt_output_{timestamp}_raw.txt"), "w") as file:
             file.write(reply)
-
-        with open(os.path.join(temp_dir, f"chatgpt_output_{timestamp}_curated.txt"), "w") as file:
-            file.write(curated_message)
 
         return reply
 

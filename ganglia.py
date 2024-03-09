@@ -97,7 +97,7 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
 def end_conversation(prompt, force=False):
     if force:
         return True
-    return prompt and "goodbye" in prompt.strip().lower() and "override" in prompt.strip().lower()
+    return prompt and "goodbye" in prompt.strip().lower()
 
 def signal_handler(sig, frame):
     Logger.print_info("User killed program - exiting gracefully")

@@ -1,21 +1,20 @@
 from abc import ABC, abstractmethod
 import re
-from gtts import gTTS
+from google.cloud import texttospeech_v1 as tts
+import os
+import tempfile
 from datetime import datetime
 import subprocess
-import os
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import subprocess
 from urllib.parse import urlparse
-import requests
 from datetime import datetime
 from logger import Logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import concurrent.futures
 import time
 from logger import Logger
-import tempfile
 
 class TextToSpeech(ABC):
     @abstractmethod
@@ -95,13 +94,36 @@ class TextToSpeech(ABC):
 class GoogleTTS(TextToSpeech):
     def convert_text_to_speech(self, text: str):
         try:
-            tts = gTTS(text=text, lang="en-uk",)
+            # Initialize the Text-to-Speech client
+            client = tts.TextToSpeechClient()
+
+            # Set up the text input and voice settings
+            synthesis_input = tts.SynthesisInput(text=text)
+            voice = tts.VoiceSelectionParams(
+                language_code="en-GB",
+                name="en-GB-Standard-D",
+                ssml_gender=tts.SsmlVoiceGender.NEUTRAL)
+
+            # Set the audio configuration
+            audio_config = tts.AudioConfig(
+                audio_encoding=tts.AudioEncoding.MP3)
+
+            # Perform the text-to-speech request
+            response = client.synthesize_speech(
+                input=synthesis_input,
+                voice=voice,
+                audio_config=audio_config)
+
+            # Save the audio to a file
             file_path = os.path.join(tempfile.gettempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
-            tts.save(file_path)
-            return 0, file_path
+            with open(file_path, "wb") as out:
+                out.write(response.audio_content)
+                Logger.print_info(f"Audio content written to file {file_path}")
+
+            return True, file_path
         except Exception as e:
             Logger.print_error(f"Error converting text to speech: {e}")
-            return 1, None
+            return False, None
 
 class NaturalReadersTTS(TextToSpeech):
     def convert_text_to_speech(self, text: str):
