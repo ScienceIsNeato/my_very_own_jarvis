@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import re
+from urllib import request
 from google.cloud import texttospeech_v1 as tts
 import os
 import tempfile
@@ -45,7 +46,7 @@ class TextToSpeech(ABC):
     def fetch_audio(self, chunk, payload, headers, index):
         try:
             start_time = datetime.now()  # Record start time
-            response = requests.post(self.api_url, json=payload, headers=headers, timeout=30)
+            response = request.post(self.api_url, json=payload, headers=headers, timeout=30)
             end_time = datetime.now()  # Record end time
             audio_url = response.json().get("audio_url")
 
