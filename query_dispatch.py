@@ -54,7 +54,7 @@ class ChatGPTQueryDispatcher:
 
         self.rotate_session_history()  # Ensure history stays under the max length
 
-        Logger.print_debug("Sending query to AI server (takes 2-20 secs depending on length of response)...")
+        Logger.print_debug("Sending query to AI server...")
 
         chat = openai.ChatCompletion.create(
             model="gpt-3.5-turbo", 
@@ -62,7 +62,6 @@ class ChatGPTQueryDispatcher:
         )
         reply = chat.choices[0].message.content
         self.messages.append({"role": "assistant", "content": reply})
-        curated_message = f"{RESPONDER_NAME}: {reply}"
 
         Logger.print_info(f"AI response received in {time() - start_time:.1f} seconds.")
 

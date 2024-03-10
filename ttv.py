@@ -10,25 +10,25 @@ from datetime import datetime
 from tts import GoogleTTS
 import textwrap
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# # Configure logging
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Set your OPENAI_API_KEY in the environment variables for security reasons
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# # Set your OPENAI_API_KEY in the environment variables for security reasons
+# openai.api_key = os.getenv("OPENAI_API_KEY")
 
-if not openai.api_key:
-    logging.error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
-    raise ValueError("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
+# if not openai.api_key:
+#     logging.error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
+#     raise ValueError("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
 
-parser = argparse.ArgumentParser(description='Generate images in a conversational style.')
-parser.add_argument('--skip-generation', action='store_true', help='Skip image generation and compile existing images.')
-parser.add_argument('--json-input', type=str, help='Path to the JSON input file', required=True)
+# parser = argparse.ArgumentParser(description='Generate images in a conversational style.')
+# parser.add_argument('--skip-generation', action='store_true', help='Skip image generation and compile existing images.')
+# parser.add_argument('--json-input', type=str, help='Path to the JSON input file', required=True)
 
-args = parser.parse_args()
+# args = parser.parse_args()
 
 # Function to load JSON input
-def load_input(json_input_path):
-    with open(json_input_path, 'r') as json_file:
+def load_input(ttv_config):
+    with open(ttv_config, 'r') as json_file:
         data = json.load(json_file)
     return data['style'], data['story']
 
@@ -162,12 +162,12 @@ def generate_blank_image(sentence, image_index):
 
     return blank_filename
 
-def main():
+def text_to_video(ttv_config, skip_generation):
     # Initialize TTS
     tts = GoogleTTS()
 
     # Load JSON input
-    style, story = load_input(args.json_input)
+    style, story = load_input(ttv_config)
 
     # Prepare for processing
     video_segments = []
@@ -177,7 +177,7 @@ def main():
     logging.info(f"Total images to generate: {total_images}")
 
     for i, sentence in enumerate(story):
-        if args.skip_generation:
+        if skip_generation:
             logging.info("Skipping image generation as per the flag.")
             # Assuming you have a way to handle skipped generation, e.g., using existing images or placeholders
             continue
@@ -217,6 +217,3 @@ def main():
         subprocess.run(["ffplay", "-autoexit", final_video_path])
     else:
         logging.error("No video segments were created. Final video not generated.")
-
-if __name__ == "__main__":
-    main()

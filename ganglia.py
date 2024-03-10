@@ -3,6 +3,7 @@ from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
+from ttv import text_to_video
 import sys
 import os
 import signal
@@ -58,12 +59,21 @@ def initialize_conversation(args):
     return USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, hotword_manager
 
 def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
-    if USER_TURN_INDICATOR:
-        USER_TURN_INDICATOR.input_in()
-    prompt = dictation.getDictatedInput(args.device_index) if dictation else input()
-    if USER_TURN_INDICATOR:
-        USER_TURN_INDICATOR.input_out()
-    return prompt
+    while True:  # Keep asking for input until a non-empty prompt is received.
+        if USER_TURN_INDICATOR:
+            USER_TURN_INDICATOR.input_in()
+
+        prompt = dictation.getDictatedInput(args.device_index) if dictation else input()
+
+        if USER_TURN_INDICATOR:
+            USER_TURN_INDICATOR.input_out()
+
+        # Check if the input is not empty.
+        if prompt.strip():
+            return prompt
+        else:
+            Logger.print_debug("collected empty input - retrying")
+
 
 def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger):
 
@@ -114,6 +124,14 @@ def main():
     global args
 
     args = parse_args()
+
+    # Currently, the text-to-video functionality is its own code path
+    if args.text_to_video:
+        if not args.ttv_config:
+            Logger.print_error("JSON input file is required for --text-to-video.")
+            sys.exit(1)
+        text_to_video(args.ttv_config, args.skip_image_generation)
+        sys.exit(0)  # Exit after processing the video generation to avoid entering the conversational loop
 
     initialization_failed = True
 
