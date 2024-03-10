@@ -42,10 +42,10 @@ class TextToSpeech(ABC):
 
         return chunks
 
-
     def fetch_audio(self, chunk, payload, headers, index):
         try:
             start_time = datetime.now()  # Record start time
+            Logger.print_info(f"Fetching audio for chunk {index}...")
             response = request.post(self.api_url, json=payload, headers=headers, timeout=30)
             end_time = datetime.now()  # Record end time
             audio_url = response.json().get("audio_url")
@@ -93,6 +93,9 @@ class TextToSpeech(ABC):
             Logger.print_error(f"Error playing the speech response: {e}")
 
 class GoogleTTS(TextToSpeech):
+    def __init__(self):
+        Logger.print_info("Initializing GoogleTTS...")
+
     def convert_text_to_speech(self, text: str):
         try:
             # Initialize the Text-to-Speech client
@@ -108,6 +111,8 @@ class GoogleTTS(TextToSpeech):
             # Set the audio configuration
             audio_config = tts.AudioConfig(
                 audio_encoding=tts.AudioEncoding.MP3)
+
+            Logger.print_debug(f"Synthesizing speech for text: {text}")
 
             # Perform the text-to-speech request
             response = client.synthesize_speech(
@@ -207,20 +212,3 @@ class CoquiTTS(TextToSpeech):
             Logger.print_error(f"Error converting text to speech: {e}")
             return 1, None
 
-    def convert_text_to_chunks(text):
-        chunks = split_text_to_phrases(text)
-
-        if not chunks:
-            return [text]
-
-        reconstructed_chunks = []
-        remaining_text = text
-
-        for chunk in chunks:
-            reconstructed_chunks.append(chunk)
-            remaining_text = remaining_text[len(chunk):]
-
-        if remaining_text:
-            reconstructed_chunks.append(remaining_text)
-
-        return reconstructed_chunks

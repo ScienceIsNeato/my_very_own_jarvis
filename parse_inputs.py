@@ -40,6 +40,7 @@ def parse_tts_interface(tts_interface: str) -> TextToSpeech:
         return GoogleTTS()
     elif tts_interface.lower() == "coqui":
         try:
+            raise ValueError("CoquiTTS has been deprecated :( Please use another TTS interface.")
             api_url, bearer_token, voice_id = load_coqui_config()
             Logger.print_debug("api_url: ", api_url)
             return CoquiTTS(api_url, bearer_token, voice_id)
