@@ -104,15 +104,14 @@ class GoogleTTS(TextToSpeech):
             # Set up the text input and voice settings
             synthesis_input = tts.SynthesisInput(text=text)
             voice = tts.VoiceSelectionParams(
-                language_code="en-GB",
-                name="en-GB-Standard-D",
-                ssml_gender=tts.SsmlVoiceGender.NEUTRAL)
+                language_code="en-US",
+                name="en-US-Casual-K")
 
             # Set the audio configuration
             audio_config = tts.AudioConfig(
                 audio_encoding=tts.AudioEncoding.MP3)
 
-            Logger.print_debug(f"Synthesizing speech for text: {text}")
+            Logger.print_debug(f"Converting text to speech...")
 
             # Perform the text-to-speech request
             response = client.synthesize_speech(
