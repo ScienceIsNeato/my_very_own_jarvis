@@ -40,6 +40,7 @@ def parse_tts_interface(tts_interface: str) -> TextToSpeech:
         return GoogleTTS()
     elif tts_interface.lower() == "coqui":
         try:
+            raise ValueError("CoquiTTS has been deprecated :( Please use another TTS interface.")
             api_url, bearer_token, voice_id = load_coqui_config()
             Logger.print_debug("api_url: ", api_url)
             return CoquiTTS(api_url, bearer_token, voice_id)
@@ -71,5 +72,14 @@ def parse_args(args=None):
     parser.add_argument("--enable-turn-indicators", action="store_true", help="Enable turn indicators (default: False)")
     parser.add_argument("--dictation-type", type=str, default="static_google", choices=["static_google", "live_google", "live_assemblyai"], help="Dictation type to use. Available options: 'static_google', 'live_google', 'live_assemblyai'")
     parser.add_argument("--store-logs", action="store_true", help="Enable storing logs in the cloud (default: False)")
+    parser.add_argument('--text-to-video', action='store_true', help='Generate video from text input.')
+    parser.add_argument('--ttv-config', type=str, help='Path to the JSON input file for video generation.')
+    parser.add_argument('--skip-image-generation', type=str, help='Use previously generated images when generating text-to-video')
 
-    return parser.parse_args(args)
+    parsed_args = parser.parse_args(args)
+
+    # Check if --text-to-video is used, then --json-input must also be provided
+    if parsed_args.text_to_video and not parsed_args.ttv_config:
+        parser.error("--json-input is required when --text-to-video is specified.")
+
+    return parsed_args

@@ -1,21 +1,21 @@
 from abc import ABC, abstractmethod
 import re
-from gtts import gTTS
+from urllib import request
+from google.cloud import texttospeech_v1 as tts
+import os
+import tempfile
 from datetime import datetime
 import subprocess
-import os
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import subprocess
 from urllib.parse import urlparse
-import requests
 from datetime import datetime
 from logger import Logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import concurrent.futures
 import time
 from logger import Logger
-import tempfile
 
 class TextToSpeech(ABC):
     @abstractmethod
@@ -42,11 +42,11 @@ class TextToSpeech(ABC):
 
         return chunks
 
-
     def fetch_audio(self, chunk, payload, headers, index):
         try:
             start_time = datetime.now()  # Record start time
-            response = requests.post(self.api_url, json=payload, headers=headers, timeout=30)
+            Logger.print_info(f"Fetching audio for chunk {index}...")
+            response = request.post(self.api_url, json=payload, headers=headers, timeout=30)
             end_time = datetime.now()  # Record end time
             audio_url = response.json().get("audio_url")
 
@@ -93,15 +93,42 @@ class TextToSpeech(ABC):
             Logger.print_error(f"Error playing the speech response: {e}")
 
 class GoogleTTS(TextToSpeech):
+    def __init__(self):
+        Logger.print_info("Initializing GoogleTTS...")
+
     def convert_text_to_speech(self, text: str):
         try:
-            tts = gTTS(text=text, lang="en-uk",)
+            # Initialize the Text-to-Speech client
+            client = tts.TextToSpeechClient()
+
+            # Set up the text input and voice settings
+            synthesis_input = tts.SynthesisInput(text=text)
+            voice = tts.VoiceSelectionParams(
+                language_code="en-US",
+                name="en-US-Casual-K")
+
+            # Set the audio configuration
+            audio_config = tts.AudioConfig(
+                audio_encoding=tts.AudioEncoding.MP3)
+
+            Logger.print_debug(f"Converting text to speech...")
+
+            # Perform the text-to-speech request
+            response = client.synthesize_speech(
+                input=synthesis_input,
+                voice=voice,
+                audio_config=audio_config)
+
+            # Save the audio to a file
             file_path = os.path.join(tempfile.gettempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
-            tts.save(file_path)
-            return 0, file_path
+            with open(file_path, "wb") as out:
+                out.write(response.audio_content)
+                Logger.print_info(f"Audio content written to file {file_path}")
+
+            return True, file_path
         except Exception as e:
             Logger.print_error(f"Error converting text to speech: {e}")
-            return 1, None
+            return False, None
 
 class NaturalReadersTTS(TextToSpeech):
     def convert_text_to_speech(self, text: str):
@@ -184,20 +211,3 @@ class CoquiTTS(TextToSpeech):
             Logger.print_error(f"Error converting text to speech: {e}")
             return 1, None
 
-    def convert_text_to_chunks(text):
-        chunks = split_text_to_phrases(text)
-
-        if not chunks:
-            return [text]
-
-        reconstructed_chunks = []
-        remaining_text = text
-
-        for chunk in chunks:
-            reconstructed_chunks.append(chunk)
-            remaining_text = remaining_text[len(chunk):]
-
-        if remaining_text:
-            reconstructed_chunks.append(remaining_text)
-
-        return reconstructed_chunks
