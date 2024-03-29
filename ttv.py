@@ -9,6 +9,7 @@ import json
 from datetime import datetime
 from tts import GoogleTTS
 import textwrap
+from logger import Logger
 
 # # Configure logging
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,7 +18,7 @@ import textwrap
 # openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # if not openai.api_key:
-#     logging.error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
+#     Logger.print_error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
 #     raise ValueError("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
 
 # parser = argparse.ArgumentParser(description='Generate images in a conversational style.')
@@ -33,7 +34,7 @@ def load_input(ttv_config):
     return data['style'], data['story']
 
 def generate_image(sentence, context, style, image_index, total_images):
-    logging.info(f"Generating image for: '{sentence}' using a style of '{style}' DALL·E 3")
+    Logger.print_debug(f"Generating image for: '{sentence}' using a style of '{style}' DALL·E 3")
     # Incorporate both the specific sentence and the accumulated context into the prompt
     prompt = f"With the context of: {context}. Create an image that matches the description: '{sentence}', while keeping the style of {style}."
     try:
@@ -51,15 +52,15 @@ def generate_image(sentence, context, style, image_index, total_images):
             
             return filename, True  # Return True to indicate success
         else:
-            logging.warning(f"No image was returned for the sentence: '{sentence}'")
+            Logger.print_error(f"No image was returned for the sentence: '{sentence}'")
             return None, False  # Return False to indicate failure
     except Exception as e:
-        logging.error(f"An error occurred while generating the image: {e}")
+        Logger.print_error(f"An error occurred while generating the image: {e}")
         return None, False
 
 def save_image_with_caption(image_url, filename, caption, current_step, total_steps):
     start_time = datetime.now()
-    logging.info(f"Starting to save image with caption: '{caption}' to {filename}")
+    Logger.print_info(f"Starting to save image with caption: '{caption}' to {filename}")
 
     # Download the image
     download_start_time = datetime.now()
@@ -68,7 +69,7 @@ def save_image_with_caption(image_url, filename, caption, current_step, total_st
         with open(filename, 'wb') as file:
             file.write(response.content)
     download_end_time = datetime.now()
-    logging.info(f"Image downloaded in {(download_end_time - download_start_time).total_seconds()} seconds.")
+    Logger.print_info(f"Image downloaded in {(download_end_time - download_start_time).total_seconds()} seconds.")
 
     # Load the image
     image = Image.open(filename)
@@ -96,10 +97,10 @@ def save_image_with_caption(image_url, filename, caption, current_step, total_st
     saving_start_time = datetime.now()
     new_image.save(filename)
     saving_end_time = datetime.now()
-    logging.info(f"Image saved in {(saving_end_time - saving_start_time).total_seconds()} seconds.")
+    Logger.print_info(f"Image saved in {(saving_end_time - saving_start_time).total_seconds()} seconds.")
 
     end_time = datetime.now()
-    logging.info(f"Total time to save image with caption: {(end_time - start_time).total_seconds()} seconds. Saved to {filename}")
+    Logger.print_info(f"Total time to save image with caption: {(end_time - start_time).total_seconds()} seconds. Saved to {filename}")
 
 def get_audio_duration(audio_file):
     """
@@ -117,23 +118,23 @@ def create_video_segment(image_path, audio_path, output_path):
     """
     Create a video segment from an image and an audio file, suppressing ffmpeg verbose output.
     """
-    logging.info("ffmpeg started for creating video segment.")
+    Logger.print_info("ffmpeg started for creating video segment.")
     try:
         subprocess.run([
             "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
             "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
             "-pix_fmt", "yuv420p", "-shortest", "-t", str(get_audio_duration(audio_path) + 1), output_path
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        logging.info("ffmpeg stopped with success for creating video segment.")
+        Logger.print_info("ffmpeg stopped with success for creating video segment.")
     except subprocess.CalledProcessError as e:
-        logging.error("ffmpeg failed with error: {}".format(e))
+        Logger.print_error("ffmpeg failed with error: {}".format(e))
 
 def create_final_video(video_segments, output_path):
     """
     Concatenate video segments into a final video with re-encoding to ensure compatibility,
     suppressing ffmpeg verbose output.
     """
-    logging.info("ffmpeg started for creating final video.")
+    Logger.print_info("ffmpeg started for creating final video.")
     with open("/tmp/concat_list.txt", "w") as f:
         for segment in video_segments:
             f.write(f"file '{segment}'\n")
@@ -143,9 +144,9 @@ def create_final_video(video_segments, output_path):
             "-pix_fmt", "yuv420p", "-c:v", "libx264", "-crf", "23", "-preset", "medium", 
             "-c:a", "aac", "-b:a", "192k", output_path
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        logging.info("ffmpeg stopped with success for creating final video.")
+        Logger.print_info("ffmpeg stopped with success for creating final video.")
     except subprocess.CalledProcessError as e:
-        logging.error(f"ffmpeg failed with error: {e}")
+        Logger.print_error(f"ffmpeg failed with error: {e}")
 
 def generate_blank_image(sentence, image_index):
     # Code to generate a blank image
@@ -174,20 +175,20 @@ def text_to_video(ttv_config, skip_generation):
     context = ""  # Maintain context for image generation
     total_images = len(story)
 
-    logging.info(f"Total images to generate: {total_images}")
+    Logger.print_info(f"Total images to generate: {total_images}")
 
     for i, sentence in enumerate(story):
         if skip_generation:
-            logging.info("Skipping image generation as per the flag.")
+            Logger.print_info("Skipping image generation as per the flag.")
             # Assuming you have a way to handle skipped generation, e.g., using existing images or placeholders
             continue
 
         # Generate audio for the sentence first
         audio_success, audio_path = tts.convert_text_to_speech(sentence)
         if audio_success:
-            logging.info(f"Audio generation successful for: '{sentence}'. Saved to {audio_path}")
+            Logger.print_info(f"Audio generation successful for: '{sentence}'. Saved to {audio_path}")
         else:
-            logging.error(f"Audio generation failed for: '{sentence}'. Skipping this sentence.")
+            Logger.print_error(f"Audio generation failed for: '{sentence}'. Skipping this sentence.")
             continue  # Skip this iteration if audio generation fails
 
 
@@ -210,10 +211,10 @@ def text_to_video(ttv_config, skip_generation):
         # Concatenate video segments into the final video
         final_video_path = "/tmp/final_video.mp4"
         create_final_video(video_segments, final_video_path)
-        logging.info(f"Final video created at {final_video_path}")
+        Logger.print_info(f"Final video created at {final_video_path}")
 
         # Optionally play the final video
-        logging.info("Playing the final video.")
+        Logger.print_info("Playing the final video.")
         subprocess.run(["ffplay", "-autoexit", final_video_path])
     else:
-        logging.error("No video segments were created. Final video not generated.")
+        Logger.print_error("No video segments were created. Final video not generated.")
