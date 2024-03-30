@@ -1,7 +1,7 @@
 import argparse
 import json
 from tts import TextToSpeech, GoogleTTS, NaturalReadersTTS, CoquiTTS
-from dictation import Dictation, StaticGoogleDictation, LiveGoogleDictation, LiveAssemblyAIDictation
+from dictation import Dictation, StaticGoogleDictation, LiveGoogleDictation
 import sys
 from logger import Logger
 
@@ -18,8 +18,6 @@ def parse_dictation_type(dictation_type: str) -> Dictation:
         return StaticGoogleDictation()
     elif dictation_type.lower() == "live_google":
         return LiveGoogleDictation()
-    elif dictation_type.lower() == "live_assemblyai":
-        return LiveAssemblyAIDictation()
     else:
         raise ValueError(
             "Invalid dictation type provided. Available options: 'static_google', 'live_assemblyai'"

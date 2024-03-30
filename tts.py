@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import platform
 import re
 import threading
 from urllib import request
@@ -73,24 +74,43 @@ class TextToSpeech(ABC):
             return None, index, None, None
 
     def play_speech_response(self, file_path, raw_response):
+        dictation = LiveGoogleDictation()  # Ensure this is your real-time dictation module
+        stop_words = ["ganglia", "stop", "excuse me"]  # Defined at class level or passed in
+        
         if file_path.endswith('.txt'):
             file_path = self.concatenate_audio_from_text(file_path)
 
         # Prepare the play command and determine the audio duration
         play_command, audio_duration = self.prepare_playback(file_path)
 
-        Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)\n Playing...")
+        Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)\n")
         Logger.print_demon_output(raw_response)
 
         # Start playback in a non-blocking manner
         playback_process = subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
 
-        # Monitor for stop words in a separate thread
-        stop_word_thread = threading.Thread(target=self.monitor_for_stop_words, args=(LiveGoogleDictation(), audio_duration))
+        # Create a timer to stop listening after the audio duration
+        timer = threading.Timer(audio_duration, lambda: dictation.done_speaking())
+        timer.start()
+
+        # Monitor for stop words in real-time
+        def monitor_for_stop_words(duration):
+            start_time = time.time()
+            Logger.print_debug(f"Say one of the following words to skip playback: {stop_words}")
+            while time.time() - start_time < duration:
+                input_text = dictation.getDictatedInput(0, interruptable=True)
+                if any(word in input_text.lower() for word in stop_words):
+                    Logger.print_debug(f"Skipping playback after catching stop word.")
+                    subprocess.call(["pkill", "-f", "ffplay"])
+                    dictation.done_speaking()
+                    break
+
+        stop_word_thread = threading.Thread(target=monitor_for_stop_words, args=(audio_duration,))
         stop_word_thread.start()
 
         # Wait for playback or stop word detection to finish
         stop_word_thread.join()
+        timer.cancel()  # Ensure timer is canceled if stop word thread finishes first
         playback_process.terminate()  # Ensure playback is stopped
 
     def concatenate_audio_from_text(self, text_file_path):
@@ -113,25 +133,46 @@ class TextToSpeech(ABC):
         return float(duration_output.strip())
 
     def monitor_for_stop_words(self, dictation, duration):
-        def should_stop():
+        def stop_listening():
+            # Called when the timer expires, indicating listening should stop.
+            Logger.print_info("WILL Stopping listening...")
+            return False
+
+        def should_stop(dictation, duration, stop_words):
+            # Flag to keep track of whether the listening should continue or not.
+            # Initially True, indicating listening should continue.
+            Logger.print_info("WILL Entering should stop")
+            listening_should_continue = [True]
+
+            # Start a timer that will call stop_listening after `duration` seconds.
+            timer = threading.Timer(duration, stop_listening)
+            timer.start()
+
             try:
-                input_text = dictation.getDictatedInput(0, interruptable=True)
-                for word in self.stop_words:
-                    if word in input_text.lower():
-                        return True
+                while listening_should_continue[0]:
+                    Logger.print_debug(f"WILL gathering input...")
+                    input_text = dictation.getDictatedInput(0, interruptable=True)
+                    for word in stop_words:
+                        if word in input_text.lower():
+                            # If a stop word is detected, stop listening and return True.
+                            timer.cancel()  # Stop the timer as we're exiting early.
+                            return True
+                    # You could add a short sleep here to reduce CPU usage, e.g., time.sleep(0.1)
+                    time.sleep(0.1)
             except Exception as e:
                 Logger.print_error(f"Monitoring error: {e}")
+
+            timer.cancel()  # Ensure the timer is stopped if exiting the loop normally.
             return False
 
         start_time = time.time()
         Logger.print_debug(f"Say one of the following words to skip playback: {self.stop_words}")
         while time.time() - start_time < duration:
-            if should_stop():
+            Logger.print_debug(f"Time remaining: {duration - (time.time() - start_time):.1f} seconds.")
+            if should_stop(dictation, duration, self.stop_words):
                 Logger.print_debug(f"Skipping playback after catching stop word.")
                 subprocess.call(["pkill", "-f", "ffplay"])
                 break
-
-
 
 class GoogleTTS(TextToSpeech):
     def __init__(self):
@@ -161,8 +202,21 @@ class GoogleTTS(TextToSpeech):
                 voice=voice,
                 audio_config=audio_config)
 
+            # Check the operating system
+            if platform.system() == "Windows":
+                # Use the default temporary directory in Windows
+                base_temp_dir = tempfile.gettempdir()
+            else:
+                # Specify a custom path for Unix-like systems
+                base_temp_dir = "/tmp/GANGLIA"
+
+            # Ensure the directory exists
+            if not os.path.exists(base_temp_dir):
+                os.makedirs(base_temp_dir, exist_ok=True)
+
             # Save the audio to a file
-            file_path = os.path.join(tempfile.gettempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
+            file_path = os.path.join(base_temp_dir, f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
+
             with open(file_path, "wb") as out:
                 out.write(response.audio_content)
                 Logger.print_info(f"Audio content written to file {file_path}")
