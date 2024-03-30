@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import re
+import threading
 from urllib import request
 from google.cloud import texttospeech_v1 as tts
 import os
@@ -11,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 import subprocess
 from urllib.parse import urlparse
 from datetime import datetime
+from dictation import LiveGoogleDictation
 from logger import Logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import concurrent.futures
@@ -58,7 +60,7 @@ class TextToSpeech(ABC):
                 return None, index, None, None
 
             file_path = os.path.abspath(os.path.join(tempfile.gettempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}_{index}.mp3"))
-            audio_response = requests.get(audio_url, timeout=30)
+            audio_response = request.Request.get(audio_url, timeout=30)
             with open(file_path, 'wb') as audio_file:
                 audio_file.write(audio_response.content)
             return file_path, index, start_time, end_time
@@ -67,6 +69,37 @@ class TextToSpeech(ABC):
             return None, index, None, None
 
     def play_speech_response(self, file_path, raw_response):
+        dictation = LiveGoogleDictation()
+
+        self.stop_words = ["ganglia", "stop", "excuse me"]  # Saying these words will interrupt the AI's turn (TODO move to a config)
+
+        # Function to monitor real-time user input for a stop word
+        def monitor_for_stop_word(audio_duration):
+            Logger.print_info("Say 'stop' to skip playback.")
+            start_time = time.time()  # Record the start time
+
+            while True:
+                current_time = time.time()
+                elapsed_time = current_time - start_time
+
+                # Break the loop if the audio duration has passed
+                if elapsed_time >= audio_duration:
+                    print("Audio playback duration exceeded. Monitoring stopped.")
+                    break
+
+                try:
+                    live_input = dictation.getDictatedInput(0) if dictation else input()
+                    if live_input:  # Ensure there's input to check
+                        # Check if any stop word is in the transcribed text
+                        if any(stop_word in live_input.lower() for stop_word in self.stop_words):
+                            stop_word_detected = next((stop_word for stop_word in self.stop_words if stop_word in live_input.lower()), None)
+                            print(f"Stop word '{stop_word_detected}' detected - stopping playback.")
+                            subprocess.call(["pkill", "-f", "ffplay"])
+                            break
+                except Exception as e:
+                    print(f"An error occurred during stop word monitoring: {e}")
+                    break
+
         try:
             if file_path.endswith('.txt'): # Concatenate and play if it's a text file containing paths
                 output_file = "combined_audio.mp3"
@@ -88,9 +121,14 @@ class TextToSpeech(ABC):
             # TODO - save the audio to disk here. Also see if we can save the input audio to disk as well?
 
             with open(os.devnull, "wb") as devnull:
-                subprocess.run(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL) # Wait for completion
+                subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+                stop_word_thread = threading.Thread(target=monitor_for_stop_word, args=(float(duration_output.strip()),))
+                stop_word_thread.start()
         except Exception as e:
             Logger.print_error(f"Error playing the speech response: {e}")
+
+        stop_word_thread.join()
+
 
 class GoogleTTS(TextToSpeech):
     def __init__(self):
