@@ -20,6 +20,9 @@ import time
 from logger import Logger
 
 class TextToSpeech(ABC):
+    def __init__(self):
+        self.stop_words = ["ganglia", "stop", "excuse me"]
+
     @abstractmethod
     def convert_text_to_speech(self, text: str):
         pass
@@ -31,6 +34,7 @@ class TextToSpeech(ABC):
         except ValueError:
             return False
 
+    @classmethod
     def split_text(cls, text: str, max_length: int = 250):
         sentences = [match.group() for match in re.finditer(r'[^.!?]*[.!?]', text)]
         chunks = []
@@ -69,69 +73,70 @@ class TextToSpeech(ABC):
             return None, index, None, None
 
     def play_speech_response(self, file_path, raw_response):
-        dictation = LiveGoogleDictation()
+        if file_path.endswith('.txt'):
+            file_path = self.concatenate_audio_from_text(file_path)
 
-        self.stop_words = ["ganglia", "stop", "excuse me"]  # Saying these words will interrupt the AI's turn (TODO move to a config)
+        # Prepare the play command and determine the audio duration
+        play_command, audio_duration = self.prepare_playback(file_path)
 
-        # Function to monitor real-time user input for a stop word
-        def monitor_for_stop_word(audio_duration):
-            Logger.print_info("Say 'stop' to skip playback.")
-            start_time = time.time()  # Record the start time
+        Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)\n Playing...")
+        Logger.print_demon_output(raw_response)
 
-            while True:
-                current_time = time.time()
-                elapsed_time = current_time - start_time
+        # Start playback in a non-blocking manner
+        playback_process = subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
 
-                # Break the loop if the audio duration has passed
-                if elapsed_time >= audio_duration:
-                    print("Audio playback duration exceeded. Monitoring stopped.")
-                    break
+        # Monitor for stop words in a separate thread
+        stop_word_thread = threading.Thread(target=self.monitor_for_stop_words, args=(LiveGoogleDictation(), audio_duration))
+        stop_word_thread.start()
 
-                try:
-                    live_input = dictation.getDictatedInput(0) if dictation else input()
-                    if live_input:  # Ensure there's input to check
-                        # Check if any stop word is in the transcribed text
-                        if any(stop_word in live_input.lower() for stop_word in self.stop_words):
-                            stop_word_detected = next((stop_word for stop_word in self.stop_words if stop_word in live_input.lower()), None)
-                            print(f"Stop word '{stop_word_detected}' detected - stopping playback.")
-                            subprocess.call(["pkill", "-f", "ffplay"])
-                            break
-                except Exception as e:
-                    print(f"An error occurred during stop word monitoring: {e}")
-                    break
-
-        try:
-            if file_path.endswith('.txt'): # Concatenate and play if it's a text file containing paths
-                output_file = "combined_audio.mp3"
-                concat_command = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", file_path, output_file]
-                with open(os.devnull, "wb") as devnull:
-                    subprocess.run(concat_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, check=True)
-                file_path = output_file
-
-            if file_path.endswith('.mp4'): # Handle video files differently if needed
-                # Define commands for playing video
-                play_command = ["ffplay", "-nodisp", "-autoexit", file_path]
-            else: # Assume audio file
-                duration_command = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
-                duration_output = subprocess.run(duration_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode('utf-8')
-                play_command = ["ffplay", "-nodisp", "-af", "volume=5", "-autoexit", file_path]
-
-            Logger.print_demon_output(f"\nA Demonic Voice Echos (Audio Duration: {float(duration_output.strip()):.1f} seconds)\n Playing... ")
-            Logger.print_demon_output(raw_response)
-            # TODO - save the audio to disk here. Also see if we can save the input audio to disk as well?
-
-            with open(os.devnull, "wb") as devnull:
-                subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
-                stop_word_thread = threading.Thread(target=monitor_for_stop_word, args=(float(duration_output.strip()),))
-                stop_word_thread.start()
-        except Exception as e:
-            Logger.print_error(f"Error playing the speech response: {e}")
-
+        # Wait for playback or stop word detection to finish
         stop_word_thread.join()
+        playback_process.terminate()  # Ensure playback is stopped
+
+    def concatenate_audio_from_text(self, text_file_path):
+        output_file = "combined_audio.mp3"
+        concat_command = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", text_file_path, output_file]
+        subprocess.run(concat_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, check=True)
+        return output_file
+
+    def prepare_playback(self, file_path):
+        if file_path.endswith('.mp4'):
+            play_command = ["ffplay", "-nodisp", "-autoexit", file_path]
+        else:
+            play_command = ["ffplay", "-nodisp", "-af", "volume=5", "-autoexit", file_path]
+        audio_duration = self.get_audio_duration(file_path)
+        return play_command, audio_duration
+
+    def get_audio_duration(self, file_path):
+        duration_command = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
+        duration_output = subprocess.run(duration_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode('utf-8')
+        return float(duration_output.strip())
+
+    def monitor_for_stop_words(self, dictation, duration):
+        def should_stop():
+            try:
+                input_text = dictation.getDictatedInput(0, interruptable=True)
+                for word in self.stop_words:
+                    if word in input_text.lower():
+                        Logger.print_debug(f"Stop word detected: {word}")
+                        return True
+            except Exception as e:
+                Logger.print_error(f"Monitoring error: {e}")
+            return False
+
+        start_time = time.time()
+        Logger.print_debug(f"Say one of the following words to skip playback: {self.stop_words}")
+        while time.time() - start_time < duration:
+            if should_stop():
+                Logger.print_debug(f"Skipping playback after catching stop word.")
+                subprocess.call(["pkill", "-f", "ffplay"])
+                break
+
 
 
 class GoogleTTS(TextToSpeech):
     def __init__(self):
+        super().__init__()
         Logger.print_info("Initializing GoogleTTS...")
 
     def convert_text_to_speech(self, text: str):
@@ -143,7 +148,7 @@ class GoogleTTS(TextToSpeech):
             synthesis_input = tts.SynthesisInput(text=text)
             voice = tts.VoiceSelectionParams(
                 language_code="en-US",
-                name="en-US-Casual-K")
+                name="en-US-Casual-K") # TODO make this configurable
 
             # Set the audio configuration
             audio_config = tts.AudioConfig(

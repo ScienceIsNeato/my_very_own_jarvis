@@ -179,10 +179,12 @@ class LiveGoogleDictation(Dictation):
 
             # Check for stop words in the transcript
             if interruptable:
-                if any(stop_word in current_input for stop_word in self.stop_words):
-                    Logger.print_info(f"Stop word detected in: '{current_input}'. Exiting...")
-                    self.done_speaking()
-                    break  # Exit the loop to stop listening
+                for stop_word in self.stop_words:
+                    if stop_word in current_input:
+                        # We're not recording this part of the conversation, so we can just bail
+                        Logger.print_info(f"Stop word detected in user input: '{current_input}'. Exiting listening thread...")
+                        self.done_speaking()
+                        return f"{stop_word} " # Exit the loop to stop listening
 
             # If we receive any new input, cancel the done_speaking_timer
             if done_speaking_timer is not None:
@@ -212,7 +214,7 @@ class LiveGoogleDictation(Dictation):
     def getDictatedInput(self, device_index, interruptable=False):
         # Async function to transcribe speech
         self.listening = True
-        transcript = self.transcribe_stream(self.generate_audio_chunks())
+        transcript = self.transcribe_stream(self.generate_audio_chunks(), interruptable)
         return transcript
 
 class LiveAssemblyAIDictation(Dictation):
