@@ -48,7 +48,7 @@ python GANGLIA.py [-d DEVICE_INDEX] [-t TTS_INTERFACE] [--static-response]
 Here's a description of each command-line argument:
 
 - `-d DEVICE_INDEX` or `--device_index DEVICE_INDEX`: Sets the index of the input device to use. The default value is 0.
-- `-t TTS_INTERFACE` or `--tts_interface TTS_INTERFACE`: Sets the text-to-speech interface to use. Available options are 'google' or 'natural_reader'. The default value is 'google'.
+- `-t TTS_INTERFACE` or `--tts_interface TTS_INTERFACE`: Sets the text-to-speech interface to use. Available options are 'google'. The default value is 'google'.
 - `--help` or `-h`: Displays usage instructions and a list of available options.
 
 Once GANGLIA is running, it will listen for voice prompts. When you're ready to ask a question or make a request, simply speak into your microphone. Once you've finished speaking, GANGLIA will generate a response using OpenAI's GPT-3 engine and speak it aloud using the pyttsx3 library.
