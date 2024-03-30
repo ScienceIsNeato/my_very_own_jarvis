@@ -1,5 +1,6 @@
 import os
 from abc import ABC
+from logger import Logger
 from pydub import AudioSegment
 from pydub.playback import play
 
@@ -17,10 +18,12 @@ class TurnIndicator(ABC):
         self.out_file_path = out_file_path
 
     def input_in(self):
+        Logger.print_user_input('> ', end='', flush=True)
         audio = AudioSegment.from_file(self.in_file_path)
         play(audio)
 
     def input_out(self):
+        Logger.print_demon_output('< ', end='', flush=True)
         audio = AudioSegment.from_file(self.out_file_path)
         play(audio)
 

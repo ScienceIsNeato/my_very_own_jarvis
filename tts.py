@@ -118,7 +118,6 @@ class TextToSpeech(ABC):
                 input_text = dictation.getDictatedInput(0, interruptable=True)
                 for word in self.stop_words:
                     if word in input_text.lower():
-                        Logger.print_debug(f"Stop word detected: {word}")
                         return True
             except Exception as e:
                 Logger.print_error(f"Monitoring error: {e}")
