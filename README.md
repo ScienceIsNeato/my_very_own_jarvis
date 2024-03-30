@@ -68,27 +68,8 @@ Here's a table of features, their implementation names, and the corresponding en
 
 ## TTS (Text To Speech)
 
-- there are a few options for how to render the AI's text response as audio. One option is to use the coqui api.
-
 - `--tts-interface google` [DEFAULT]
-    - the free, simple female google tts voice
-- `--tts-interface coqui`
-    - coqui is an incredible voice synthesis service that offers endless options for speechification
-    - when using Coqui as TTS, set up the coqui_config.json in the project root (see section below)
-
-#### Setting up Coqui TTS Configuration
-
-If you want to use Coqui as your Text To Speech interface, you need to provide the necessary configurations for the Coqui TTS API. 
-
-Create a file named `coqui_config.json` in the root directory with the following format:
-
-```json
-{
-    "api_url": "https://app.coqui.ai/api/v2/samples",
-    "bearer_token": "<your_token>",
-    "voice_id": "<your_voice_id>"
-}
-```
+    - versatile text-to-speech service provided by goggle
 
 ### AI Session Tuning
 

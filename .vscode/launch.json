@@ -8,7 +8,7 @@
             "program": "${workspaceFolder}/ganglia.py",
             "console": "integratedTerminal",
             "args": [
-                "--tts-interface", "coqui",
+                "--tts-interface", "google",
                 "--dictation-type", "live_google",
                 "--device-index", "3",
                 "--enable-turn-indicators"
