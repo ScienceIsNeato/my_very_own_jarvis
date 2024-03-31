@@ -12,7 +12,7 @@ class Logger:
         print(*args, **kwargs)
         print(f"{term.white}", end="", flush=True)
 
-    @staticmethod
+    @staticmethod # TODO genericize this
     def print_demon_output(*args, **kwargs):
         print(f"{term.firebrick2}", end="")
         print(*args, **kwargs)

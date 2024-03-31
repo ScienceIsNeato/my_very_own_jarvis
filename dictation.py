@@ -184,7 +184,7 @@ class LiveGoogleDictation(Dictation):
                         # We're not recording this part of the conversation, so we can just bail
                         Logger.print_debug(f"Stop word detected in user input: '{current_input}'. Exiting listening thread...")
                         self.done_speaking()
-                        return f"{stop_word} " # Exit the loop to stop listening
+                        return f"{stop_word}"
 
             # If we receive any new input, cancel the done_speaking_timer
             if done_speaking_timer is not None:

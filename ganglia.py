@@ -84,6 +84,7 @@ def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
                 exit(0)
         
         # Print a fun little prompt at the beginning of the user's turn
+        # TODO - take another look at this
         Logger.print_info(dictation.generate_random_phrase())
         prompt = dictation.getDictatedInput(args.device_index, interruptable=False) if dictation else input()
 
@@ -118,7 +119,7 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
         session_logger.log_session_interaction(SessionEvent(prompt, response))
 
 def should_end_conversation(prompt):
-    return prompt and "goodbye" in prompt.strip().lower()
+    return prompt and "goodbye" in prompt.strip().lower() # TODO move this specific word to a config
 
 def end_conversation():
     Logger.print_info("Ending session with GANGLIA. Goodbye!")
@@ -167,6 +168,8 @@ def main():
             prompt = user_turn(None, dictation, USER_TURN_INDICATOR, args)
             if should_end_conversation(prompt):
                 Logger.print_info("User ended conversation")
+
+                # Give the AI one last turn to say goodbye to the user
                 ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
                 end_conversation()
                 break
