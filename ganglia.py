@@ -63,16 +63,29 @@ def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
         if USER_TURN_INDICATOR:
             USER_TURN_INDICATOR.input_in()
 
-        prompt = dictation.getDictatedInput(args.device_index) if dictation else input()
+        got_input = False
+        while not got_input:
+            try:
+                prompt = dictation.getDictatedInput(args.device_index, interruptable=False) if dictation else input()
 
-        if USER_TURN_INDICATOR:
-            USER_TURN_INDICATOR.input_out()
+                # If the input is empty restart the loop
+                if not prompt.strip():
+                    continue
 
-        # Check if the input is not empty.
-        if prompt.strip():
-            return prompt
-        else:
-            Logger.print_debug("collected empty input - retrying")
+                got_input = True # Break out of the input loop
+
+                if USER_TURN_INDICATOR:
+                    USER_TURN_INDICATOR.input_out()
+
+                return prompt
+            except KeyboardInterrupt:
+                Logger.print_info("User killed program - exiting gracefully")
+                should_end_conversation(None)
+                exit(0)
+        
+        # Print a fun little prompt at the beginning of the user's turn
+        Logger.print_info(dictation.generate_random_phrase())
+        prompt = dictation.getDictatedInput(args.device_index, interruptable=False) if dictation else input()
 
 
 def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger):
@@ -104,15 +117,16 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
         # Log interaction
         session_logger.log_session_interaction(SessionEvent(prompt, response))
 
-def end_conversation(prompt, force=False):
-    if force:
-        return True
+def should_end_conversation(prompt):
     return prompt and "goodbye" in prompt.strip().lower()
+
+def end_conversation():
+    Logger.print_info("Ending session with GANGLIA. Goodbye!")
+    sys.exit(0)
 
 def signal_handler(sig, frame):
     Logger.print_info("User killed program - exiting gracefully")
-    end_conversation(None, force=True)
-    exit(0)
+    end_conversation()
 
 def clear_screen_after_hotword(tts):
     output = "hotword detected - clearning response from screen after playback"
@@ -151,7 +165,10 @@ def main():
     while True:
         try:
             prompt = user_turn(None, dictation, USER_TURN_INDICATOR, args)
-            if end_conversation(prompt):
+            if should_end_conversation(prompt):
+                Logger.print_info("User ended conversation")
+                ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
+                end_conversation()
                 break
             ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
         except Exception as e:

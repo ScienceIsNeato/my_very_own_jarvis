@@ -1,4 +1,5 @@
 import base64
+import threading
 import time
 import websockets
 import asyncio
@@ -19,7 +20,7 @@ URL = "wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000"
 
 class Dictation(ABC):
     @abstractmethod
-    def getDictatedInput(self, device_index):
+    def getDictatedInput(self, device_index, interruptable=False):
         pass
 
     @abstractmethod
@@ -28,7 +29,7 @@ class Dictation(ABC):
 
 
 class StaticGoogleDictation(Dictation):
-    def getDictatedInput(self, device_index):
+    def getDictatedInput(self, device_index, interruptable=False):
         Logger.print_debug("Testing audio input access...")
         recognizer = sr.Recognizer()
 
@@ -56,12 +57,11 @@ class StaticGoogleDictation(Dictation):
         pass
 
 class LiveGoogleDictation(Dictation):
-    SILENCE_THRESHOLD = 2.5  # seconds
+    SILENCE_THRESHOLD = 2.5  # seconds <-- maybe have one threshold for user_turn and a different one for AI_TURN?
     COUNTER = 0
 
     def __init__(self):
         try:
-            Logger.print_debug("Initializing LiveGoogleDictation...")
             self.listening = True
             self.client = speech.SpeechClient()
             self.audio_stream = pyaudio.PyAudio().open(
@@ -71,7 +71,7 @@ class LiveGoogleDictation(Dictation):
                 input=True,
                 frames_per_buffer=1024
             )
-            Logger.print_info("Audio stream opened successfully")
+            self.stop_words = ["ganglia", "stop", "excuse me"]  # Saying these words will interrupt the AI's turn (TODO move to a config)
         except Exception as e:
             Logger.print_error(f"Error initializing LiveGoogleDictation: {e}")
             raise
@@ -96,6 +96,8 @@ class LiveGoogleDictation(Dictation):
             self.listening = False
 
     def generate_random_phrase(self):
+        # TODO ugh - omjp, this is an abomination. Please move it. We should move this to config and have a teplate with something short and simple.
+        #      We could also consider having a subfolder in config called `examples` and put things like this and previous chatgpt and ttv configs in there
         if self.COUNTER % 10 == 0:
             phrases = ["I hear you from the other side...",
             "Speak, mortal.",
@@ -154,12 +156,10 @@ class LiveGoogleDictation(Dictation):
             self.COUNTER += 1
             return "..."
 
-    def transcribe_stream(self, stream):
+    def transcribe_stream(self, stream, interruptable=False):
         done_speaking_timer = None
         self.state = 'START'
         finalized_transcript = ''
-
-        Logger.print_info(self.generate_random_phrase())
 
         # The generator function will continuously yield audio data
         requests = (speech.StreamingRecognizeRequest(audio_content=chunk) for chunk in stream)
@@ -175,7 +175,18 @@ class LiveGoogleDictation(Dictation):
             if not result.alternatives:
                 continue
 
-            # If we recieve any new input, cancel the done_speaking_timer
+            current_input = result.alternatives[0].transcript.strip()
+
+            # Check for stop words in the transcript
+            if interruptable:
+                for stop_word in self.stop_words:
+                    if stop_word in current_input:
+                        # We're not recording this part of the conversation, so we can just bail
+                        Logger.print_debug(f"Stop word detected in user input: '{current_input}'. Exiting listening thread...")
+                        self.done_speaking()
+                        return f"{stop_word} " # Exit the loop to stop listening
+
+            # If we receive any new input, cancel the done_speaking_timer
             if done_speaking_timer is not None:
                 done_speaking_timer.cancel()
 
@@ -185,25 +196,25 @@ class LiveGoogleDictation(Dictation):
             # Now process the results from the microphone input
             # (the fancy escape sequeces are for terminal cursor and feed control)
             if self.state == 'START':
-                Logger.print_user_input(f'\033[K{result.alternatives[0].transcript.strip()}\r', end='', flush=True)
+                Logger.print_user_input(f'\033[K{current_input}\r', end='', flush=True)
                 self.state = 'LISTENING'
 
             elif is_final:
-                finalized_transcript += f"{result.alternatives[0].transcript.strip()} "
-                Logger.print_user_input(f'\033[K{result.alternatives[0].transcript.strip()}', flush=True)
+                finalized_transcript += f"{current_input} "
+                Logger.print_user_input(f'\033[K{current_input}', flush=True)
                 self.state = 'START'
                 done_speaking_timer = Timer(self.SILENCE_THRESHOLD, self.done_speaking)
                 done_speaking_timer.start()
 
             elif self.state == 'LISTENING':
-                Logger.print_user_input(f'\033[K{result.alternatives[0].transcript.strip()}', end='\r', flush=True)
+                Logger.print_user_input(f'\033[K{current_input}', end='\r', flush=True)
 
         return finalized_transcript
 
-    def getDictatedInput(self, device_index):
+    def getDictatedInput(self, device_index, interruptable=False):
         # Async function to transcribe speech
         self.listening = True
-        transcript = self.transcribe_stream(self.generate_audio_chunks())
+        transcript = self.transcribe_stream(self.generate_audio_chunks(), interruptable)
         return transcript
 
 class LiveAssemblyAIDictation(Dictation):
@@ -404,6 +415,6 @@ class LiveAssemblyAIDictation(Dictation):
             # Return the result from the receive() function
             return receive_result
 
-    def getDictatedInput(self, device_index):
+    def getDictatedInput(self, device_index, interruptable=False):
         result = asyncio.run(self.send_receive(device_index))
         return result
