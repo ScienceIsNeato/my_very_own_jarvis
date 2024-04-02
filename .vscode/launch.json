@@ -3,7 +3,7 @@
     "configurations": [
         {
             "name": "Python: ganglia.py",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/ganglia.py",
             "console": "integratedTerminal",

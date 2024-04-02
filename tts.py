@@ -85,8 +85,8 @@ class TextToSpeech(ABC):
         # Prepare the play command and determine the audio duration
         play_command, audio_duration = self.prepare_playback(file_path)
 
-        Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)\n") # TODO GANGLIA loaded from config
-        Logger.print_demon_output(raw_response)
+        Logger.print_ganglia_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)\n") # TODO GANGLIA loaded from config
+        Logger.print_ganglia_output(raw_response)
 
         # Start playback in a non-blocking manner
         playback_process = subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
@@ -183,7 +183,6 @@ class GoogleTTS(TextToSpeech):
 
             with open(file_path, "wb") as out:
                 out.write(response.audio_content)
-                Logger.print_info(f"Audio content written to file {file_path}")
 
             return True, file_path
         except Exception as e:

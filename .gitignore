@@ -5,6 +5,5 @@ recorded_audio.*
 .env
 /output
 concat_list.txt
-config/chatgpt_session_config.json
-config/hotwords.json
-config/ttv_config.json
+ganlia_config.json
+config/text_to_video_config.json

@@ -1,3 +1,4 @@
+import json
 import time
 from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
@@ -9,10 +10,12 @@ import os
 import signal
 from logger import Logger
 from hotwords import HotwordManager
+from load_config import ConfigLoader
 
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
     AI_TURN_INDICATOR = None
+    config = ConfigLoader()
     session_logger = None if args.suppress_session_logging else CLISessionLogger(args)
 
     if args.enable_turn_indicators:
@@ -49,7 +52,7 @@ def initialize_conversation(args):
 
     hotword_manager = None
     try:
-        hotword_manager = HotwordManager('config/hotwords.json')  # Initialize the class
+        hotword_manager = HotwordManager()
         Logger.print_debug("HotwordManager initialized successfully.")
     except Exception as e:
         Logger.print_error(f"Failed to initialize HotwordManager: {e}")
@@ -137,6 +140,9 @@ def clear_screen_after_hotword(tts):
 
 def main():
     global args
+
+    # Load the config file first thing - it will now be available anywhere in the program
+    config_loader = ConfigLoader()
 
     args = parse_args()
 

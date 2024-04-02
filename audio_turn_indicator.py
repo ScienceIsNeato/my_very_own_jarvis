@@ -23,7 +23,7 @@ class TurnIndicator(ABC):
         play(audio)
 
     def input_out(self):
-        Logger.print_demon_output('< ', end='', flush=True)
+        Logger.print_ganglia_output('< ', end='', flush=True)
         audio = AudioSegment.from_file(self.out_file_path)
         play(audio)
 
