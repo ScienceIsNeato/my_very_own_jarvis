@@ -64,7 +64,7 @@ class TextToSpeech(ABC):
                 Logger.print_debug(f"No audio url found in the response for chunk {index}: {chunk}")
                 return None, index, None, None
 
-            file_path = os.path.abspath(os.path.join(tempfile.gettempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}_{index}.mp3"))
+            file_path = os.path.abspath(os.path.join(tempfile.gettempdir(), f"ganglia_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}_{index}.mp3"))
             audio_response = request.Request.get(audio_url, timeout=30)
             with open(file_path, 'wb') as audio_file:
                 audio_file.write(audio_response.content)
@@ -179,7 +179,7 @@ class GoogleTTS(TextToSpeech):
                 os.makedirs(base_temp_dir, exist_ok=True)
 
             # Save the audio to a file
-            file_path = os.path.join(base_temp_dir, f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
+            file_path = os.path.join(base_temp_dir, f"ganglia_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
 
             with open(file_path, "wb") as out:
                 out.write(response.audio_content)

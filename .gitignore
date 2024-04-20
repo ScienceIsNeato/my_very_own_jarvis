@@ -6,4 +6,5 @@ recorded_audio.*
 /output
 concat_list.txt
 ganlia_config.json
+config/ganglia_config.json
 config/text_to_video_config.json

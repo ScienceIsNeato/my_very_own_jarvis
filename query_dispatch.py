@@ -23,7 +23,7 @@ class ChatGPTQueryDispatcher:
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
     def __init__(self):
-        self.config_file_path = os.path.join("config", "chatgpt_session_config.json")
+        self.config_file_path = os.path.join("config", "ganglia_config.json")
         self.messages = []
         self.load_config()
 
@@ -68,7 +68,7 @@ class ChatGPTQueryDispatcher:
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         temp_dir = tempfile.gettempdir()
 
-        with open(os.path.join(temp_dir, f"chatgpt_output_{timestamp}_raw.txt"), "w") as file:
+        with open(os.path.join(temp_dir, f"ganglia_output_{timestamp}_raw.txt"), "w") as file:
             file.write(reply)
 
         return reply

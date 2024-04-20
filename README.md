@@ -74,8 +74,8 @@ Here's a table of features, their implementation names, and the corresponding en
 ### AI Session Tuning
 
 - when using chatgpt, the persona of the AI can be tweaked by modifying the config file:
-    - `config/chatgpt_session_config.json`
-    - see `config/chatgpt_session_config.template` for examples and explanations.
+    - `config/ganglia_config.json`
+    - see `config/ganglia_config.template` for examples and explanations.
 
 ## Setting up Session Logging to the Cloud (Optional)
 

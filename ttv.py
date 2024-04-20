@@ -37,26 +37,32 @@ def generate_image(sentence, context, style, image_index, total_images):
     Logger.print_debug(f"Generating image for: '{sentence}' using a style of '{style}' DALL·E 3")
     # Incorporate both the specific sentence and the accumulated context into the prompt
     prompt = f"With the context of: {context}. Create an image that matches the description: '{sentence}', while keeping the style of {style}."
-    try:
-        response = openai.Image.create(
-            model="dall-e-3",
-            prompt=prompt,
-            size="1024x1024",
-            quality="hd",  # Can be "standard" or "hd" for DALL·E 3
-            n=1
-        )
-        if response.data:
-            image_url = response['data'][0]['url']
-            filename = f"/tmp/image_{image_index}.png"  # Save to /tmp/ directory
-            save_image_with_caption(image_url, filename, sentence, image_index, total_images)
-            
-            return filename, True  # Return True to indicate success
-        else:
-            Logger.print_error(f"No image was returned for the sentence: '{sentence}'")
-            return None, False  # Return False to indicate failure
-    except Exception as e:
-        Logger.print_error(f"An error occurred while generating the image: {e}")
-        return None, False
+    
+    max_tries = 5
+    try_number = 1
+
+    while try_number <= max_tries: # There are frequent, spurious errors when generating images
+        try:
+            response = openai.Image.create(
+                model="dall-e-3",
+                prompt=prompt,
+                size="1024x1024",
+                quality="hd",  # Can be "standard" or "hd" for DALL·E 3
+                n=1
+            )
+            if response.data:
+                image_url = response['data'][0]['url']
+                filename = f"/tmp/image_{image_index}.png"  # Save to /tmp/ directory
+                save_image_with_caption(image_url, filename, sentence, image_index, total_images)
+                return filename, True  # Return True to indicate success
+            else:
+                Logger.print_error(f"No image was returned for the sentence: '{sentence}'")
+                return None, False  # Return False to indicate failure
+        except Exception as e:
+            Logger.print_error(f"An error occurred while generating the image: {e}")
+
+    Logger.print_error(f"Unable to generate image for: '{sentence}' after {max_tries} tries.")
+    return None, False
 
 def save_image_with_caption(image_url, filename, caption, current_step, total_steps):
     start_time = datetime.now()
