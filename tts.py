@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import ctypes
 import platform
 import re
 import threading
@@ -103,6 +104,19 @@ class TextToSpeech(ABC):
                 playback_process.terminate()
                 return
 
+    def terminate_thread(self, thread):
+        if not thread.is_alive():
+            return
+
+        exc = ctypes.py_object(SystemExit)
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
+            ctypes.c_long(thread.ident), exc)
+
+        if res == 0:
+            raise ValueError("nonexistent thread id")
+        elif res > 1:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread.ident, None)
+            raise SystemError("PyThreadState_SetAsyncExc failed")
 
     def play_speech_response(self, file_path, raw_response):
         if file_path.endswith('.txt'):
@@ -119,14 +133,14 @@ class TextToSpeech(ABC):
         # Start playback in a non-blocking manner
         playback_process = subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
 
-        # Monitor for stop words with adjusted list
         stop_words = ["GANGLIA", "stop", "wait"]
         stop_word_thread = threading.Thread(target=self.monitor_for_stop_words, args=(audio_duration, stop_words, raw_response, playback_process))
         stop_word_thread.start()
 
         # Wait for playback or stop word detection to finish
-        stop_word_thread.join()
-        playback_process.terminate()  # Ensure playback is stopped
+        playback_process.wait()  # Ensure playback is stopped
+        self.terminate_thread(stop_word_thread)  # Forcefully stop the thread (note, the net says this is dangerous)
+
 
     def concatenate_audio_from_text(self, text_file_path):
         output_file = "combined_audio.mp3" # TODO move to tmp
