@@ -73,10 +73,38 @@ class TextToSpeech(ABC):
             Logger.print_error(f"Error fetching audio for chunk {index}: {e}")
             return None, index, None, None
 
-    def play_speech_response(self, file_path, raw_response):
+    def monitor_for_stop_words(self, duration, stop_words, current_playback_phrase, playback_process):
+        """
+        Monitors for stop words in real-time during audio playback and stops playback if encountered.
+
+        Parameters:
+            duration (float): Duration to monitor for stop words.
+            stop_words (list): List of stop words to monitor.
+            current_playback_phrase (str): The phrase currently being played back.
+            playback_process (subprocess.Popen): The process handling playback.
+        """
         dictation = LiveGoogleDictation()
-        stop_words = ["ganglia", "stop", "excuse me"]  # TODO load from config
-        
+        start_time = time.time()
+
+        # Prepare the playback phrase for comparison by removing punctuation and lowering the case
+        filtered_phrase = ''.join(char.lower() for char in current_playback_phrase if char.isalnum() or char.isspace()).split()
+
+        # Convert stop words to lowercase and remove them if they appear in the filtered phrase
+        current_stop_words = [word.lower() for word in stop_words]
+        current_stop_words = [word for word in current_stop_words if word not in filtered_phrase]
+
+        Logger.print_debug(f"Say one of the following words to skip playback: {current_stop_words}")
+        while time.time() - start_time < duration:
+            input_text = dictation.getDictatedInput(0, interruptable=True)
+            # Apply similar filtering to the live input text
+            filtered_input = ''.join(char.lower() for char in input_text if char.isalnum() or char.isspace()).split()
+            if any(word in filtered_input for word in current_stop_words):
+                Logger.print_debug("Skipping playback after catching stop word.")
+                playback_process.terminate()
+                return
+
+
+    def play_speech_response(self, file_path, raw_response):
         if file_path.endswith('.txt'):
             # If we have an .mp4, we'll just play it directly. 
             # But if we have a .txt, we'll need to concanate the mp4s within it into a single audio file first
@@ -91,30 +119,13 @@ class TextToSpeech(ABC):
         # Start playback in a non-blocking manner
         playback_process = subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
 
-        # Create a timer to stop listening after the audio duration
-        playback_complete_timer = threading.Timer(audio_duration, lambda: playback_complete_callback())
-        playback_complete_timer.start()
-
-        # Monitor for stop words in real-time and immediately return if encountered
-        def monitor_for_stop_words(duration):
-            start_time = time.time()
-            Logger.print_debug(f"Say one of the following words to skip playback: {stop_words}")
-            while time.time() - start_time < duration:
-                input_text = dictation.getDictatedInput(0, interruptable=True)
-                if any(word in input_text.lower() for word in stop_words):
-                    Logger.print_debug(f"Skipping playback after catching stop word.")
-                    return
-                
-        def playback_complete_callback():
-            dictation.done_speaking() # let the listener know to stop listening
-            playback_process.terminate()
-
-        stop_word_thread = threading.Thread(target=monitor_for_stop_words, args=(audio_duration,))
+        # Monitor for stop words with adjusted list
+        stop_words = ["GANGLIA", "stop", "wait"]
+        stop_word_thread = threading.Thread(target=self.monitor_for_stop_words, args=(audio_duration, stop_words, raw_response, playback_process))
         stop_word_thread.start()
 
         # Wait for playback or stop word detection to finish
         stop_word_thread.join()
-        playback_complete_timer.cancel()  # Ensure timer is canceled if stop word thread finishes first
         playback_process.terminate()  # Ensure playback is stopped
 
     def concatenate_audio_from_text(self, text_file_path):

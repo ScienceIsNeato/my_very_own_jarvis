@@ -27,6 +27,36 @@ class ChatGPTQueryDispatcher:
         self.messages = []
         self.load_config()
 
+    def load_conversation_context(self, contexts):
+        """
+        Loads a series of conversation context prompts into the conversation and simulates an acknowledgment for each.
+
+        Parameters:
+            contexts (list): List of context strings from the config file.
+        """
+        # Start the spoofed exchange to simulate loading context without eliciting reactions
+        initial_prompt = "Ok friend, I'm going to feed you a bunch of conversation context that I'd like you to be aware of. I don't want any reaction or discussion at all - just let me know you got the message with 'ack' and keep saying 'ack' to each message until I'm done feeding context."
+        spoofed_response = "ack"
+        self.sendQuery(initial_prompt, spoof=True, spoofed_response=spoofed_response)
+
+        # Load each context as a spoofed user input and simulate 'ack' from the system for each
+        for context in contexts:
+            self.sendQuery(context, spoof=True, spoofed_response=spoofed_response)
+
+        # End the context loading with a final real exchange asking for a summary
+        final_prompt = "Ok, that's all the context I'll provide. From this point on, you can start responding normally. Please keep the context top of mind as we continue chatting. If you are ready to proceed with this context, give me an enthusiastic holler!"
+        final_response = "Ohhh, yeah! Let's do this!"
+        self.sendQuery(final_prompt, spoof=False, spoofed_response=final_response)
+
+    def summarize_conversation_context(self):
+        """Asks the AI to summarise the conversation context that was previously loaded."""
+
+        prompt = "Ok, a new user is walking up to start interacting with you. Can you give them a quick rundown of the conversation context they're walking into? Keep it brief and fun so they're eager to jump in!"
+        summary_response = self.sendQuery(prompt, spoof=False)
+
+        Logger.print_debug(f"Summary of context: {summary_response}")
+        return summary_response
+
     def load_config(self):
         try:
             Logger.print_debug("DEBUG FP: ", self.config_file_path)
@@ -48,23 +78,39 @@ class ChatGPTQueryDispatcher:
             Logger.print_error(f"Error: Invalid JSON in config file: `{self.config_file_path}`")
 
 
-    def sendQuery(self, current_input):
+    def sendQuery(self, current_input, spoof=False, spoofed_response=""):
+        """
+        Sends a query to the AI model or uses a spoofed response based on the spoof flag.
+
+        Parameters:
+            current_input (str): The user's input to send or spoof.
+            spoof (bool): Indicates whether to use the spoofed response.
+            spoofed_response (str): The response to use if spoof is True.
+
+        Returns:
+            str: The AI's or spoofed response.
+        """
         self.messages.append({"role": "user", "content": current_input})
         start_time = time()
 
         self.rotate_session_history()  # Ensure history stays under the max length
 
-        Logger.print_debug("Sending query to AI server...")
+        if spoof:
+            reply = spoofed_response
+        else:
+            Logger.print_debug("Sending query to AI server...")
+            chat = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo", 
+                messages=self.messages
+            )
+            reply = chat.choices[0].message.content
 
-        chat = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo", 
-            messages=self.messages
-        )
-        reply = chat.choices[0].message.content
         self.messages.append({"role": "assistant", "content": reply})
 
-        Logger.print_info(f"AI response received in {time() - start_time:.1f} seconds.")
+        if not spoofed_response:
+            Logger.print_info(f"AI response received in {time() - start_time:.1f} seconds.")
 
+        # Store the response for auditing purposes
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         temp_dir = tempfile.gettempdir()
 

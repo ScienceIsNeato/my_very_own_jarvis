@@ -57,6 +57,8 @@ def initialize_conversation(args):
     except Exception as e:
         Logger.print_error(f"Failed to initialize HotwordManager: {e}")
 
+    query_dispatcher.load_conversation_context(config.get('conversation_context'))
+
     Logger.print_info("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
 
     return USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, hotword_manager
@@ -142,7 +144,7 @@ def main():
     global args
 
     # Load the config file first thing - it will now be available anywhere in the program
-    config_loader = ConfigLoader()
+    ConfigLoader()
 
     args = parse_args()
 
@@ -168,6 +170,13 @@ def main():
     Logger.print_legend()
 
     signal.signal(signal.SIGINT, signal_handler)
+
+    # Before entering the main loop, playback the llm's last response describing the conversation context
+    summary = query_dispatcher.summarize_conversation_context()
+    if tts:
+        # Generate speech response
+        _, file_path = tts.convert_text_to_speech(summary)
+        tts.play_speech_response(file_path, summary)
 
     while True:
         try:
