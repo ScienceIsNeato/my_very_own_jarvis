@@ -1,3 +1,4 @@
+import time
 import openai
 import os
 import requests
@@ -10,22 +11,7 @@ from datetime import datetime
 from tts import GoogleTTS
 import textwrap
 from logger import Logger
-
-# # Configure logging
-# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# # Set your OPENAI_API_KEY in the environment variables for security reasons
-# openai.api_key = os.getenv("OPENAI_API_KEY")
-
-# if not openai.api_key:
-#     Logger.print_error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
-#     raise ValueError("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
-
-# parser = argparse.ArgumentParser(description='Generate images in a conversational style.')
-# parser.add_argument('--skip-generation', action='store_true', help='Skip image generation and compile existing images.')
-# parser.add_argument('--json-input', type=str, help='Path to the JSON input file', required=True)
-
-# args = parser.parse_args()
+from music_lib import MusicGenerator  # Import the new music generation library
 
 # Function to load JSON input
 def load_input(ttv_config):
@@ -148,6 +134,21 @@ def create_final_video(video_segments, output_path):
     except subprocess.CalledProcessError as e:
         Logger.print_error(f"ffmpeg failed with error: {e}")
 
+def add_background_music(video_path, music_path, output_path):
+    """
+    Add background music to the final video.
+    """
+    Logger.print_info("ffmpeg started for adding background music to final video.")
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", video_path, "-i", music_path, "-filter_complex",
+            "[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=2", "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "192k", output_path
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        Logger.print_info("ffmpeg stopped with success for adding background music.")
+    except subprocess.CalledProcessError as e:
+        Logger.print_error(f"ffmpeg failed with error: {e}")
+
 def generate_blank_image(sentence, image_index):
     # Code to generate a blank image
     blank_image = Image.new('RGB', (1024, 1024), 'white') 
@@ -162,6 +163,42 @@ def generate_blank_image(sentence, image_index):
     blank_image.save(blank_filename)
 
     return blank_filename
+
+def generate_music():
+    music_gen = MusicGenerator()
+    description_prompt = "a song for a fine scottish evening"
+    duration = 180  # Hardcoded duration for simplicity, adjust as needed
+
+    response = music_gen.generate_music(description_prompt, duration=duration)
+    if 'error' in response:
+        Logger.print_error(f"Music generation error: {response['message']}")
+        return None
+    
+    song_id = response['data'][0]['song_id']
+    Logger.print_info(f"Generated Song ID for music: {song_id}")
+
+    # Polling the status until the song is ready
+    status = "queued"
+    while status in ["queued", "processing", "streaming"]:
+        time.sleep(5)
+        status_response = music_gen.query_music_status(song_id)
+        status = status_response['data']['status']
+        Logger.print_info(f"Current music generation status: {status}")
+
+    if status == "complete":
+        audio_url = status_response['data']['audio_url']
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_path = f"/tmp/ken_burns_music_{timestamp}.mp3"
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        if music_gen.download_audio(audio_url, output_path):
+            Logger.print_info(f"Music downloaded to {output_path}")
+            return output_path
+        else:
+            Logger.print_error("Failed to download music.")
+            return None
+    else:
+        Logger.print_error("Music generation failed or was not completed.")
+        return None
 
 def text_to_video(ttv_config, skip_generation):
     # Initialize TTS
@@ -191,7 +228,6 @@ def text_to_video(ttv_config, skip_generation):
             Logger.print_error(f"Audio generation failed for: '{sentence}'. Skipping this sentence.")
             continue  # Skip this iteration if audio generation fails
 
-
         # Generate image with updated method signature
         filename, success = generate_image(sentence, context, style, i + 1, total_images)
 
@@ -213,8 +249,30 @@ def text_to_video(ttv_config, skip_generation):
         create_final_video(video_segments, final_video_path)
         Logger.print_info(f"Final video created at {final_video_path}")
 
-        # Optionally play the final video
-        Logger.print_info("Playing the final video.")
-        subprocess.run(["ffplay", "-autoexit", final_video_path])
+        # Generate background music
+        music_path = generate_music()
+        if music_path:
+            # Add background music to the final video
+            final_video_with_music_path = "/tmp/final_video_with_music.mp4"
+            add_background_music(final_video_path, music_path, final_video_with_music_path)
+            Logger.print_info(f"Final video with background music created at {final_video_with_music_path}")
+
+            # Optionally play the final video with background music
+            Logger.print_info("Playing the final video with background music.")
+            subprocess.run(["ffplay", "-autoexit", final_video_with_music_path])
+        else:
+            Logger.print_error("Background music generation failed. Playing final video without background music.")
+            subprocess.run(["ffplay", "-autoexit", final_video_path])
     else:
         Logger.print_error("No video segments were created. Final video not generated.")
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate and test music creation.")
+    parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Set the logging level')
+
+    args = parser.parse_args()
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    text_to_video('path/to/your/config.json', skip_generation=False)  # Update with actual path to your JSON config
