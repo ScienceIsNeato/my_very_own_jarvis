@@ -90,11 +90,11 @@ def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_pa
     # Ensure the directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    # Create a video from the still image and audio
+    # Create a video from the still image and audio with fade-in effect
     ffmpeg_cmd = [
         "ffmpeg", "-y", "-loop", "1", "-i", movie_poster_path, "-i", song_with_lyrics_path,
         "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k", "-pix_fmt", "yuv420p",
-        "-shortest", closing_credits_video_path
+        "-vf", "fade=in:st=3:d=2", "-shortest", closing_credits_video_path
     ]
 
     Logger.print_info(f"Creating closing credits video from {movie_poster_path} and {song_with_lyrics_path}")
@@ -127,12 +127,15 @@ def add_background_music_to_video(final_video_path, music_path):
     if music_path is None:
         Logger.print_error("Music path is None")
         return None
+
+    background_music_volume = 0.45  # Adjust this value to change the relative volume of the background music
+
     main_video_with_background_music_path = "/tmp/GANGLIA/ttv/main_video_with_background_music.mp4"
     try:
         if music_path:
             ffmpeg_cmd = [
                 "ffmpeg", "-y", "-i", final_video_path, "-i", music_path, "-filter_complex",
-                "[0:a]volume=1.0[v];[1:a]volume=0.3[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2",
+                f"[0:a]volume=1.0[v];[1:a]volume={background_music_volume}[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2",
                 "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", main_video_with_background_music_path
             ]
             result = run_ffmpeg_command(ffmpeg_cmd)

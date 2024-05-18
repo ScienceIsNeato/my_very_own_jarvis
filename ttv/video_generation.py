@@ -16,10 +16,15 @@ def create_video_segment(image_path, audio_path, output_path):
 def create_still_video_with_fade(image_path, audio_path, output_path):
     Logger.print_info("Creating still video with fade.")
     audio_delay = "adelay=3000|3000"  # Delay audio by 3000ms (3 seconds)
+    audio_fade_in = "afade=t=in:ss=0:d=3"  # Fade-in effect over 3 seconds
+    audio_fade_out = "afade=t=out:st={}:d=5".format(get_audio_duration(audio_path))  # Fade-out effect starting at the end
+
+    # Combine audio filters
+    audio_filters = f"{audio_delay},{audio_fade_in},{audio_fade_out}"
 
     ffmpeg_cmd = [
         "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
-        "-vf", "fade=t=out:st=25:d=5", "-af", audio_delay,
+        "-vf", "fade=t=out:st=25:d=5", "-af", audio_filters,
         "-t", str(get_audio_duration(audio_path) + 1 + 3),  # Add 3 seconds to the duration for the delay
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", output_path
     ]

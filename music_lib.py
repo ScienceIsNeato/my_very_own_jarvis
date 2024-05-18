@@ -4,7 +4,6 @@ import requests
 import os
 import json
 from logger import Logger
-from query_dispatch import ChatGPTQueryDispatcher
 
 class MusicGenerator:
     def __init__(self):
@@ -18,7 +17,7 @@ class MusicGenerator:
             "Content-Type": "application/json"
         }
 
-    def generate_music(self, prompt, model="chirp-v3-0", duration=10, with_lyrics=False, story_text=None, query_dispatcher=None):
+    def generate_music(self, prompt, model="chirp-v3-0", duration=10, with_lyrics=False, story_text=None, retries=5, wait_time=60, query_dispatcher=60):
         """
         Generates audio based on the given prompt, with options for instrumental or with lyrics.
 
@@ -28,7 +27,6 @@ class MusicGenerator:
             duration (int): The duration of the generated audio in seconds. Defaults to 10.
             with_lyrics (bool): Whether to generate audio with lyrics. Defaults to False.
             story_text (str): The story text to generate lyrics from if with_lyrics is True. Defaults to None.
-            max_length (int): The maximum length of the prompt. Defaults to 4096.
 
         Returns:
             str: Path to the generated audio file, or an error message.
@@ -59,52 +57,72 @@ class MusicGenerator:
         # Remove keys with None values to prevent validation errors
         data = {k: v for k, v in data.items() if v is not None}
 
-        Logger.print_debug(f"Sending request to {endpoint} with data: {data}")
-        try:
-            response = requests.post(endpoint, headers=self.headers, json=data)
-            Logger.print_debug(f"Request to {endpoint} completed with status code {response.status_code}")
+        attempt = 0
+        while attempt < retries:
+            try:
+                Logger.print_debug(f"Sending request to {endpoint} with data: {data}")
+                response = requests.post(endpoint, headers=self.headers, json=data)
+                Logger.print_debug(f"Request to {endpoint} completed with status code {response.status_code}")
 
-            if response.status_code == 200:
-                Logger.print_debug(f"Response received: {response.json()}")
-                job_data = response.json().get("data", [])[0]  # Accessing the first item in the list
-                job_id = job_data.get("song_id")
-                if not job_id:
-                    Logger.print_info("No job ID found in response.")
-                    return
+                if response.status_code == 200:
+                    Logger.print_debug(f"Response received: {response.json()}")
+                    job_data = response.json().get("data", [])
+                    if not job_data:
+                        Logger.print_error("No job data found in response.")
+                        return {"error": "no_job_data", "message": "No job data found in response."}
 
-                Logger.print_info("Waiting for audio generation to complete...")
-                complete = False
-                audio_url = None
-                expected_duration = 30 if with_lyrics else 120
-                start_time = datetime.now()
-                while not complete:
-                    time_elapsed = (datetime.now() - start_time).total_seconds()
-                    expected_time_remaining = int(expected_duration - time_elapsed)
-                    time.sleep(5)  # Check every 5 seconds
-                    music_type = "song_with_lyrics" if with_lyrics else "instrumental"
-                    Logger.print_info(f"Music generation for {music_type} in progress... Expected time remaining: {expected_time_remaining} seconds")
-                    status_response = self.query_music_status(job_id)
-                    if status_response.get("status") == "complete":
-                        complete = True
-                        audio_url = status_response.get("audio_url")
-                    elif status_response.get("status") == "error":
-                        Logger.print_error("Audio generation failed")
-                        return
+                    job_id = job_data[0].get("song_id")
+                    if not job_id:
+                        Logger.print_info("No job ID found in response.")
+                        return {"error": "no_job_id", "message": "No job ID found in response."}
 
-                filename = f"generated_{'song_with_lyrics' if with_lyrics else 'instrumental'}_{int(time.time())}.mp3"
-                local_path = os.path.join("/tmp/GANGLIA/ttv", filename)
+                    Logger.print_info("Waiting for audio generation to complete...")
+                    complete = False
+                    audio_url = None
+                    expected_duration = 30 if with_lyrics else 120
+                    start_time = datetime.now()
+                    while not complete:
+                        time_elapsed = (datetime.now() - start_time).total_seconds()
+                        expected_time_remaining = int(expected_duration - time_elapsed)
+                        time.sleep(5)  # Check every 5 seconds
+                        music_type = "song_with_lyrics" if with_lyrics else "instrumental"
+                        Logger.print_info(f"Music generation for {music_type} in progress... Expected time remaining: {expected_time_remaining} seconds")
+                        status_response = self.query_music_status(job_id)
+                        if status_response.get("status") == "complete":
+                            complete = True
+                            audio_url = status_response.get("audio_url")
+                        elif status_response.get("status") == "error":
+                            Logger.print_error("Audio generation failed")
+                            return {"error": "audio_generation_failed", "message": "Audio generation failed."}
 
-                if self.download_audio(audio_url, local_path):
-                    return local_path
+                    filename = f"generated_{'song_with_lyrics' if with_lyrics else 'instrumental'}_{int(time.time())}.mp3"
+                    local_path = os.path.join("/tmp/GANGLIA/ttv", filename)
+
+                    if self.download_audio(audio_url, local_path):
+                        return local_path
+                    else:
+                        Logger.print_error(f"Failed to download audio from {audio_url}")
+                        return {"error": "download_failed", "message": "Failed to download generated audio."}
                 else:
-                    Logger.print_error(f"Failed to download audio from {audio_url}")
-                    return {"error": "download_failed", "message": "Failed to download generated audio"}
-            else:
-                Logger.print_error(f"Error in response: {response.text}")
-                return {"error": response.status_code, "message": response.text}
-        except Exception as e:
-            Logger.print_error(f"Exception during request to {endpoint}: {e}")
-            return {"error": "exception", "message": str(e)}
+                    Logger.print_error(f"Error in response: {response.text}")
+                    if response.status_code == 429:  # Rate limit exceeded
+                        Logger.print_warning(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+                        time.sleep(wait_time)
+                        attempt += 1
+                    else:
+                        return {"error": response.status_code, "message": response.text}
+            except Exception as e:
+                Logger.print_error(f"Exception during request to {endpoint}: {e}")
+                if 'Rate limit exceeded' in str(e):
+                    Logger.print_warning(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+                    time.sleep(wait_time)
+                    attempt += 1
+                else:
+                    return {"error": "exception", "message": str(e)}
+
+        Logger.print_error(f"Failed to generate audio after {retries} attempts due to rate limiting.")
+        return {"error": "rate_limit_exceeded", "message": "Failed to generate audio after multiple attempts due to rate limiting."}
+
 
     def generateSongLyrics(self, story_text, query_dispatcher):
         """

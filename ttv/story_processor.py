@@ -1,4 +1,5 @@
 import concurrent.futures
+import time
 from logger import Logger
 from music_lib import MusicGenerator
 from .image_generation import generate_image_for_sentence, generate_blank_image, generate_movie_poster
@@ -90,3 +91,15 @@ def process_story(tts, style, story, skip_generation, query_dispatcher):
             movie_poster_path = None
 
     return video_segments, background_music_path, song_with_lyrics_path, movie_poster_path
+
+def retry_on_rate_limit(func, *args, retries=5, wait_time=60, **kwargs):
+    for attempt in range(retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if 'Rate limit exceeded' in str(e):
+                Logger.print_error(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+                time.sleep(wait_time)
+            else:
+                raise e
+    raise Exception(f"Failed to complete {func.__name__} after {retries} attempts due to rate limiting.")

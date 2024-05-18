@@ -31,6 +31,12 @@ class Logger:
         print(f"{term.white}", end="", flush=True)
 
     @staticmethod
+    def print_warning(*args, **kwargs):
+        print(f"{term.yellow}", end="")
+        print(*args, **kwargs)
+        print(f"{term.white}", end="", flush=True)
+
+    @staticmethod
     def print_info(*args, **kwargs):
         print(f"{term.salmon1}", end="")
         print(*args, **kwargs)

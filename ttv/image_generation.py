@@ -5,28 +5,41 @@ import textwrap
 from datetime import datetime
 from logger import Logger
 
-def generate_image(sentence, context, style, image_index, total_images):
+import time
+import openai
+from logger import Logger
+
+def generate_image(sentence, context, style, image_index, total_images, retries=5, wait_time=60):
     Logger.print_debug(f"Generating image for: '{sentence}' using a style of '{style}' DALL·E 3")
-    prompt = f"With the context of: {context}. Create an image that matches the description: '{sentence}', while keeping the style of {style}."
-    try:
-        response = openai.Image.create(
-            model="dall-e-3",
-            prompt=prompt,
-            size="1024x1024",
-            quality="hd",
-            n=1
-        )
-        if response.data:
-            image_url = response['data'][0]['url']
-            filename = f"/tmp/GANGLIA/ttv/image_{image_index}.png"
-            save_image_with_caption(image_url, filename, sentence, image_index, total_images)
-            return filename, True
-        else:
-            Logger.print_error(f"No image was returned for the sentence: '{sentence}'")
-            return None, False
-    except Exception as e:
-        Logger.print_error(f"An error occurred while generating the image: {e}")
-        return None, False
+    prompt = f"With the context of: {context}. Create an image that matches the description: '{sentence}', while keeping the style of {style}. Limit text in image to a few words max."
+
+    for attempt in range(retries):
+        try:
+            response = openai.Image.create(
+                model="dall-e-3",
+                prompt=prompt,
+                size="1024x1024",
+                quality="hd",
+                n=1
+            )
+            if response.data:
+                image_url = response['data'][0]['url']
+                filename = f"/tmp/GANGLIA/ttv/image_{image_index}.png"
+                save_image_with_caption(image_url, filename, sentence, image_index, total_images)
+                return filename, True
+            else:
+                Logger.print_error(f"No image was returned for the sentence: '{sentence}'")
+                return None, False
+        except Exception as e:
+            if 'Rate limit exceeded' in str(e):
+                Logger.print_warning(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+                time.sleep(wait_time)
+            else:
+                Logger.print_error(f"An error occurred while generating the image: {e}")
+                return None, False
+    Logger.print_error(f"Failed to generate image after {retries} attempts due to rate limiting.")
+    return None, False
+
 
 def save_image_with_caption(image_url, filename, caption, current_step, total_steps):
     start_time = datetime.now()
