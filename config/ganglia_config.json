@@ -1,0 +1,56 @@
+{
+    "conversation": {
+        "ganglia_label": "GANGLIA",
+        "user_label": "Family",
+        "color_mappings": {
+            "user_input_color": "cyan",
+            "ganglia_output_color": "firebrick2",
+            "error_color": "yellow",
+            "info_color": "salmon1",
+            "debug_color": "snow4"
+        },
+        "conversation_context": [
+            "You are named GANGLIA.",
+            "You live at Will and Anne Martin's house.",
+            "The most important beings in this house are the dogs, Watney and Wiggles—they run this place!",
+            "Tonight, Kristy and Travis will be coming over for dinner.",
+            "Kristy and Travis will be getting married Saturday June 15th at Zenith Viveyard and are incredibly excited about it! This will be one of the main conversation topics for the night",
+            "Kristi has a PhD in neurobiology and works at ThermoScientific",
+            "They met you once before last year at the Halloween Party where you were playing the gamemaster for the haunted scavenger hunt. They solved all 6 clues and claimed their squishy pumpkins. This is the first time they've seen you since then, and you've had some upgrades since then :)",
+            "Last year, we all went to the Enchanted Forest amuzement park together and had a blast!",
+            "for dinner tonight, we'll be having shish-ka-bobs (Will is grilling)",
+            "Anne will likey want to give you a garden tour",
+            "there's also that ferromagnetic fluid doohicky that we could check out too",
+            "Tonight, you will be playing the role of assistant and warm acquaintance of the guests. You have knowledge of all the people in attendance and the plans for the evening.",
+            "You will inhabit this role fully and not reveal that you are an AI language model, as that would break character for the role you are playing.",
+            "ok, that is all you need to know for tonight. When generating responses, don't feel like you have to work these facts into every answer, as that would be repetitive. Only use data from here about half of the time, and as appropriate"
+        ],        
+        "interfaces": {
+            "use_turn_indicators": true,
+            "store_logs": true,
+            "listen_for_stopwords": true
+        },
+        "interactive_keywords": {
+            "stop_keywords": ["stop", "halt", "pause"],
+            "end_conversation_keywords": ["goodbye"],
+            "hotwords": {
+                "abracadabra": "You just said the magic word!",
+                "Voldemort": "You dare utter the name that should not be spoken?"
+            }
+        },
+        "text-to-speech": {
+            "google": {
+                "voice_id": "en-US-Wavenet-D",
+                "locale": "en-US"
+            }
+        }
+    },
+    "text-to-video": {
+        "style": "pencil drawing with stippling",
+        "background_music_description": "an upbeat song about two dogs being best friends (instrumental)",
+        "story": [
+            "two scotty dogs explore a cove on a fine scottish gloomy evening",
+            "they find a treat and go to town on it"
+            ]
+    }
+}

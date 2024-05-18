@@ -81,27 +81,35 @@ def generate_blank_image(sentence, image_index):
     blank_image.save(blank_filename)
     return blank_filename
 
-def generate_movie_poster(context, style, story_title):
+def generate_movie_poster(context, style, story_title, retries=5, wait_time=60):
     prompt = f"Create a movie poster for the story titled '{story_title}' with the style of {style} and context: {context}."
-    try:
-        response = openai.Image.create(
-            model="dall-e-3",
-            prompt=prompt,
-            size="1024x1024",
-            quality="hd",
-            n=1
-        )
-        if response.data:
-            image_url = response['data'][0]['url']
-            filename = "/tmp/GANGLIA/ttv/movie_poster.png"
-            save_image_without_caption(image_url, filename)
-            return filename
-        else:
-            Logger.print_error(f"No image was returned for the movie poster.")
-            return None
-    except Exception as e:
-        Logger.print_error(f"An error occurred while generating the movie poster: {e}")
-        return None
+    
+    for attempt in range(retries):
+        try:
+            response = openai.Image.create(
+                model="dall-e-3",
+                prompt=prompt,
+                size="1024x1024",
+                quality="hd",
+                n=1
+            )
+            if response.data:
+                image_url = response['data'][0]['url']
+                filename = "/tmp/GANGLIA/ttv/movie_poster.png"
+                save_image_without_caption(image_url, filename)
+                return filename
+            else:
+                Logger.print_error(f"No image was returned for the movie poster.")
+                return None
+        except Exception as e:
+            if 'Rate limit exceeded' in str(e):
+                Logger.print_warning(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+                time.sleep(wait_time)
+            else:
+                Logger.print_error(f"An error occurred while generating the movie poster: {e}")
+                return None
+    Logger.print_error(f"Failed to generate movie poster after {retries} attempts due to rate limiting.")
+    return None
     
 def save_image_without_caption(image_url, filename):
     response = requests.get(image_url)
