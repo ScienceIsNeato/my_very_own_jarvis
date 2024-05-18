@@ -35,7 +35,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         Logger.print_error(f"{thread_id} Error processing sentence '{sentence}': {e}")
         return None, sentence, i  # Ensure it returns 3 values
 
-def process_story(tts, style, story, skip_generation):
+def process_story(tts, style, story, skip_generation, query_dispatcher):
     total_images = len(story)
     Logger.print_info(f"Total images to generate: {total_images}")
 
@@ -48,12 +48,12 @@ def process_story(tts, style, story, skip_generation):
 
         Logger.print_info("Submitting background music generation task...")
         background_music_future = executor.submit(
-            music_gen.generate_music, "background music for the final video", "chirp-v3-0", 180, with_lyrics=False
+            music_gen.generate_music, "background music for the final video", "chirp-v3-0", 180, story_text=None, with_lyrics=False, query_dispatcher=query_dispatcher
         )
 
         Logger.print_info("Submitting song with lyrics generation task...")
         song_with_lyrics_future = executor.submit(
-            music_gen.generate_music, f"Write a song about this story: {full_story_text}", "chirp-v3-0", 180, with_lyrics=True
+            music_gen.generate_music, f"Write a song about this story: {full_story_text}", "chirp-v3-0", 180, story_text=story, with_lyrics=True, query_dispatcher=query_dispatcher
         )
         Logger.print_info("Submitting sentence processing tasks...")
         sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation) for i, sentence in enumerate(story)]

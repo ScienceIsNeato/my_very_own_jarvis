@@ -146,6 +146,16 @@ def main():
 
     args = parse_args()
 
+    # If there's some spurious problem initializing, wait a bit and try again
+    initialization_failed = True
+    while initialization_failed:
+        try:
+            USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, hotword_manager = initialize_conversation(args)
+            initialization_failed = False
+        except Exception as e:
+            Logger.print_error(f"Error initializing conversation: {e}")
+            time.sleep(20)
+
     # Currently, the text-to-video functionality is its own code path
     if args.text_to_video:
         if not args.ttv_config:
@@ -154,20 +164,11 @@ def main():
         current_datetime = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         output_path = f"/tmp/GANGLIA/ttv/final_output_{current_datetime}.mp4"
         tts_client = parse_tts_interface(args.tts_interface)
-        text_to_video(args.ttv_config, args.skip_image_generation, output_path, tts_client)
+        text_to_video(args.ttv_config, args.skip_image_generation, output_path, tts_client, query_dispatcher)
         sys.exit(0)  # Exit after processing the video generation to avoid entering the conversational loop
 
 
-    initialization_failed = True
 
-    # If there's some spurious problem initializing, wait a bit and try again
-    while initialization_failed:
-        try:
-            USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, hotword_manager = initialize_conversation(args)
-            initialization_failed = False
-        except Exception as e:
-            Logger.print_error(f"Error initializing conversation: {e}")
-            time.sleep(20)
 
     Logger.print_legend()
 

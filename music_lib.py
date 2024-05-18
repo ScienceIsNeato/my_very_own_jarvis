@@ -2,8 +2,9 @@ from datetime import datetime
 import time
 import requests
 import os
-import logging
+import json
 from logger import Logger
+from query_dispatch import ChatGPTQueryDispatcher
 
 class MusicGenerator:
     def __init__(self):
@@ -17,7 +18,7 @@ class MusicGenerator:
             "Content-Type": "application/json"
         }
 
-    def generate_music(self, prompt, model="chirp-v3-0", duration=10, with_lyrics=False, max_length=4096):
+    def generate_music(self, prompt, model="chirp-v3-0", duration=10, with_lyrics=False, story_text=None, query_dispatcher=None):
         """
         Generates audio based on the given prompt, with options for instrumental or with lyrics.
 
@@ -26,6 +27,7 @@ class MusicGenerator:
             model (str): The model to be used for generation. Defaults to "chirp-v3-0".
             duration (int): The duration of the generated audio in seconds. Defaults to 10.
             with_lyrics (bool): Whether to generate audio with lyrics. Defaults to False.
+            story_text (str): The story text to generate lyrics from if with_lyrics is True. Defaults to None.
             max_length (int): The maximum length of the prompt. Defaults to 4096.
 
         Returns:
@@ -33,10 +35,13 @@ class MusicGenerator:
         """
         Logger.print_debug(f"Generating audio with prompt: {prompt}")
 
-        if len(prompt) > max_length:
-            original_length = len(prompt)
-            prompt = prompt[:max_length]
-            Logger.print_info(f"Truncated prompt from {original_length} to {max_length} characters")
+        if with_lyrics and story_text:
+            prompt = self.generateSongLyrics(story_text, query_dispatcher=query_dispatcher)
+            Logger.print_info(f"Generated lyrics: {prompt}")
+
+        if with_lyrics and not story_text:
+            Logger.print_error("Error: Story text is required when generating audio with lyrics.")
+            return "Error: Story text is required when generating audio with lyrics."
 
         endpoint = f"{self.base_url}/gateway/generate/gpt_desc" if not with_lyrics else f"{self.base_url}/gateway/generate/music"
         data = {
@@ -77,7 +82,7 @@ class MusicGenerator:
                     expected_time_remaining = int(expected_duration - time_elapsed)
                     time.sleep(5)  # Check every 5 seconds
                     music_type = "song_with_lyrics" if with_lyrics else "instrumental"
-                    Logger.print_info(f"Music generation for {music_type} in progress... Expected time remaining: {expected_time_remaining} seconds ".format(time_remaining=expected_duration))
+                    Logger.print_info(f"Music generation for {music_type} in progress... Expected time remaining: {expected_time_remaining} seconds")
                     status_response = self.query_music_status(job_id)
                     if status_response.get("status") == "complete":
                         complete = True
@@ -101,7 +106,40 @@ class MusicGenerator:
             Logger.print_error(f"Exception during request to {endpoint}: {e}")
             return {"error": "exception", "message": str(e)}
 
-    # Helper Functions (Assumed to be implemented elsewhere in your codebase)
+    def generateSongLyrics(self, story_text, query_dispatcher):
+        """
+        Generates song lyrics based on the provided story text using ChatGPT.
+
+        Args:
+            story_text (str): The story text to base the lyrics on.
+
+        Returns:
+            str: Generated song lyrics.
+        """
+        Logger.print_info("Generating song lyrics with ChatGPT.")
+     
+        prompt = (
+            f"Write a song with lyrics based on this story:\n\n{story_text}\n\n"
+            "Please return the lyrics in the following JSON format:\n"
+            "{\n"
+            "  \"lyrics\": \"<insert lyrics here>\"\n"
+            "}"
+        )
+        
+        try:
+            response = query_dispatcher.sendQuery(prompt)
+            Logger.print_info(f"Response received: {response}")
+            
+            # Parse the response to extract the lyrics
+            response_json = json.loads(response)
+            lyrics = response_json.get("lyrics", story_text)  # Fallback to story_text if "lyrics" key is not found
+            
+            Logger.print_info(f"Generated lyrics: {lyrics}")
+            return lyrics
+        except Exception as e:
+            Logger.print_error(f"Error generating lyrics: {e}")
+            return story_text  # Fallback to story text if there's an error
+
     def query_music_status(self, song_id):
         endpoint = f"{self.base_url}/gateway/query?ids={song_id}"
         try:
