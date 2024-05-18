@@ -1,8 +1,9 @@
+from datetime import datetime
+import time
 import requests
 import os
-import time
 import logging
-import concurrent.futures
+from logger import Logger
 
 class MusicGenerator:
     def __init__(self):
@@ -16,105 +17,119 @@ class MusicGenerator:
             "Content-Type": "application/json"
         }
 
-    def generate_instrumental_music(self, gpt_description_prompt, model="chirp-v3-0", duration=10):
-        endpoint = f"{self.base_url}/gateway/generate/gpt_desc"
+    def generate_music(self, prompt, model="chirp-v3-0", duration=10, with_lyrics=False, max_length=4096):
+        """
+        Generates audio based on the given prompt, with options for instrumental or with lyrics.
+
+        Args:
+            prompt (str): The prompt for generating the audio.
+            model (str): The model to be used for generation. Defaults to "chirp-v3-0".
+            duration (int): The duration of the generated audio in seconds. Defaults to 10.
+            with_lyrics (bool): Whether to generate audio with lyrics. Defaults to False.
+            max_length (int): The maximum length of the prompt. Defaults to 4096.
+
+        Returns:
+            str: Path to the generated audio file, or an error message.
+        """
+        Logger.print_debug(f"Generating audio with prompt: {prompt}")
+
+        if len(prompt) > max_length:
+            original_length = len(prompt)
+            prompt = prompt[:max_length]
+            Logger.print_info(f"Truncated prompt from {original_length} to {max_length} characters")
+
+        endpoint = f"{self.base_url}/gateway/generate/gpt_desc" if not with_lyrics else f"{self.base_url}/gateway/generate/music"
         data = {
-            "gpt_description_prompt": gpt_description_prompt,
-            "make_instrumental": True,
+            "gpt_description_prompt": prompt if not with_lyrics else None,
+            "prompt": prompt if with_lyrics else None,
+            "make_instrumental": not with_lyrics,
             "mv": model,
-            "duration": duration
+            "duration": duration,
         }
 
-        logging.debug(f"Sending request to {endpoint} with data: {data}")
+        if with_lyrics:
+            data["title"] = "Generated Song"
+            data["tags"] = "general"
+
+        # Remove keys with None values to prevent validation errors
+        data = {k: v for k, v in data.items() if v is not None}
+
+        Logger.print_debug(f"Sending request to {endpoint} with data: {data}")
         try:
             response = requests.post(endpoint, headers=self.headers, json=data)
-            logging.debug(f"Request to {endpoint} completed with status code {response.status_code}")
+            Logger.print_debug(f"Request to {endpoint} completed with status code {response.status_code}")
 
             if response.status_code == 200:
-                logging.debug(f"Response received: {response.json()}")
-                return response.json()
+                Logger.print_debug(f"Response received: {response.json()}")
+                job_data = response.json().get("data", [])[0]  # Accessing the first item in the list
+                job_id = job_data.get("song_id")
+                if not job_id:
+                    Logger.print_info("No job ID found in response.")
+                    return
+
+                Logger.print_info("Waiting for audio generation to complete...")
+                complete = False
+                audio_url = None
+                expected_duration = 30 if with_lyrics else 120
+                start_time = datetime.now()
+                while not complete:
+                    time_elapsed = (datetime.now() - start_time).total_seconds()
+                    expected_time_remaining = int(expected_duration - time_elapsed)
+                    time.sleep(5)  # Check every 5 seconds
+                    music_type = "song_with_lyrics" if with_lyrics else "instrumental"
+                    Logger.print_info(f"Music generation for {music_type} in progress... Expected time remaining: {expected_time_remaining} seconds ".format(time_remaining=expected_duration))
+                    status_response = self.query_music_status(job_id)
+                    if status_response.get("status") == "complete":
+                        complete = True
+                        audio_url = status_response.get("audio_url")
+                    elif status_response.get("status") == "error":
+                        Logger.print_error("Audio generation failed")
+                        return
+
+                filename = f"generated_{'song_with_lyrics' if with_lyrics else 'instrumental'}_{int(time.time())}.mp3"
+                local_path = os.path.join("/tmp/GANGLIA/ttv", filename)
+
+                if self.download_audio(audio_url, local_path):
+                    return local_path
+                else:
+                    Logger.print_error(f"Failed to download audio from {audio_url}")
+                    return {"error": "download_failed", "message": "Failed to download generated audio"}
             else:
-                logging.error(f"Error in response: {response.text}")
+                Logger.print_error(f"Error in response: {response.text}")
                 return {"error": response.status_code, "message": response.text}
         except Exception as e:
-            logging.error(f"Exception during request to {endpoint}: {e}")
+            Logger.print_error(f"Exception during request to {endpoint}: {e}")
             return {"error": "exception", "message": str(e)}
 
-    def generate_song_with_lyrics(self, gpt_description_prompt, model="chirp-v3-0", duration=10):
-        endpoint = f"{self.base_url}/gateway/generate/gpt_desc"
-        data = {
-            "gpt_description_prompt": gpt_description_prompt,
-            "make_instrumental": False,
-            "mv": model,
-            "duration": duration
-        }
-
-        logging.debug(f"Sending request to {endpoint} with data: {data}")
-        try:
-            response = requests.post(endpoint, headers=self.headers, json=data)
-            logging.debug(f"Request to {endpoint} completed with status code {response.status_code}")
-
-            if response.status_code == 200:
-                logging.debug(f"Response received: {response.json()}")
-                return response.json()
-            else:
-                logging.error(f"Error in response: {response.text}")
-                return {"error": response.status_code, "message": response.text}
-        except Exception as e:
-            logging.error(f"Exception during request to {endpoint}: {e}")
-            return {"error": "exception", "message": str(e)}
-
+    # Helper Functions (Assumed to be implemented elsewhere in your codebase)
     def query_music_status(self, song_id):
-        endpoint = f"{self.base_url}/gateway/feed/{song_id}"
-        logging.debug(f"Querying status for song ID: {song_id}")
+        endpoint = f"{self.base_url}/gateway/query?ids={song_id}"
         try:
             response = requests.get(endpoint, headers=self.headers)
-            logging.debug(f"Request to {endpoint} completed with status code {response.status_code}")
-
             if response.status_code == 200:
-                logging.debug(f"Status response: {response.json()}")
-                return response.json()
+                return response.json()[0]  # Assuming the response is a list
             else:
-                logging.error(f"Error in status response: {response.text}")
+                Logger.print_error(f"Error in status response: {response.text}")
                 return {"error": response.status_code, "message": response.text}
         except Exception as e:
-            logging.error(f"Exception during request to {endpoint}: {e}")
+            Logger.print_error(f"Exception during request to {endpoint}: {e}")
             return {"error": "exception", "message": str(e)}
 
     def download_audio(self, audio_url, output_path):
-        logging.debug(f"Downloading audio from {audio_url} to {output_path}")
+        Logger.print_debug(f"Downloading audio from {audio_url} to {output_path}")
         try:
             response = requests.get(audio_url, stream=True)
-            logging.debug(f"Request to download audio completed with status code {response.status_code}")
+            Logger.print_debug(f"Request to download audio completed with status code {response.status_code}")
 
             if response.status_code == 200:
                 with open(output_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
-                logging.debug(f"Download completed successfully")
+                Logger.print_debug(f"Download completed successfully")
                 return True
             else:
-                logging.error(f"Error downloading audio: {response.text}")
+                Logger.print_error(f"Error downloading audio: {response.text}")
                 return False
         except Exception as e:
-            logging.error(f"Exception during download: {e}")
+            Logger.print_error(f"Exception during download: {e}")
             return False
-
-def generate_music_concurrently(full_story_text):
-    try:
-        music_gen = MusicGenerator()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            logging.info("Submitting music generation tasks...")
-            background_music_future = executor.submit(music_gen.generate_instrumental_music, "background music for the final video", "chirp-v3-0", 180)
-            song_with_lyrics_future = executor.submit(music_gen.generate_song_with_lyrics, f"Write a song about this story: {full_story_text}", "chirp-v3-0", 180)
-
-            music_path = background_music_future.result()
-            logging.info(f"Background music generated: {music_path}")
-
-            song_with_lyrics_path = song_with_lyrics_future.result()
-            logging.info(f"Song with lyrics generated: {song_with_lyrics_path}")
-
-        return music_path, song_with_lyrics_path
-    except Exception as e:
-        logging.error(f"Error generating music concurrently: {e}")
-        return None, None

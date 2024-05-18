@@ -15,7 +15,7 @@ from ttv.audio_generation import generate_audio, get_audio_duration
 from ttv.video_generation import create_video_segment, create_still_video_with_fade
 from music_lib import MusicGenerator
 from ttv.story_processor import process_story, generate_image_for_sentence
-from ttv.final_video_generation import create_final_video_with_music, concatenate_video_segments
+from ttv.final_video_generation import assemble_final_video, concatenate_video_segments
 
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
