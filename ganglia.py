@@ -3,12 +3,19 @@ from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
-from ttv import text_to_video
+from ttv.ttv import text_to_video
 import sys
 import os
 import signal
 from logger import Logger
 from hotwords import HotwordManager
+import datetime
+from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, generate_movie_poster, save_image_without_caption
+from ttv.audio_generation import generate_audio, get_audio_duration
+from ttv.video_generation import create_video_segment, create_still_video_with_fade
+from music_lib import MusicGenerator
+from ttv.story_processor import process_story, generate_image_for_sentence
+from ttv.final_video_generation import create_final_video_with_music, concatenate_video_segments
 
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
@@ -144,8 +151,12 @@ def main():
         if not args.ttv_config:
             Logger.print_error("JSON input file is required for --text-to-video.")
             sys.exit(1)
-        text_to_video(args.ttv_config, args.skip_image_generation)
+        current_datetime = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        output_path = f"/tmp/GANGLIA/ttv/final_output_{current_datetime}.mp4"
+        tts_client = parse_tts_interface(args.tts_interface)
+        text_to_video(args.ttv_config, args.skip_image_generation, output_path, tts_client)
         sys.exit(0)  # Exit after processing the video generation to avoid entering the conversational loop
+
 
     initialization_failed = True
 

@@ -22,7 +22,7 @@ def test_generate_music(log_level=logging.INFO):
         raise EnvironmentError("Environment variable 'SUNO_API_KEY' is not set.")
     
     music_gen = MusicGenerator()
-    gpt_description_prompt = "background music for a Ken Burns documentary"
+    gpt_description_prompt = "background music for a Ken Burns documentary, meaning somble civil war era music"
     duration = 10  # Duration in seconds for testing purposes
 
     response = music_gen.generate_music(gpt_description_prompt, duration=duration)
