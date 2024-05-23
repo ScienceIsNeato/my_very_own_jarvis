@@ -9,7 +9,7 @@ import time
 
 def generate_image(sentence, context, style, image_index, total_images, retries=5, wait_time=60):
     Logger.print_debug(f"Generating image for: '{sentence}' using a style of '{style}' DALL·E 3")
-    prompt = f"With the context of: {context}. Create an image that matches the description: '{sentence}', while keeping the style of {style}. Limit text in image to a few words max."
+    prompt = f"With the context of: {context}. Create an image that matches the description: '{sentence}', while keeping the style of {style}. Please focus on the visual elements only and do not include any text in the image.\n\n"
 
     for attempt in range(retries):
         try:

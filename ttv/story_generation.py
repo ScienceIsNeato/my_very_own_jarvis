@@ -1,4 +1,5 @@
 import json
+import os
 import openai
 import time
 
@@ -106,6 +107,7 @@ def generate_movie_poster(context, style, story_title, query_dispatcher, retries
 def save_image_without_caption(image_url, filename):
     response = requests.get(image_url)
     if response.status_code == 200:
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, 'wb') as file:
             file.write(response.content)
     Logger.print_info(f"Movie poster saved to {filename}")
