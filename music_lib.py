@@ -189,6 +189,7 @@ class MusicGenerator:
             f"Ensure the song follows the lyrical style of {lyrical_style} and fits the context of a {song_context}. "
             "Make sure to introduce creative differences and lyrical variations so that the song lyrics are not just a direct retelling of the story. "
             "Also, ensure that the order of the characters and places mentioned is different from the order in the story.\n\n"
+            "Don't mention any of the meta data about the song in the lyrics (e.g. don't mention that it is a movie theme song).\n\n"
             "Please return the lyrics in the following JSON format:\n"
             "{\n"
             "  \"context\": \"<insert song context here>\",\n"

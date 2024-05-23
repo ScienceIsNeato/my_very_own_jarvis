@@ -2,7 +2,7 @@ import concurrent.futures
 import time
 from logger import Logger
 from music_lib import MusicGenerator
-from .image_generation import generate_image_for_sentence, generate_blank_image, generate_movie_poster
+from .image_generation import generate_image_for_sentence, generate_blank_image, generate_movie_poster, generate_filtered_story
 from .audio_generation import generate_audio
 from .video_generation import create_video_segment
 from tts import GoogleTTS
