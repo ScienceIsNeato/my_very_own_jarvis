@@ -1,6 +1,8 @@
 import json
 import openai
 import time
+
+import requests
 from logger import Logger
 
 def generate_filtered_story(context, style, story_title, query_dispatcher):

@@ -1,11 +1,7 @@
 import json
-import logging
 import os
 import sys
 from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 ganlgia_home = os.getenv('GANGLIA_HOME')
 if not ganlgia_home:
@@ -14,9 +10,12 @@ if not ganlgia_home:
 # Add GANGLIA_HOME to sys.path to resolve imports
 sys.path.insert(0, ganlgia_home)
 
-from logger import Logger
+from lyrics_lib import LyricsGenerator
 from query_dispatch import ChatGPTQueryDispatcher
-from music_lib import MusicGenerator
+from logger import Logger
+
+# Load environment variables from .env file
+load_dotenv()
 
 def main():
     api_key = os.getenv('OPENAI_API_KEY')
@@ -31,11 +30,11 @@ def main():
         "lost city of Atlantis."
     )
     proper_nouns = ["Stephanie", "Steve", "Philadelphia", "Arthur", "Bella", "Cassandra", "Eldoria", "Eldon", "Fiona", "Gregory"]
-    
+
     query_dispatcher = ChatGPTQueryDispatcher()
-    music_gen = MusicGenerator()
-    
-    result = music_gen.generateSongLyrics(
+    lyrics_generator = LyricsGenerator()
+
+    result = lyrics_generator.generate_song_lyrics(
         story_text, query_dispatcher, 
         song_context="theme song for the closing credits of a movie - you know - the kind that sums up the movie. Good examples are the MC Hammer Addams Family song and I'll Remember from With Honors"
     )
