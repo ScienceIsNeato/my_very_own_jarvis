@@ -24,6 +24,7 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
         f"I'm about to send this text to DALLE-3 as the input for a movie poster image, but I'm worried about the input not passing the content filters in place by openai. Could you tweak this to ensure that it will pass the filters? Create a filtered story titled '{story_title}' with the style of {style} and the following context:\n\n"
         f"{context}\n\n"
         "Ensure that the generated story is appropriate for all audiences and does not contain any sensitive or inappropriate content.\n\n"
+        "Please also rewrite any sections containing PII so that only publicly available information is included.\n\n"
         "Please return the filtered story in the following JSON format:\n"
         "{\n"
         "  \"context\": \"<insert context here>\",\n"
@@ -43,7 +44,10 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
         filtered_style = response_json.get("style", style)
         filtered_title = response_json.get("title", story_title)
         filtered_story = response_json.get("story", "No story generated")  # Fallback to default message if "story" key is not found
-        
+
+        if filtered_story == "No story generated":
+            Logger.print_error("Filtered story is not in valid JSON format")
+
         Logger.print_info(f"Generated filtered story: {filtered_story}")
         return json.dumps({
             "context": filtered_context,
