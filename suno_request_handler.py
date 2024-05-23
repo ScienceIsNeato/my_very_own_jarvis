@@ -1,12 +1,22 @@
-import time
+import os
 import requests
 from logger import Logger
-from suno_job_processor import SunoJobProcessor
 
 class SunoRequestHandler:
     def __init__(self, base_url, headers):
         self.base_url = base_url
         self.headers = headers
+        self.api_key = os.getenv('SUNO_API_KEY')
+        self.base_url = os.getenv('SUNO_BASE_URL', 'https://api.suno.com')
+        if not self.api_key:
+            raise EnvironmentError("Environment variable 'SUNO_API_KEY' is not set.")
+        if not self.base_url:
+            raise EnvironmentError("Environment variable 'SUNO_BASE_URL' is not set.")
+        
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
 
     def build_request_data(self, prompt, model, duration, with_lyrics):
         data = {

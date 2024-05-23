@@ -10,7 +10,8 @@ import signal
 from logger import Logger
 from hotwords import HotwordManager
 import datetime
-from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, generate_movie_poster, save_image_without_caption
+from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, save_image_without_caption
+from ttv.story_generation import generate_movie_poster
 from ttv.audio_generation import generate_audio, get_audio_duration
 from ttv.video_generation import create_video_segment, create_still_video_with_fade
 from music_lib import MusicGenerator

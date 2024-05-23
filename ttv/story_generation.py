@@ -37,7 +37,6 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
 
     try:
         response = query_dispatcher.sendQuery(prompt)
-        Logger.print_info(f"Response received: {response}")
         
         # Parse the response to extract the filtered story
         response_json = json.loads(response)

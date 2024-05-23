@@ -1,16 +1,20 @@
-from datetime import datetime
 import os
 import time
 import requests
+from datetime import datetime
 from logger import Logger
+from suno_request_handler import SunoRequestHandler
 
 class SunoJobProcessor:
-    def __init__(self):
+    def __init__(self, headers):
+        self.headers = headers
         self.api_key = os.getenv('SUNO_API_KEY')
+        self.base_url = os.getenv('SUNO_BASE_URL')
         if not self.api_key:
             raise EnvironmentError("Environment variable 'SUNO_API_KEY' is not set.")
+        if not self.base_url:
+            raise EnvironmentError("Environment variable 'SUNO_BASE_URL' is not set.")
         
-        self.base_url = "https://api.suno.com"  # Replace with the actual base URL
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -27,6 +31,8 @@ class SunoJobProcessor:
         # Ensure the directory exists
         os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
 
+        Logger.print_debug(f"Entering wait_for_completion method...")
+
         while not complete:
             time_elapsed = (datetime.now() - start_time).total_seconds()
             expected_time_remaining = int(expected_duration - time_elapsed)
@@ -34,6 +40,8 @@ class SunoJobProcessor:
             music_type = "song_with_lyrics" if with_lyrics else "instrumental"
             Logger.print_info(f"Music generation for {music_type} in progress... Expected time remaining: {expected_time_remaining} seconds")
             status_response = self.query_music_status(job_id)
+            Logger.print_debug(f"Status response: {status_response}")
+
             if status_response.get("status") == "complete":
                 complete = True
                 audio_url = status_response.get("audio_url")

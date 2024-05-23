@@ -37,8 +37,6 @@ class LyricsGenerator:
 
         try:
             response = query_dispatcher.sendQuery(prompt)
-            Logger.print_info(f"Response received: {response}")
-
             response_json = json.loads(response)
             context = response_json.get("context", song_context)
             style = response_json.get("style", lyrical_style)
@@ -69,8 +67,6 @@ class LyricsGenerator:
 
         try:
             response = query_dispatcher.sendQuery(prompt)
-            Logger.print_info(f"Response received: {response}")
-
             lyrical_style = response.strip().split('\n')[0]
 
             if lyrical_style not in example_lyrical_styles:
