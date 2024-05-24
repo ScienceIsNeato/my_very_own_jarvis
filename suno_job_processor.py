@@ -56,33 +56,12 @@ class SunoJobProcessor:
         return audio_url
 
     def query_music_status(self, song_id):
-        endpoint = f"{self.base_url}/gateway/query?ids={song_id}"
-        try:
-            response = requests.get(endpoint, headers=self.headers)
-            if response.status_code == 200:
-                return response.json()[0]  # Assuming the response is a list
-            else:
-                Logger.print_error(f"Error in status response: {response.text}")
-                return {"error": response.status_code, "message": response.text}
-        except Exception as e:
-            Logger.print_error(f"Exception during request to {endpoint}: {e}")
-            return {"error": "exception", "message": str(e)}
+        data = {"ids": song_id}
+        endpoint = f"{self.base_url}/gateway/query"
+        Logger.print_debug(f"Querying music status for song ID: {song_id}")
+        
+        retries = 3
+        wait_time = 5
 
-    def download_audio(self, audio_url, output_path):
-        Logger.print_debug(f"Downloading audio from {audio_url} to {output_path}")
-        try:
-            response = requests.get(audio_url, stream=True)
-            Logger.print_debug(f"Request to download audio completed with status code {response.status_code}")
-
-            if response.status_code == 200:
-                with open(output_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                Logger.print_debug(f"Download completed successfully")
-                return True
-            else:
-                Logger.print_error(f"Error downloading audio: {response.text}")
-                return False
-        except Exception as e:
-            Logger.print_error(f"Exception during download: {e}")
-            return False
+        Logger.print_debug("TESTY about to send from query_music")
+        return SunoRequestHandler().send_request(endpoint, data, retries=retries, wait_time=wait_time)

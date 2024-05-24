@@ -12,6 +12,7 @@
 - need to consider play testers who don't want to spend a dime to play. Need to have an input flag called --demo-mode that uses the best version of everything that doesn't require creds
 - switch from having the captions at the bottom to appearing in sync with the music being played (like an instagram story)
 - add semantic versioning
+- push results of each run to GCP
 
 ### Tech Debt
 - organize test files

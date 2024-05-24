@@ -40,7 +40,7 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
         
         # Parse the response to extract the filtered story
         response_json = json.loads(response)
-        filtered_context = response_json.get("context", context)
+        filtered_story_content = response_json.get("context", context)
         filtered_style = response_json.get("style", style)
         filtered_title = response_json.get("title", story_title)
         filtered_story = response_json.get("story", "No story generated")  # Fallback to default message if "story" key is not found
@@ -50,7 +50,7 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
 
         Logger.print_info(f"Generated filtered story: {filtered_story}")
         return json.dumps({
-            "context": filtered_context,
+            "context": filtered_story_content,
             "style": filtered_style,
             "title": filtered_title,
             "story": filtered_story
@@ -62,18 +62,20 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
             "style": style,
             "title": story_title,
             "story": "No story generated"
-        })  # Fallback to default message if there's an error
+        })
 
-def generate_movie_poster(context, style, story_title, query_dispatcher, retries=5, wait_time=60):
-    filtered_story_json = generate_filtered_story(context, style, story_title, query_dispatcher)
-    
+def generate_movie_poster(filtered_story_json, style, story_title, query_dispatcher, retries=5, wait_time=60):
     try:
         filtered_story = json.loads(filtered_story_json)
     except json.JSONDecodeError:
         Logger.print_error("Filtered story is not in valid JSON format")
         return None
     
-    filtered_context = filtered_story.get("story", context)
+    filtered_context = filtered_story.get("story", "")
+    if not filtered_context:
+        Logger.print_error("Filtered story does not contain a story")
+        return None
+
     prompt = f"Create a movie poster for the story titled '{story_title}' with the style of {style} and context: {filtered_context}."
     
     for attempt in range(retries):

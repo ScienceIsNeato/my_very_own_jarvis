@@ -1,6 +1,6 @@
 import time
 from query_dispatch import ChatGPTQueryDispatcher
-from parse_inputs import parse_args, parse_tts_interface, parse_dictation_type
+from parse_inputs import load_config, parse_args, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 from ttv.ttv import text_to_video
@@ -11,7 +11,6 @@ from logger import Logger
 from hotwords import HotwordManager
 import datetime
 from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, save_image_without_caption
-from ttv.story_generation import generate_movie_poster
 from ttv.audio_generation import generate_audio, get_audio_duration
 from ttv.video_generation import create_video_segment, create_still_video_with_fade
 from music_lib import MusicGenerator
@@ -145,7 +144,7 @@ def clear_screen_after_hotword(tts):
 def main():
     global args
 
-    args = parse_args()
+    args = load_config()
 
     # If there's some spurious problem initializing, wait a bit and try again
     initialization_failed = True

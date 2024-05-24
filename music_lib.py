@@ -9,9 +9,9 @@ class MusicGenerator:
         if not self.api_key:
             raise EnvironmentError("Environment variable 'SUNO_API_KEY' is not set.")
         
-        self.base_url = "https://api.sunoaiapi.com/api/v1"
+        self.base_url = "https://api.sunoaiapi.com/api/v1/"
         self.headers = {
-            "api-key": self.api_key,
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
 
@@ -29,5 +29,5 @@ class MusicGenerator:
             Logger.print_error("Error: Story text is required when generating audio with lyrics.")
             return "Error: Story text is required when generating audio with lyrics."
 
-        data = self.suno_request_handler.build_request_data(prompt, model, duration, with_lyrics)
-        return self.suno_request_handler.send_request(data, with_lyrics, retries, wait_time)
+        endpoint, data = self.suno_request_handler.build_request_data(prompt, model, duration, with_lyrics)
+        return self.suno_request_handler.send_request(endpoint, data, retries, wait_time)

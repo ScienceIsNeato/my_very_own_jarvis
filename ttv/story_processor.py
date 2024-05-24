@@ -3,41 +3,51 @@ import time
 from logger import Logger
 from music_lib import MusicGenerator
 from .image_generation import generate_image_for_sentence, generate_blank_image
-from .story_generation import generate_movie_poster
+from .story_generation import generate_movie_poster, generate_filtered_story
 from .audio_generation import generate_audio
 from .video_generation import create_video_segment
 from tts import GoogleTTS
 
 tts = GoogleTTS()
 
-def process_sentence(i, sentence, context, style, total_images, tts, skip_generation):
+def process_sentence(i, sentence, context, style, total_images, tts, skip_generation, retries=5, wait_time=60):
     thread_id = f"[Thread-{i}]"
-    try:
-        if skip_generation:
-            Logger.print_info(f"{thread_id} Skipping image generation as per the flag.")
-            return None
+    
+    for attempt in range(retries):
+        try:
+            if skip_generation:
+                Logger.print_info(f"{thread_id} Skipping image generation as per the flag.")
+                return None, sentence, i  # Ensure it returns 3 values
 
-        Logger.print_info(f"{thread_id} Converting text to speech...")
-        audio_path = generate_audio(tts, sentence)
-        if not audio_path:
-            return None, sentence, i  # Ensure it returns 3 values
+            Logger.print_info(f"{thread_id} Converting text to speech...")
+            audio_path = generate_audio(tts, sentence)
+            if not audio_path:
+                return None, sentence, i  # Ensure it returns 3 values
 
-        Logger.print_info(f"{thread_id} Generating image for sentence.")
-        filename = generate_image_for_sentence(sentence, context, style, i + 1, total_images)
-        if not filename:
-            filename = generate_blank_image(sentence, i)
+            Logger.print_info(f"{thread_id} Generating image for sentence.")
+            filename = generate_image_for_sentence(sentence, context, style, i + 1, total_images)
+            if not filename:
+                filename = generate_blank_image(sentence, i)
 
-        Logger.print_info(f"{thread_id} Adding audio for image {i + 1} of {total_images} with input text: '{sentence}'")
-        Logger.print_info(f"{thread_id} Creating video segment.")
-        video_segment_path = f"/tmp/GANGLIA/ttv/segment_{i}.mp4"
-        create_video_segment(filename, audio_path, video_segment_path)
+            Logger.print_info(f"{thread_id} Adding audio for image {i + 1} of {total_images} with input text: '{sentence}'")
+            Logger.print_info(f"{thread_id} Creating video segment.")
+            video_segment_path = f"/tmp/GANGLIA/ttv/segment_{i}.mp4"
+            create_video_segment(filename, audio_path, video_segment_path)
 
-        return video_segment_path, sentence, i
-    except Exception as e:
-        Logger.print_error(f"{thread_id} Error processing sentence '{sentence}': {e}")
-        return None, sentence, i  # Ensure it returns 3 values
+            return video_segment_path, sentence, i
+        except Exception as e:
+            if 'Your request was rejected as a result of our safety system' in str(e):
+                Logger.print_warning(f"Content filter triggered. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+                time.sleep(wait_time)
+            else:
+                Logger.print_error(f"{thread_id} Error processing sentence '{sentence}': {e}")
+                return None, sentence, i  # Ensure it returns 3 values
 
-def process_story(tts, style, story, skip_generation, query_dispatcher):
+    Logger.print_error(f"{thread_id} Failed to process sentence '{sentence}' after {retries} attempts due to content filtering.")
+    return None, sentence, i  # Ensure it returns 3 values
+
+
+def process_story(tts, style, story_title, story, skip_generation, query_dispatcher):
     total_images = len(story)
     Logger.print_info(f"Total images to generate: {total_images}")
 
@@ -50,18 +60,40 @@ def process_story(tts, style, story, skip_generation, query_dispatcher):
 
         Logger.print_info("Submitting background music generation task...")
         background_music_future = executor.submit(
-            music_gen.generate_music, "background music for the final video", "chirp-v3-0", 180, story_text=None, with_lyrics=False, query_dispatcher=query_dispatcher
+            music_gen.generate_music,
+            prompt="background music for the final video",
+            model="chirp-v3-0",
+            duration=180,
+            with_lyrics=False,
+            story_text=None,
+            retries=5,
+            wait_time=60,
+            query_dispatcher=query_dispatcher
         )
 
         Logger.print_info("Submitting song with lyrics generation task...")
         song_with_lyrics_future = executor.submit(
-            music_gen.generate_music, f"Write a song about this story: {full_story_text}", "chirp-v3-0", 180, story_text=story, with_lyrics=True, query_dispatcher=query_dispatcher
+            music_gen.generate_music,
+            prompt=f"Write a song about this story: {full_story_text}",
+            model="chirp-v3-0",
+            duration=180,
+            with_lyrics=True,
+            story_text=story,
+            retries=5,
+            wait_time=60,
+            query_dispatcher=query_dispatcher
         )
+
+        filtered_story_json = generate_filtered_story(context, style, story_title, query_dispatcher)
+
+
         Logger.print_info("Submitting sentence processing tasks...")
         sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation) for i, sentence in enumerate(story)]
+
+
         
         Logger.print_info("Submitting movie poster generation task...")
-        movie_poster_future = executor.submit(generate_movie_poster, context, style, full_story_text)
+        movie_poster_future = executor.submit(generate_movie_poster, filtered_story_json, context, style, story_title, query_dispatcher)
         
         for future in concurrent.futures.as_completed(sentence_futures):
             result = future.result()

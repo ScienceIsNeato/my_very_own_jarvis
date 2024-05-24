@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from logger import Logger
 
@@ -7,7 +8,7 @@ class SunoRequestHandler:
         self.base_url = base_url
         self.headers = headers
         self.api_key = os.getenv('SUNO_API_KEY')
-        self.base_url = os.getenv('SUNO_BASE_URL', 'https://api.suno.com')
+        self.base_url = os.getenv('SUNO_BASE_URL')
         if not self.api_key:
             raise EnvironmentError("Environment variable 'SUNO_API_KEY' is not set.")
         if not self.base_url:
@@ -31,20 +32,21 @@ class SunoRequestHandler:
             data["title"] = "Generated Song"
             data["tags"] = "general"
 
-        return {k: v for k, v in data.items() if v is not None}
+        endpoint = f"{self.base_url}/gateway/generate/music"
+        data = {k: v for k, v in data.items() if v is not None}
 
-    def send_request(self, data, with_lyrics, retries, wait_time):
-        endpoint = f"{self.base_url}/gateway/generate/gpt_desc" if not with_lyrics else f"{self.base_url}/gateway/generate/music"
+        return endpoint, data
 
+    def send_request(self, endpoint, data, retries, wait_time):
         attempt = 0
         while attempt < retries:
             try:
-                Logger.print_debug(f"Sending request to {endpoint} with data: {data}")
+                Logger.print_debug(f"Sending request to {endpoint} with data: {data} and headers: {self.headers}")
                 response = requests.post(endpoint, headers=self.headers, json=data)
                 Logger.print_debug(f"Request to {endpoint} completed with status code {response.status_code}")
 
                 if response.status_code == 200:
-                    return self.handle_response(response, with_lyrics)
+                    return response.json()
                 else:
                     Logger.print_error(f"Error in response: {response.text}")
                     if response.status_code == 429:
@@ -61,24 +63,7 @@ class SunoRequestHandler:
                     attempt += 1
                 else:
                     return {"error": "exception", "message": str(e)}
+            print("Retrying... (Attempt {attempt + 1} of {retries})")
 
         Logger.print_error(f"Failed to generate audio after {retries} attempts due to rate limiting.")
         return {"error": "rate_limit_exceeded", "message": "Failed to generate audio after multiple attempts due to rate limiting."}
-
-    def handle_response(self, response, with_lyrics):
-        job_data = response.json().get("data", [])
-        if not job_data:
-            Logger.print_error("No job data found in response.")
-            return {"error": "no_job_data", "message": "No job data found in response."}
-
-        job_id = job_data[0].get("song_id")
-        if not job_id:
-            Logger.print_info("No job ID found in response.")
-            return {"error": "no_job_id", "message": "No job ID found in response."}
-
-        Logger.print_info("Waiting for audio generation to complete...")
-        return self.wait_for_completion(job_id, with_lyrics)
-
-    def wait_for_completion(self, job_id, with_lyrics):
-        processor = SunoJobProcessor()
-        return processor.wait_for_completion(job_id, with_lyrics)

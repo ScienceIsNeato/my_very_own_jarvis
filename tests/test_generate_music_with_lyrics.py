@@ -2,7 +2,7 @@ import json
 import os
 import sys
 
-# Add GANGLIA_HOME to sys.path to resolve imports
+# Ensure all environment 
 ganlgia_home = os.getenv('GANGLIA_HOME')
 if not ganlgia_home:
     raise EnvironmentError("Environment variable 'GANGLIA_HOME' is not set.")
