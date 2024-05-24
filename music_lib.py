@@ -24,4 +24,14 @@ class MusicGenerator:
             return "Error: Story text is required when generating audio with lyrics."
 
         endpoint, data = self.suno_request_handler.build_request_data(prompt, model, duration, with_lyrics)
-        return self.suno_request_handler.send_request(endpoint, data, retries, wait_time)
+        response = self.suno_request_handler.send_request(endpoint, data, retries, wait_time)
+        
+        # Ensure the response is in the correct format and extract the music path
+        if response and "data" in response and isinstance(response["data"], list):
+            job_data = response["data"]
+            if job_data and "audio_url" in job_data[0]:
+                return job_data[0]["audio_url"]
+        
+        Logger.print_error("Failed to generate music. Response: {response}")
+        return None
+

@@ -5,8 +5,8 @@ from .final_video_generation import assemble_final_video
 
 def text_to_video(ttv_config, skip_generation, output_path, tts, query_dispatcher):
     try:
-        style, story, title = load_input(ttv_config)
-        video_segments, background_music_path, song_with_lyrics_path, movie_poster_path = process_story(tts, style, title, story, skip_generation, query_dispatcher)
+        style, story, story_title = load_input(ttv_config)
+        video_segments, background_music_path, song_with_lyrics_path, movie_poster_path = process_story(tts, style, story, skip_generation, query_dispatcher, story_title)
   
         if video_segments:
             assemble_final_video(video_segments, background_music_path, song_with_lyrics_path, movie_poster_path, output_path)

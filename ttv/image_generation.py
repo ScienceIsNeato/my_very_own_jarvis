@@ -11,11 +11,12 @@ from ttv.story_generation import filter_text
 
 def generate_image(sentence, context, style, image_index, total_images, query_dispatcher, retries=5, wait_time=60):
     Logger.print_debug(f"Generating image for: '{sentence}' using a style of '{style}' DALL·E 3")
-    
-    sentence = filter_text(sentence, query_dispatcher)
-    
-    prompt = f"With the context of: {context}. Create an image that matches the description: '{sentence}', while keeping the style of {style}. Please focus on the visual elements only and do not include any text in the image.\n\n"
 
+    filtered_response = filter_text(sentence, context, style, query_dispatcher, retries, wait_time)
+    filtered_sentence = filtered_response["text"]
+
+    prompt = f"With the context of: {context}. Create an image that matches the description: '{filtered_sentence}', while keeping the style of {style}. Please focus on the visual elements only and do not include any text in the image.\n\n"
+    
     for attempt in range(retries):
         try:
             response = openai.Image.create(
@@ -40,8 +41,11 @@ def generate_image(sentence, context, style, image_index, total_images, query_di
             else:
                 Logger.print_error(f"An error occurred while generating the image: {e}")
                 return None, False
+
     Logger.print_error(f"Failed to generate image after {retries} attempts due to rate limiting.")
     return None, False
+
+
 
 def save_image_with_caption(image_url, filename, caption, current_step, total_steps):
     start_time = datetime.now()

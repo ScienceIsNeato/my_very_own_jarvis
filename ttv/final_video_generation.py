@@ -128,6 +128,14 @@ def add_background_music_to_video(final_video_path, music_path):
         Logger.print_error("Music path is None")
         return None
 
+    # Ensure music_path is a string, not a dictionary
+    if isinstance(music_path, dict):
+        # Assuming the dictionary has a key 'path' that holds the music file path
+        music_path = music_path.get('path')
+        if music_path is None:
+            Logger.print_error("Music path is missing in the dictionary")
+            return None
+
     background_music_volume = 0.45  # Adjust this value to change the relative volume of the background music
 
     main_video_with_background_music_path = "/tmp/GANGLIA/ttv/main_video_with_background_music.mp4"

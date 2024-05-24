@@ -103,33 +103,41 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
     Logger.print_error(f"Failed to generate movie poster after {retries} attempts due to rate limiting.")
     return None
 
-def filter_text(text, query_dispatcher):
-    """
-    Filters the given text to ensure it passes the content filters.
-    
-    Args:
-        text (str): The text to be filtered.
-        query_dispatcher: An instance of the query dispatcher to send the query to ChatGPT.
+def filter_text(sentence, context, style, query_dispatcher, retries=5, wait_time=60):
+    Logger.print_debug(f"Filtering text to pass content filters: '{sentence}' with context '{context}' and style '{style}'")
 
-    Returns:
-        str: The filtered text.
-    """
-    Logger.print_info("Filtering text to pass content filters.")
-    
     prompt = (
-        f"I'm about to send this text to DALLE-3 as the input for an image, but I'm worried about the input not passing the content filters in place by openai. Could you tweak this to ensure that it will pass the filters?\n\n"
-        f"{text}\n\n"
-        "Ensure that the text is appropriate for all audiences and does not contain any sensitive or inappropriate content.\n\n"
-        "Please return the filtered text as a plain string."
+        f"Please filter this text to ensure it passes content filters for generating an image:\n\n"
+        f"Sentence: {sentence}\n"
+        f"Context: {context}\n"
+        f"Style: {style}\n\n"
+        "Please ensure that the filtered text does not contain any sensitive or inappropriate content.\n\n"
+        "Please return the filtered story in the following JSON format:\n"
+        "{\n"
+        "  \"text\": \"<insert result here>\"\n"
+        "}"
     )
 
-    try:
-        response = query_dispatcher.sendQuery(prompt)
-        Logger.print_info(f"Filtered text response: {response}")
-        return response.strip()
-    except Exception as e:
-        Logger.print_error(f"Error filtering text: {e}")
-        return text  # Return the original text if there's an error
+    for attempt in range(retries):
+        try:
+            response = query_dispatcher.sendQuery(prompt)
+            response_json = json.loads(response)
+
+            filtered_sentence = response_json.get("text", sentence)  # Fallback to original sentence if key is not found
+            Logger.print_debug(f"Filtered sentence: {filtered_sentence}")
+
+            return {"text": filtered_sentence}
+        except Exception as e:
+            if 'Rate limit exceeded' in str(e):
+                Logger.print_warning(f"Rate limit exceeded while filtering text. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+                time.sleep(wait_time)
+            else:
+                Logger.print_error(f"Error filtering text: {e}")
+                return {"text": sentence}  # Fallback to original sentence in case of other errors
+
+    Logger.print_error(f"Failed to filter text after {retries} attempts due to rate limiting.")
+    return {"text": sentence}  # Fallback to original sentence after retries
+
 
 def save_image_without_caption(image_url, filename):
     response = requests.get(image_url)
