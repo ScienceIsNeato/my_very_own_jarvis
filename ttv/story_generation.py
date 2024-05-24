@@ -28,7 +28,6 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
         "Please also rewrite any sections containing PII so that only publicly available information is included.\n\n"
         "Please return the filtered story in the following JSON format:\n"
         "{\n"
-        "  \"context\": \"<insert context here>\",\n"
         "  \"style\": \"<insert style here>\",\n"
         "  \"title\": \"<insert title here>\",\n"
         "  \"story\": \"<insert filtered story here>\"\n"
@@ -103,6 +102,34 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
                 return None
     Logger.print_error(f"Failed to generate movie poster after {retries} attempts due to rate limiting.")
     return None
+
+def filter_text(text, query_dispatcher):
+    """
+    Filters the given text to ensure it passes the content filters.
+    
+    Args:
+        text (str): The text to be filtered.
+        query_dispatcher: An instance of the query dispatcher to send the query to ChatGPT.
+
+    Returns:
+        str: The filtered text.
+    """
+    Logger.print_info("Filtering text to pass content filters.")
+    
+    prompt = (
+        f"I'm about to send this text to DALLE-3 as the input for an image, but I'm worried about the input not passing the content filters in place by openai. Could you tweak this to ensure that it will pass the filters?\n\n"
+        f"{text}\n\n"
+        "Ensure that the text is appropriate for all audiences and does not contain any sensitive or inappropriate content.\n\n"
+        "Please return the filtered text as a plain string."
+    )
+
+    try:
+        response = query_dispatcher.sendQuery(prompt)
+        Logger.print_info(f"Filtered text response: {response}")
+        return response.strip()
+    except Exception as e:
+        Logger.print_error(f"Error filtering text: {e}")
+        return text  # Return the original text if there's an error
 
 def save_image_without_caption(image_url, filename):
     response = requests.get(image_url)

@@ -7,8 +7,13 @@ from datetime import datetime
 from logger import Logger
 import time
 
-def generate_image(sentence, context, style, image_index, total_images, retries=5, wait_time=60):
+from ttv.story_generation import filter_text
+
+def generate_image(sentence, context, style, image_index, total_images, query_dispatcher, retries=5, wait_time=60):
     Logger.print_debug(f"Generating image for: '{sentence}' using a style of '{style}' DALL·E 3")
+    
+    sentence = filter_text(sentence, query_dispatcher)
+    
     prompt = f"With the context of: {context}. Create an image that matches the description: '{sentence}', while keeping the style of {style}. Please focus on the visual elements only and do not include any text in the image.\n\n"
 
     for attempt in range(retries):
@@ -85,8 +90,8 @@ def save_image_without_caption(image_url, filename):
             file.write(response.content)
     Logger.print_info(f"Movie poster saved to {filename}")
 
-def generate_image_for_sentence(sentence, context, style, image_index, total_images):
-    filename, success = generate_image(sentence, context, style, image_index, total_images)
+def generate_image_for_sentence(sentence, context, style, image_index, total_images, query_dispatcher):
+    filename, success = generate_image(sentence, context, style, image_index, total_images, query_dispatcher=query_dispatcher)
     if not success:
         Logger.print_error(f"Image generation failed for: '{sentence}'. Generating blank image.")
         return generate_blank_image(sentence, image_index)

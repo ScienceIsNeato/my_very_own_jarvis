@@ -10,7 +10,7 @@ from tts import GoogleTTS
 
 tts = GoogleTTS()
 
-def process_sentence(i, sentence, context, style, total_images, tts, skip_generation, retries=5, wait_time=60):
+def process_sentence(i, sentence, context, style, total_images, tts, skip_generation, retries=5, wait_time=60, query_dispatcher=None):
     thread_id = f"[Thread-{i}]"
     
     for attempt in range(retries):
@@ -25,7 +25,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
                 return None, sentence, i  # Ensure it returns 3 values
 
             Logger.print_info(f"{thread_id} Generating image for sentence.")
-            filename = generate_image_for_sentence(sentence, context, style, i + 1, total_images)
+            filename = generate_image_for_sentence(sentence, context, style, i + 1, total_images, query_dispatcher)
             if not filename:
                 filename = generate_blank_image(sentence, i)
 
@@ -84,7 +84,7 @@ def process_story(tts, style, story_title, story, skip_generation, query_dispatc
         filtered_story_json = generate_filtered_story(context, style, story_title, query_dispatcher)
 
         Logger.print_info("Submitting sentence processing tasks...")
-        sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation) for i, sentence in enumerate(story)]
+        sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher) for i, sentence in enumerate(story)]
 
         Logger.print_info("Submitting movie poster generation task...")
         movie_poster_future = executor.submit(generate_movie_poster, filtered_story_json, style, story_title, query_dispatcher)
