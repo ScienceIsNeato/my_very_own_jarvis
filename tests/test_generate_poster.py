@@ -43,10 +43,6 @@ def main():
 
     filtered_story_json = generate_filtered_story(context, style, story_title, query_dispatcher)
 
-    # Parse the filtered story JSON
-    filtered_story = json.loads(filtered_story_json)
-    filtered_context = filtered_story["story"]
-
     Logger.print_info("Submitting movie poster generation task...")
     movie_poster_path = generate_movie_poster(filtered_story_json, style, story_title, query_dispatcher)
 

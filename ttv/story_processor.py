@@ -87,7 +87,7 @@ def process_story(tts, style, story_title, story, skip_generation, query_dispatc
         sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation) for i, sentence in enumerate(story)]
 
         Logger.print_info("Submitting movie poster generation task...")
-        movie_poster_future = executor.submit(generate_movie_poster, filtered_story_json, context, style, story_title)
+        movie_poster_future = executor.submit(generate_movie_poster, filtered_story_json, style, story_title, query_dispatcher)
         
         for future in concurrent.futures.as_completed(sentence_futures):
             result = future.result()

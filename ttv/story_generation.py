@@ -42,9 +42,9 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
         # Parse the response to extract the filtered story
         response_json = json.loads(response)
 
-        filtered_style = response_json.get("style", style)
-        filtered_title = response_json.get("title", story_title)
-        filtered_story = response_json.get("story", "No story generated")  # Fallback to default message if "story" key is not found
+        filtered_style = response_json["style"]
+        filtered_title = response_json["title"]
+        filtered_story = response_json["story"]
 
         if filtered_story == "No story generated":
             Logger.print_error("Failed to generate filtered story - error in response format. Response: " + response)

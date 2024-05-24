@@ -33,8 +33,6 @@ class LyricsGenerator:
             "}"
         )
 
-
-
         try:
             response = query_dispatcher.sendQuery(prompt)
             response_json = json.loads(response)
@@ -44,14 +42,12 @@ class LyricsGenerator:
             
             Logger.print_info(f"Generated lyrics: {lyrics}")
             return json.dumps({
-                "context": context,
                 "style": style,
                 "lyrics": lyrics
             })
         except Exception as e:
             Logger.print_error(f"Error generating lyrics: {e}")
             return json.dumps({
-                "context": song_context,
                 "style": lyrical_style,
                 "lyrics": story_text
             })
