@@ -74,19 +74,21 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 video_segments[index] = video_segment_path
                 context += f" {sentence}"
         
-        try:
-            background_music_path = background_music_future.result()
-            Logger.print_info(f"Background music generated: {background_music_path}")
-        except Exception as e:
-            Logger.print_error(f"Error generating background music: {e}")
+        # Background music generation status tracking
+        background_music_job_id = background_music_future.result()
+        if background_music_job_id:
+            background_music_path = track_status(music_gen, background_music_job_id)
+        else:
             background_music_path = None
+            Logger.print_error("Failed to get background music job ID.")
         
-        try:
-            song_with_lyrics_path = song_with_lyrics_future.result()
-            Logger.print_info(f"Song with lyrics generated: {song_with_lyrics_path}")
-        except Exception as e:
-            Logger.print_error(f"Error generating song with lyrics: {e}")
+        # Song with lyrics generation status tracking
+        song_with_lyrics_job_id = song_with_lyrics_future.result()
+        if song_with_lyrics_job_id:
+            song_with_lyrics_path = track_status(music_gen, song_with_lyrics_job_id)
+        else:
             song_with_lyrics_path = None
+            Logger.print_error("Failed to get song with lyrics job ID.")
         
         try:
             movie_poster_path = movie_poster_future.result()
@@ -96,6 +98,27 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
             movie_poster_path = None
 
     return video_segments, background_music_path, song_with_lyrics_path, movie_poster_path
+
+def track_status(music_gen, job_id):
+    status = "submitted"
+    while status not in ["complete", "error"]:
+        time.sleep(10)  # Poll every 10 seconds
+        status_response = music_gen.suno_request_handler.query_job_status(job_id)
+        
+        # If status_response is a list, handle it appropriately
+        if isinstance(status_response, list):
+            status_response = status_response[0]  # Assuming the response is a list with one item
+        
+        status = status_response.get("status", "error")
+        if status == "complete":
+            Logger.print_info(f"Job {job_id} completed successfully.")
+            return status_response.get("audio_url")
+        elif status == "error":
+            Logger.print_error(f"Job {job_id} failed with message: {status_response.get('message', 'No error message provided')}")
+            return None
+        Logger.print_info(f"Job {job_id} status: {status}. Retrying in 10 seconds.")
+    return None
+
 
 def retry_on_rate_limit(func, *args, retries=5, wait_time=60, **kwargs):
     for attempt in range(retries):

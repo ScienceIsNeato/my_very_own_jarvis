@@ -26,12 +26,11 @@ class MusicGenerator:
         endpoint, data = self.suno_request_handler.build_request_data(prompt, model, duration, with_lyrics)
         response = self.suno_request_handler.send_request(endpoint, data, retries, wait_time)
         
-        # Ensure the response is in the correct format and extract the music path
+        # Ensure the response is in the correct format and extract the job ID
         if response and "data" in response and isinstance(response["data"], list):
             job_data = response["data"]
-            if job_data and "audio_url" in job_data[0]:
-                return job_data[0]["audio_url"]
+            if job_data and "song_id" in job_data[0]:
+                return job_data[0]["song_id"]
         
         Logger.print_error("Failed to generate music. Response: {response}")
         return None
-

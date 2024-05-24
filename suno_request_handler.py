@@ -18,6 +18,29 @@ class SunoRequestHandler:
             "Content-Type": "application/json"
         }
 
+    def query_job_status(self, job_id, retries=5, wait_time=60):
+        endpoint = f"{self.base_url}/gateway/query?ids={job_id}"
+        for attempt in range(retries):
+            try:
+                Logger.print_debug(f"Querying job status for job ID: {job_id}")
+                response = requests.get(endpoint, headers=self.headers)
+                if response.status_code == 200:
+                    status_response = response.json()
+                    if status_response and isinstance(status_response, list):
+                        job_data = status_response[0]  # Assuming the response is a list with one item
+                        Logger.print_debug(f"Job status response: {job_data}")
+                        return job_data
+                Logger.print_error(f"Error in status response: {response.text}")
+            except Exception as e:
+                Logger.print_error(f"Exception during status query: {e}")
+                if 'Rate limit exceeded' in str(e):
+                    Logger.print_warning(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+                    time.sleep(wait_time)
+                else:
+                    return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Failed to query job status after retries."}
+
+
     def build_request_data(self, prompt, model, duration, with_lyrics):
         data = {
             "gpt_description_prompt": prompt if not with_lyrics else None,
