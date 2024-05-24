@@ -8,15 +8,9 @@ class MusicGenerator:
         self.api_key = os.getenv('SUNO_API_KEY')
         if not self.api_key:
             raise EnvironmentError("Environment variable 'SUNO_API_KEY' is not set.")
-        
-        self.base_url = "https://api.sunoaiapi.com/api/v1/"
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
 
         self.lyrics_generator = LyricsGenerator()
-        self.suno_request_handler = SunoRequestHandler(self.base_url, self.headers)
+        self.suno_request_handler = SunoRequestHandler()
 
     def generate_music(self, prompt, model="chirp-v3-0", duration=10, with_lyrics=False, story_text=None, retries=5, wait_time=60, query_dispatcher=None):
         Logger.print_debug(f"Generating audio with prompt: {prompt}")

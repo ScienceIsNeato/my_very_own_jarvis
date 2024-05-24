@@ -36,12 +36,9 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
 
             return video_segment_path, sentence, i
         except Exception as e:
-            if 'Your request was rejected as a result of our safety system' in str(e):
-                Logger.print_warning(f"Content filter triggered. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
-                time.sleep(wait_time)
-            else:
-                Logger.print_error(f"{thread_id} Error processing sentence '{sentence}': {e}")
-                return None, sentence, i  # Ensure it returns 3 values
+            Logger.print_warning(f"Error during generation: {e}. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+            time.sleep(wait_time)
+
 
     Logger.print_error(f"{thread_id} Failed to process sentence '{sentence}' after {retries} attempts due to content filtering.")
     return None, sentence, i  # Ensure it returns 3 values
@@ -86,14 +83,11 @@ def process_story(tts, style, story_title, story, skip_generation, query_dispatc
 
         filtered_story_json = generate_filtered_story(context, style, story_title, query_dispatcher)
 
-
         Logger.print_info("Submitting sentence processing tasks...")
         sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation) for i, sentence in enumerate(story)]
 
-
-        
         Logger.print_info("Submitting movie poster generation task...")
-        movie_poster_future = executor.submit(generate_movie_poster, filtered_story_json, context, style, story_title, query_dispatcher)
+        movie_poster_future = executor.submit(generate_movie_poster, filtered_story_json, context, style, story_title)
         
         for future in concurrent.futures.as_completed(sentence_futures):
             result = future.result()

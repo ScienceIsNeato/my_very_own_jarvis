@@ -41,27 +41,21 @@ def main():
 
     query_dispatcher = ChatGPTQueryDispatcher()
 
-    # Generate the filtered story
     filtered_story_json = generate_filtered_story(context, style, story_title, query_dispatcher)
-    
-    try:
-        filtered_story = json.loads(filtered_story_json)
-    except json.JSONDecodeError:
-        Logger.print_error("Filtered story is not in valid JSON format")
-        return
 
-    # Extract the filtered context for the movie poster
-    filtered_context = filtered_story.get("story", context)
+    # Parse the filtered story JSON
+    filtered_story = json.loads(filtered_story_json)
+    filtered_context = filtered_story["story"]
 
-    # Generate the movie poster using the filtered context
-    movie_poster_path = generate_movie_poster(filtered_context, style, story_title, query_dispatcher=query_dispatcher)
+    Logger.print_info("Submitting movie poster generation task...")
+    movie_poster_path = generate_movie_poster(filtered_story_json, style, story_title, query_dispatcher)
 
     if movie_poster_path:
         Logger.print_info(f"Movie poster generated and saved to: {movie_poster_path}")
+        Logger.print_info("Test passed.")
     else:
         Logger.print_error("Failed to generate movie poster.")
-
-    Logger.print_info("All checks passed successfully.")
+        Logger.print_error("Test failed.")
 
 if __name__ == "__main__":
     main()

@@ -6,27 +6,13 @@ from logger import Logger
 from suno_request_handler import SunoRequestHandler
 
 class SunoJobProcessor:
-    def __init__(self, headers):
-        self.headers = headers
-        self.api_key = os.getenv('SUNO_API_KEY')
-        self.base_url = os.getenv('SUNO_BASE_URL')
-        if not self.api_key:
-            raise EnvironmentError("Environment variable 'SUNO_API_KEY' is not set.")
-        if not self.base_url:
-            raise EnvironmentError("Environment variable 'SUNO_BASE_URL' is not set.")
-        
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
     def wait_for_completion(self, job_id, with_lyrics):
         complete = False
         audio_url = None
         expected_duration = 30 if with_lyrics else 120
         start_time = datetime.now()
 
-        log_file_path = "/tmp/GANGLIA/analytics.log"
+        log_file_path = "/tmp/GANGLIA/analytics.log" # TODO: not sure what this file is for
 
         # Ensure the directory exists
         os.makedirs(os.path.dirname(log_file_path), exist_ok=True)

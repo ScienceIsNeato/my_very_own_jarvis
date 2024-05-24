@@ -37,20 +37,20 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
 
     try:
         response = query_dispatcher.sendQuery(prompt)
+        print("Response for filtered story: " + response)
         
         # Parse the response to extract the filtered story
         response_json = json.loads(response)
-        filtered_story_content = response_json.get("context", context)
+
         filtered_style = response_json.get("style", style)
         filtered_title = response_json.get("title", story_title)
         filtered_story = response_json.get("story", "No story generated")  # Fallback to default message if "story" key is not found
 
         if filtered_story == "No story generated":
-            Logger.print_error("Filtered story is not in valid JSON format")
+            Logger.print_error("Failed to generate filtered story - error in response format. Response: " + response)
 
         Logger.print_info(f"Generated filtered story: {filtered_story}")
         return json.dumps({
-            "context": filtered_story_content,
             "style": filtered_style,
             "title": filtered_title,
             "story": filtered_story
@@ -58,7 +58,6 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
     except Exception as e:
         Logger.print_error(f"Error generating filtered story: {e}")
         return json.dumps({
-            "context": context,
             "style": style,
             "title": story_title,
             "story": "No story generated"

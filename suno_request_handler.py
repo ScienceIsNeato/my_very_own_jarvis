@@ -4,18 +4,17 @@ import requests
 from logger import Logger
 
 class SunoRequestHandler:
-    def __init__(self, base_url, headers):
-        self.base_url = base_url
-        self.headers = headers
+    def __init__(self):
         self.api_key = os.getenv('SUNO_API_KEY')
         self.base_url = os.getenv('SUNO_BASE_URL')
         if not self.api_key:
             raise EnvironmentError("Environment variable 'SUNO_API_KEY' is not set.")
         if not self.base_url:
             raise EnvironmentError("Environment variable 'SUNO_BASE_URL' is not set.")
-        
+
+        self.base_url = "https://api.sunoaiapi.com/api/v1"
         self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "api-key": self.api_key,
             "Content-Type": "application/json"
         }
 
@@ -28,9 +27,9 @@ class SunoRequestHandler:
             "duration": duration,
         }
 
-        if with_lyrics:
-            data["title"] = "Generated Song"
-            data["tags"] = "general"
+        data["title"] = "Generated Song" #TODO: generate
+        data["tags"] = "general" #TODO: generate
+        
 
         endpoint = f"{self.base_url}/gateway/generate/music"
         data = {k: v for k, v in data.items() if v is not None}
