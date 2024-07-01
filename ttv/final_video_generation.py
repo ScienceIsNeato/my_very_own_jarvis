@@ -136,7 +136,7 @@ def add_background_music_to_video(final_video_path, music_path):
             Logger.print_error("Music path is missing in the dictionary")
             return None
 
-    background_music_volume = 0.45  # Adjust this value to change the relative volume of the background music
+    background_music_volume = 0.3  # Adjust this value to change the relative volume of the background music
 
     main_video_with_background_music_path = "/tmp/GANGLIA/ttv/main_video_with_background_music.mp4"
     try:

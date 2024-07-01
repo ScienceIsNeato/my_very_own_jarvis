@@ -50,12 +50,13 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
 
         Logger.print_info("Submitting background music generation task...")
         background_music_future = executor.submit(
-            music_gen.generate_music, "background music for the final video", "chirp-v3-0", 180, False, None, 5, 60, query_dispatcher
+            # TODO: need to move this to the configuration file
+            music_gen.generate_music, "ambient 16-bit video game music", "chirp-v3-0", 180, False, None, 5, 60, query_dispatcher
         )
 
         Logger.print_info("Submitting song with lyrics generation task...")
         song_with_lyrics_future = executor.submit(
-            music_gen.generate_music, f"Write a song about this story: {full_story_text}", "chirp-v3-0", 180, True, story, 5, 60, query_dispatcher
+            music_gen.generate_music, f"Write a song about this story: {full_story_text} in the style of 90s alternative", "chirp-v3-0", 180, True, story, 5, 60, query_dispatcher
         )
 
         Logger.print_info("Submitting sentence processing tasks...")

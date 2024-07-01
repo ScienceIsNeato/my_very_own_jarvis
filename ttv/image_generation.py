@@ -1,4 +1,5 @@
 import json
+import os
 import openai
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -45,11 +46,11 @@ def generate_image(sentence, context, style, image_index, total_images, query_di
     Logger.print_error(f"Failed to generate image after {retries} attempts due to rate limiting.")
     return None, False
 
-
-
 def save_image_with_caption(image_url, filename, caption, current_step, total_steps):
     start_time = datetime.now()
     Logger.print_info(f"Starting to save image with caption: '{caption}' to {filename}")
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
     download_start_time = datetime.now()
     response = requests.get(image_url)
     if response.status_code == 200:
@@ -84,6 +85,7 @@ def generate_blank_image(sentence, image_index):
     font = ImageFont.truetype("Arial.ttf", 36)
     draw.text((20, 20), sentence, fill='black', font=font)
     blank_filename = f"/tmp/GANGLIA/ttv/blank_image_{image_index}.png"
+    os.makedirs(os.path.dirname(blank_filename), exist_ok=True)
     blank_image.save(blank_filename)
     return blank_filename
 

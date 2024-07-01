@@ -141,10 +141,31 @@ def clear_screen_after_hotword(tts):
     tts.play_speech_response(file_path, output)
     os.system('cls' if os.name == 'nt' else 'clear')
 
+def setup_tmp_dir():
+    # Determine the base directory based on the operating system
+    if os.name == 'nt':  # Windows
+        base_dir = os.path.join(tempfile.gettempdir(), "GANGLIA")
+    else:  # Unix-based systems
+        base_dir = "/tmp/GANGLIA"
+
+    # Ensure the directory exists
+    os.makedirs(base_dir, exist_ok=True)
+
+def get_tmp_dir():
+    # Determine the base directory based on the operating system
+    if os.name == 'nt':  # Windows
+        base_dir = os.path.join(tempfile.gettempdir(), "GANGLIA")
+    else:  # Unix-based systems
+        base_dir = "/tmp/GANGLIA"
+
+    return base_dir
+
 def main():
     global args
 
     args = load_config()
+
+    setup_tmp_dir()
 
     # If there's some spurious problem initializing, wait a bit and try again
     initialization_failed = True
