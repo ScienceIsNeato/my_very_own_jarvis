@@ -1,9 +1,30 @@
 import argparse
 import json
+import os
+import sys
 from tts import TextToSpeech, GoogleTTS, NaturalReadersTTS, CoquiTTS
 from dictation import Dictation, StaticGoogleDictation, LiveGoogleDictation, LiveAssemblyAIDictation
-import sys
 from logger import Logger
+
+def check_environment_variables():
+    print("Checking environment variables...")
+
+    required_vars = [
+        'OPENAI_API_KEY',
+        'ASSEMBLYAI_TOKEN',
+        'GCP_BUCKET_NAME',
+        'GCP_PROJECT_NAME',
+        'SUNO_API_KEY',
+        'SUNO_BASE_URL',
+        'GANGLIA_HOME'
+    ]
+
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+
+    if missing_vars:
+        missing = ', '.join(missing_vars)
+        sys.stderr.write(f"Error: The following environment variables are missing: {missing}\n")
+        sys.exit(1)
 
 def load_coqui_config():
     """
@@ -31,7 +52,6 @@ def load_coqui_config():
     except ValueError as ve:
         Logger.print_error(f"Error: {ve}", file=sys.stderr)
         sys.exit(1)
-
 
 def parse_tts_interface(tts_interface: str) -> TextToSpeech:
     if tts_interface.lower() == "natural_reader":
@@ -83,3 +103,8 @@ def parse_args(args=None):
         parser.error("--json-input is required when --text-to-video is specified.")
 
     return parsed_args
+
+def load_config():
+    check_environment_variables()
+
+    return parse_args()

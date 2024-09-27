@@ -26,8 +26,15 @@ GANGLIA is a highly modularized, generic personal assistant. Built partially by 
 
 ### Installation
 
-1. Install Python 3.x.
-2. Install the necessary libraries using:
+1. Install Homebrew (if not already installed):
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+2. Install brew dependencies:
+`brew install python pyenv zinit direnv openssl readline sqlite3 xz zlib portaudio ffmpeg opencv gh wget`
+
+3. Install Python 3.x.
+4. Install the necessary libraries using:
 ```bash
 pip install -r requirements.txt
 ```

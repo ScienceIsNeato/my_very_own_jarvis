@@ -162,7 +162,8 @@ class GoogleTTS(TextToSpeech):
                 audio_config=audio_config)
 
             # Save the audio to a file
-            file_path = os.path.join(tempfile.gettempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
+            snippet = '_'.join(text.split()[:3])  # Take the first 3 words of the text as a snippet
+            file_path = os.path.join(tempfile.gettempdir(), f"chatgpt_response_{snippet}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
             with open(file_path, "wb") as out:
                 out.write(response.audio_content)
                 Logger.print_info(f"Audio content written to file {file_path}")
@@ -171,6 +172,7 @@ class GoogleTTS(TextToSpeech):
         except Exception as e:
             Logger.print_error(f"Error converting text to speech: {e}")
             return False, None
+
 
 class NaturalReadersTTS(TextToSpeech):
     def convert_text_to_speech(self, text: str):
@@ -211,7 +213,7 @@ class CoquiTTS(TextToSpeech):
                     "name": "GANGLIA",
                     "voice_id": self.voice_id,
                     "text": chunk,
-                     "speed": 1.1,
+                     "speed": 1.0,
                     "language": "en",
                 }
 

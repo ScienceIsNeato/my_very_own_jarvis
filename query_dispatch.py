@@ -1,52 +1,19 @@
 import os
 import openai
+import json
 from datetime import datetime
 from dotenv import load_dotenv
-from abc import ABC, abstractmethod
 from logger import Logger
-from threading import Thread
-from time import sleep
-from time import time
-import json
 import tempfile
-
-
-RESPONDER_NAME = "Them"
-
-class QueryDispatcher(ABC):
-    @abstractmethod
-    def sendQuery(self, current_input):
-        pass
+from time import time
 
 class ChatGPTQueryDispatcher:
-    load_dotenv()
-    openai.api_key = os.environ.get("OPENAI_API_KEY")
-
     def __init__(self):
-        self.config_file_path = os.path.join("config", "chatgpt_session_config.json")
+        load_dotenv()
+        openai.api_key = os.environ.get("OPENAI_API_KEY")
+        ganglia_home = os.getenv('GANGLIA_HOME', os.getcwd())
+        self.config_file_path = os.path.join(ganglia_home, 'config', 'ganglia_config.json')
         self.messages = []
-        self.load_config()
-
-    def load_config(self):
-        try:
-            Logger.print_debug("DEBUG FP: ", self.config_file_path)
-            with open(self.config_file_path) as f:
-                config = json.load(f)
-            
-            Logger.print_debug("DEBUG CONFIG: ", config)
-            pre_prompts = config.get("pre_prompts")
-            if pre_prompts:
-                # Each line here represents a rule that the AI will attempt to follow when generating responses
-                for prompt in pre_prompts:
-                    self.messages.append({"role": "system", "content": prompt})
-            Logger.print_debug("Loaded pre-prompts from config file: ", pre_prompts)
-
-        except FileNotFoundError:
-            Logger.print_error(f"Error: Config file `{self.config_file_path}` not found")
-
-        except json.JSONDecodeError:
-            Logger.print_error(f"Error: Invalid JSON in config file: `{self.config_file_path}`")
-
 
     def sendQuery(self, current_input):
         self.messages.append({"role": "user", "content": current_input})
@@ -74,29 +41,14 @@ class ChatGPTQueryDispatcher:
         return reply
 
     def rotate_session_history(self):
-        """
-        Rotates the session history by removing old messages
-        to prevent context length from exceeding model limits.
-        """
-        
-        # Calculate number of tokens used so far
         total_tokens = 0
         for message in self.messages:
             total_tokens += len(message["content"].split())
 
-        # Define max tokens allowed
-        MAX_TOKENS = 4097 # this should be defaulted to this value and loaded from a config
+        MAX_TOKENS = 4097
 
-        # If over limit, remove oldest messages until under limit
         while total_tokens > MAX_TOKENS:
             removed_message = self.messages.pop(0)
             removed_length = len(removed_message["content"].split())
             total_tokens -= removed_length
-            
-            # Log removed message and new length
             Logger.print_debug(f"Conversation history getting long - dropping oldest content: {removed_message['content']} ({removed_length} tokens)")
-
-class BardQueryDispatcher(QueryDispatcher):
-    def sendQuery(self, current_input):
-        # Stubbed method, implement the actual functionality here
-        pass
