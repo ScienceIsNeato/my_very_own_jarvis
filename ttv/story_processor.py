@@ -50,13 +50,28 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
 
         Logger.print_info("Submitting background music generation task...")
         background_music_future = executor.submit(
-            # TODO: need to move this to the configuration file
-            music_gen.generate_music, "ambient 16-bit video game music", "chirp-v3-0", 180, False, None, 5, 60, query_dispatcher
+            music_gen.generate_music,
+            prompt="ambient 16-bit video game music", # TODO: need to move this to the configuration file
+            model="chirp-v3-0",
+            duration=180,
+            with_lyrics=False,
+            story_text=None,
+            retries=5,
+            wait_time=60,
+            query_dispatcher=query_dispatcher
         )
 
         Logger.print_info("Submitting song with lyrics generation task...")
         song_with_lyrics_future = executor.submit(
-            music_gen.generate_music, f"Write a song about this story: {full_story_text} in the style of 90s alternative", "chirp-v3-0", 180, True, story, 5, 60, query_dispatcher
+            music_gen.generate_music,
+            prompt="90s alternative", # TODO: need to move this to the configuration file
+            model="chirp-v3-0",
+            duration=180,
+            with_lyrics=True,
+            story_text=full_story_text,
+            retries=5,
+            wait_time=60,
+            query_dispatcher=query_dispatcher
         )
 
         Logger.print_info("Submitting sentence processing tasks...")
@@ -75,21 +90,15 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 video_segments[index] = video_segment_path
                 context += f" {sentence}"
         
-        # Background music generation status tracking
-        background_music_job_id = background_music_future.result()
-        if background_music_job_id:
-            background_music_path = track_status(music_gen, background_music_job_id)
-        else:
-            background_music_path = None
-            Logger.print_error("Failed to get background music job ID.")
+        # Get the background music path
+        background_music_path = background_music_future.result()
+        if not background_music_path:
+            Logger.print_error("Failed to generate background music.")
         
-        # Song with lyrics generation status tracking
-        song_with_lyrics_job_id = song_with_lyrics_future.result()
-        if song_with_lyrics_job_id:
-            song_with_lyrics_path = track_status(music_gen, song_with_lyrics_job_id)
-        else:
-            song_with_lyrics_path = None
-            Logger.print_error("Failed to get song with lyrics job ID.")
+        # Get the song with lyrics path
+        song_with_lyrics_path = song_with_lyrics_future.result()
+        if not song_with_lyrics_path:
+            Logger.print_error("Failed to generate song with lyrics.")
         
         try:
             movie_poster_path = movie_poster_future.result()
@@ -99,26 +108,6 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
             movie_poster_path = None
 
     return video_segments, background_music_path, song_with_lyrics_path, movie_poster_path
-
-def track_status(music_gen, job_id):
-    status = "submitted"
-    while status not in ["complete", "error"]:
-        time.sleep(10)  # Poll every 10 seconds
-        status_response = music_gen.suno_request_handler.query_job_status(job_id)
-        
-        # If status_response is a list, handle it appropriately
-        if isinstance(status_response, list):
-            status_response = status_response[0]  # Assuming the response is a list with one item
-        
-        status = status_response.get("status", "error")
-        if status == "complete":
-            Logger.print_info(f"Job {job_id} completed successfully.")
-            return status_response.get("audio_url")
-        elif status == "error":
-            Logger.print_error(f"Job {job_id} failed with message: {status_response.get('message', 'No error message provided')}")
-            return None
-        Logger.print_info(f"Job {job_id} status: {status}. Retrying in 10 seconds.")
-    return None
 
 
 def retry_on_rate_limit(func, *args, retries=5, wait_time=60, **kwargs):
