@@ -64,7 +64,7 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
         Logger.print_info("Submitting song with lyrics generation task...")
         song_with_lyrics_future = executor.submit(
             music_gen.generate_music,
-            prompt="90s alternative", # TODO: need to move this to the configuration file
+            prompt="epic rock in the style of The Darkness", # TODO: need to move this to the configuration file
             model="chirp-v3-0",
             duration=180,
             with_lyrics=True,
