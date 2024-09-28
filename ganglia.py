@@ -9,6 +9,7 @@ import os
 import signal
 from logger import Logger
 from hotwords import HotwordManager
+from conversation_context import ContextManager
 import datetime
 from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, save_image_without_caption
 from ttv.audio_generation import generate_audio, get_audio_duration
@@ -47,6 +48,7 @@ def initialize_conversation(args):
         Logger.print_error(f"Failed to parse Dictation type: {e}")
         sys.exit("Initialization failed. Exiting program...")
 
+    # QueryDispatcher setup
     try:
         query_dispatcher = ChatGPTQueryDispatcher()
         Logger.print_debug("Query Dispatcher initialized successfully.")
@@ -54,12 +56,26 @@ def initialize_conversation(args):
         Logger.print_error(f"Failed to initialize Query Dispatcher: {e}")
         sys.exit("Initialization failed. Exiting program...")
 
+    # HotwordManager setup
     hotword_manager = None
     try:
-        hotword_manager = HotwordManager('config/hotwords.json')  # Initialize the class
+        hotword_manager = HotwordManager('config/ganglia_config.json')  # Updated config path
         Logger.print_debug("HotwordManager initialized successfully.")
     except Exception as e:
         Logger.print_error(f"Failed to initialize HotwordManager: {e}")
+
+    # ContextManager setup
+    context_manager = None
+    try:
+        context_manager = ContextManager('config/ganglia_config.json')  # Load conversation context
+        Logger.print_debug("ContextManager initialized successfully.")
+
+        # Feed the context into the query dispatcher
+        query_dispatcher.add_system_context(context_manager.context)
+
+    except Exception as e:
+        Logger.print_error(f"Failed to initialize ContextManager: {e}")
+
 
     Logger.print_info("Starting session with GANGLIA. To stop, simply say \"Goodbye\"")
 
@@ -136,7 +152,7 @@ def signal_handler(sig, frame):
     end_conversation()
 
 def clear_screen_after_hotword(tts):
-    output = "hotword detected - clearning response from screen after playback"
+    output = "hotword detected - clearing response from screen after playback"
     _, file_path = tts.convert_text_to_speech(output)
     tts.play_speech_response(file_path, output)
     os.system('cls' if os.name == 'nt' else 'clear')

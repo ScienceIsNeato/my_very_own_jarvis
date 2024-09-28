@@ -9,11 +9,13 @@ class HotwordManager:
     def load_config(self, config_file_path):
         try:
             with open(config_file_path, 'r') as json_file:
-                hotwords_config = json.load(json_file)
-                
-                lowercase_hotwords = {}
-                for hotword, phrase in hotwords_config.items():
-                    lowercase_hotwords[hotword.lower()] = phrase
+                config = json.load(json_file)
+
+                # Navigate to the hotwords section inside interactive_keywords
+                hotwords_config = config.get("conversation", {}).get("interactive_keywords", {}).get("hotwords", {})
+
+                # Ensure that all hotwords are stored as lowercase for case-insensitive matching
+                lowercase_hotwords = {hotword.lower(): phrase for hotword, phrase in hotwords_config.items()}
 
                 Logger.print_info(f"Loaded {len(lowercase_hotwords)} hotword mappings from config file")
 
@@ -31,12 +33,12 @@ class HotwordManager:
 
     def detect_hotwords(self, prompt):
         prompt = prompt.lower()
-        
+
         hotword_detected = False
         hotword_phrase = ""
 
         for hotword, phrase in self.hotwords_config.items():
-            if prompt.find(hotword) != -1:
+            if hotword in prompt:
                 hotword_detected = True
                 hotword_phrase = phrase
                 break

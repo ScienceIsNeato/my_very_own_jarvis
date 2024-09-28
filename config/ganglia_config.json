@@ -43,6 +43,10 @@
                 "voice_id": "en-US-Wavenet-D",
                 "locale": "en-US"
             }
+        },
+        "hotwords": {
+            "abracadabra": "You just said the magic word!",
+            "Voldemort": "You dare utter the name that should not be spoken?"
         }
     }
 }
