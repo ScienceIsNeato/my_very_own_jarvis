@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 import re
+import select
+import sys
 import threading
 from urllib import request
 from google.cloud import texttospeech_v1 as tts
@@ -7,15 +9,12 @@ import os
 import tempfile
 from datetime import datetime
 import subprocess
-import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import subprocess
 from urllib.parse import urlparse
 from datetime import datetime
-from dictation import LiveGoogleDictation
 from logger import Logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import concurrent.futures
 import time
 from logger import Logger
 
@@ -79,19 +78,35 @@ class TextToSpeech(ABC):
         # Prepare the play command and determine the audio duration
         play_command, audio_duration = self.prepare_playback(file_path)
 
-        Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)\n Playing...")
+        Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)\nPlaying...")
         Logger.print_demon_output(raw_response)
 
         # Start playback in a non-blocking manner
         playback_process = subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
 
-        # Monitor for stop words in a separate thread
-        stop_word_thread = threading.Thread(target=self.monitor_for_stop_words, args=(LiveGoogleDictation(), audio_duration))
-        stop_word_thread.start()
+        # Start the Enter key listener in a separate thread
+        stop_thread = threading.Thread(target=self.monitor_enter_keypress, args=(playback_process,))
+        stop_thread.daemon = True  # Ensure the thread exits when the main program exits
+        stop_thread.start()
 
-        # Wait for playback or stop word detection to finish
-        stop_word_thread.join()
-        playback_process.terminate()  # Ensure playback is stopped
+        # Wait for playback process to finish
+        playback_process.wait()  # This will wait for natural completion
+
+        # Ensure Enter key thread finishes
+        stop_thread.join(timeout=1)  # Attempt to join, but timeout if it hangs
+
+    def monitor_enter_keypress(self, playback_process):
+        """Non-blocking Enter key listener."""
+        Logger.print_debug("Press Enter to stop playback...")
+
+        while playback_process.poll() is None:  # While playback is running
+            # Use select to check if input is available (non-blocking check)
+            if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+                key_press = sys.stdin.read(1)  # Read single character
+                if key_press == '\n':  # Check for Enter key
+                    Logger.print_debug("Enter key detected. Terminating playback...")
+                    playback_process.terminate()  # Terminate the playback if Enter is pressed
+                    break
 
     def concatenate_audio_from_text(self, text_file_path):
         output_file = "combined_audio.mp3"
@@ -166,7 +181,6 @@ class GoogleTTS(TextToSpeech):
             file_path = os.path.join(tempfile.gettempdir(), f"chatgpt_response_{snippet}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
             with open(file_path, "wb") as out:
                 out.write(response.audio_content)
-                Logger.print_info(f"Audio content written to file {file_path}")
 
             return True, file_path
         except Exception as e:

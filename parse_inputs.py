@@ -3,7 +3,10 @@ import json
 import os
 import sys
 from tts import TextToSpeech, GoogleTTS, NaturalReadersTTS, CoquiTTS
-from dictation import Dictation, StaticGoogleDictation, LiveGoogleDictation, LiveAssemblyAIDictation
+from dictation.dictation import Dictation
+from dictation.static_google_dictation import StaticGoogleDictation
+from dictation.live_google_dictation import LiveGoogleDictation
+from dictation.live_assemblyai_dictation import LiveAssemblyAIDictation
 from logger import Logger
 
 def check_environment_variables():
