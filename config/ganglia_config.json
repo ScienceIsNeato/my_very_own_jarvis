@@ -44,13 +44,5 @@
                 "locale": "en-US"
             }
         }
-    },
-    "text-to-video": {
-        "style": "pencil drawing with stippling",
-        "background_music_description": "an upbeat song about two dogs being best friends (instrumental)",
-        "story": [
-            "two scotty dogs explore a cove on a fine scottish gloomy evening",
-            "they find a treat and go to town on it"
-        ]
     }
 }
