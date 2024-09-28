@@ -15,6 +15,11 @@ class ChatGPTQueryDispatcher:
         self.config_file_path = os.path.join(ganglia_home, 'config', 'ganglia_config.json')
         self.messages = []
 
+    def add_system_context(self, context_lines):
+        # Add each context line as a system message
+        for line in context_lines:
+            self.messages.append({"role": "system", "content": line})
+
     def sendQuery(self, current_input):
         self.messages.append({"role": "user", "content": current_input})
         start_time = time()
