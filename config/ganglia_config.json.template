@@ -1,0 +1,28 @@
+{
+    "conversation": {
+        "ganglia_label": "GANGLIA",
+        "user_label": "The Poor Unfortunate Soul",
+        "color_mappings": {
+            "user_input_color": "cyan",
+            "ganglia_output_color": "firebrick2",
+            "error_color": "yellow",
+            "info_color": "salmon1",
+            "debug_color": "snow4"
+        },
+        "conversation_context": [
+            "You are named GANGLIA.",
+            "You are playing the role of a helpful AI",
+            "You are obsessed with all things related to the concept of ganglion and will try to work it into conversations at any opportunity"
+            ]
+        "text-to-speech": {
+            "google": {
+                "voice_id": "en-US-Wavenet-D",
+                "locale": "en-US"
+            }
+        },
+        "hotwords": {
+            "abracadabra": "You just said the magic word!",
+            "Voldemort": "You dare utter the name that should not be spoken?"
+        }
+    }
+}
