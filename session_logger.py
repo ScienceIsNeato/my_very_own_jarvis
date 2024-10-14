@@ -90,7 +90,6 @@ class CLISessionLogger:
             bucket = storage_client.get_bucket(self.bucket_name)
             blob = bucket.blob(os.path.basename(self.file_name))
             blob.upload_from_filename(self.file_name)
-            Logger.print_info(f"Session log uploaded successfully to {self.bucket_name}.")
         except Exception as e:
             Logger.print_error(f"Error uploading logs to cloud: {e}")
 
