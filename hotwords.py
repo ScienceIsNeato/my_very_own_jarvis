@@ -11,8 +11,8 @@ class HotwordManager:
             with open(config_file_path, 'r') as json_file:
                 config = json.load(json_file)
 
-                # Navigate to the hotwords section inside interactive_keywords
-                hotwords_config = config.get("conversation", {}).get("interactive_keywords", {}).get("hotwords", {})
+                # Navigate to the hotwords section
+                hotwords_config = config.get("conversation", {}).get("hotwords", {})
 
                 # Ensure that all hotwords are stored as lowercase for case-insensitive matching
                 lowercase_hotwords = {hotword.lower(): phrase for hotword, phrase in hotwords_config.items()}

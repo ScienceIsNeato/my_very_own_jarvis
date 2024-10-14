@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import threading
 from dotenv import load_dotenv
 load_dotenv()
 import time
@@ -72,12 +73,9 @@ class CLISessionLogger:
         self.conversation.append(session_event)
         self.write_to_disk()
 
-        # TODO: don't upload every time
-        if self.options.store_logs:  # Check the flag from the options
-            self.store_in_cloud()
-            #Logger.print_info(f"Session log saved as {self.file_name} and stored in {self.bucket_name}.")
-        #else:
-            #Logger.print_info(f"Session log saved as {self.file_name}.")
+        if self.options.store_logs:
+            # Use a background thread to upload the log without blocking the main thread. If we lose a log line or two, it's not a big deal.
+            threading.Thread(target=self.store_in_cloud_background).start()
 
     def write_to_disk(self):
         session = Session(self.session_id, self.timestamp, self.conversation)
@@ -86,16 +84,20 @@ class CLISessionLogger:
         file_path = Path(self.file_name)  # Use pathlib.Path
         file_path.write_text(json_data)  # Use write_text method
 
-    def store_in_cloud(self):
-        storage_client = storage.Client(project=self.project_name)
-        bucket = storage_client.get_bucket(self.bucket_name)
-        blob = bucket.blob(os.path.basename(self.file_name))
-        blob.upload_from_filename(self.file_name)
+    def store_in_cloud_background(self):
+        try:
+            storage_client = storage.Client(project=self.project_name)
+            bucket = storage_client.get_bucket(self.bucket_name)
+            blob = bucket.blob(os.path.basename(self.file_name))
+            blob.upload_from_filename(self.file_name)
+            Logger.print_info(f"Session log uploaded successfully to {self.bucket_name}.")
+        except Exception as e:
+            Logger.print_error(f"Error uploading logs to cloud: {e}")
 
     def finalize_session(self):
         self.write_to_disk()
         if self.options.store_logs:  # Check the flag from the options
-            self.store_in_cloud()
+            self.store_in_cloud_background()
             Logger.print_info(f"Session log saved as {self.file_name} and stored in {self.bucket_name}.")
         else:
             Logger.print_info(f"Session log saved as {self.file_name}.")
