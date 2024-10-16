@@ -78,7 +78,7 @@ class TextToSpeech(ABC):
         # Prepare the play command and determine the audio duration
         play_command, audio_duration = self.prepare_playback(file_path)
 
-        Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)\nPlaying...")
+        Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)")
         Logger.print_demon_output(raw_response)
 
         # Start playback in a non-blocking manner
@@ -153,7 +153,7 @@ class GoogleTTS(TextToSpeech):
         super().__init__()
         Logger.print_info("Initializing GoogleTTS...")
 
-    def convert_text_to_speech(self, text: str):
+    def convert_text_to_speech(self, text: str, voice_id="en-US-Casual-K"):
         try:
             # Initialize the Text-to-Speech client
             client = tts.TextToSpeechClient()
@@ -162,7 +162,7 @@ class GoogleTTS(TextToSpeech):
             synthesis_input = tts.SynthesisInput(text=text)
             voice = tts.VoiceSelectionParams(
                 language_code="en-US",
-                name="en-US-Casual-K") # TODO make this configurable
+                name=voice_id,)
 
             # Set the audio configuration
             audio_config = tts.AudioConfig(

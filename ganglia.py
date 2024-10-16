@@ -112,7 +112,6 @@ def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
 
 
 def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger):
-
     hotword_detected, hotword_phrase = hotword_manager.detect_hotwords(prompt)
 
     if AI_TURN_INDICATOR:
@@ -143,8 +142,10 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
 def should_end_conversation(prompt):
     return prompt and "goodbye" in prompt.strip().lower()
 
-def end_conversation():
+def end_conversation(session_logger=None):
     Logger.print_info("Ending session with GANGLIA. Goodbye!")
+    if session_logger:
+        session_logger.finalize_session()
     sys.exit(0)
 
 def signal_handler(sig, frame):
@@ -204,9 +205,6 @@ def main():
         text_to_video(args.ttv_config, args.skip_image_generation, output_path, tts_client, query_dispatcher)
         sys.exit(0)  # Exit after processing the video generation to avoid entering the conversational loop
 
-
-
-
     Logger.print_legend()
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -217,7 +215,7 @@ def main():
             if should_end_conversation(prompt):
                 Logger.print_info("User ended conversation")
                 ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
-                end_conversation()
+                end_conversation(session_logger)
                 break
             ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
         except Exception as e:
@@ -228,8 +226,7 @@ def main():
                 Logger.print_error(f"Exception in main loop: {str(e)}")
 
 
-    if session_logger:
-        session_logger.finalize_session()
+    end_conversation(session_logger)
 
     Logger.print_info("Thanks for chatting! Have a great day!")
 
