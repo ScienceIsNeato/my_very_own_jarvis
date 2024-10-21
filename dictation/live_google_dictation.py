@@ -122,8 +122,6 @@ class LiveGoogleDictation(Dictation):
                 retries += 1
                 time.sleep(self.RETRY_DELAY)
             except Exception as e:
-                Logger.print_error(f"Unexpected error during streaming: {e}")
-
                 # Log any other exceptions as conversation events
                 self.session_logger.log_session_interaction(
                     SessionEvent(
