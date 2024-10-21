@@ -1,6 +1,6 @@
 import time
 from query_dispatch import ChatGPTQueryDispatcher
-from parse_inputs import load_config, parse_args, parse_tts_interface, parse_dictation_type
+from parse_inputs import load_config, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 from ttv.ttv import text_to_video
@@ -189,6 +189,7 @@ def main():
     while initialization_failed:
         try:
             USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, hotword_manager = initialize_conversation(args)
+            dictation.set_session_logger(session_logger)
             initialization_failed = False
         except Exception as e:
             Logger.print_error(f"Error initializing conversation: {e}")
