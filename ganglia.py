@@ -219,11 +219,16 @@ def main():
                 break
             ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
         except Exception as e:
-            if 'Exceeded maximum allowed stream duration' in str(e):
+            if 'Exceeded maximum allowed stream duration' in str(e) or 'Long duration elapsed without audio' in str(e):
                 continue
-
             else:
-                Logger.print_error(f"Exception in main loop: {str(e)}")
+                # Treat the exception as part of the conversation
+                session_logger.log_session_interaction(
+                    SessionEvent(
+                        user_input="SYSTEM ERROR",
+                        response_output=f"Exception occurred: {str(e)}"
+                    )
+                )
 
 
     end_conversation(session_logger)
