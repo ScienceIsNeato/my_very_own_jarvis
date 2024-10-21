@@ -29,7 +29,7 @@ class ChatGPTQueryDispatcher:
         Logger.print_debug("Sending query to AI server...")
 
         chat = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo", 
+            model="gpt-4o-mini",
             messages=self.messages
         )
         reply = chat.choices[0].message.content
