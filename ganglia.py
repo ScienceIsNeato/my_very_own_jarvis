@@ -1,6 +1,6 @@
 import time
 from query_dispatch import ChatGPTQueryDispatcher
-from parse_inputs import load_config, parse_args, parse_tts_interface, parse_dictation_type
+from parse_inputs import load_config, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
 from audio_turn_indicator import UserTurnIndicator, AiTurnIndicator
 from ttv.ttv import text_to_video
@@ -189,6 +189,7 @@ def main():
     while initialization_failed:
         try:
             USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, hotword_manager = initialize_conversation(args)
+            dictation.set_session_logger(session_logger)
             initialization_failed = False
         except Exception as e:
             Logger.print_error(f"Error initializing conversation: {e}")
@@ -219,11 +220,16 @@ def main():
                 break
             ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
         except Exception as e:
-            if 'Exceeded maximum allowed stream duration' in str(e):
+            if 'Exceeded maximum allowed stream duration' in str(e) or 'Long duration elapsed without audio' in str(e):
                 continue
-
             else:
-                Logger.print_error(f"Exception in main loop: {str(e)}")
+                # Treat the exception as part of the conversation
+                session_logger.log_session_interaction(
+                    SessionEvent(
+                        user_input="SYSTEM ERROR",
+                        response_output=f"Exception occurred: {str(e)}"
+                    )
+                )
 
 
     end_conversation(session_logger)
