@@ -1,3 +1,4 @@
+from threading import Thread
 import time
 from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import load_config, parse_tts_interface, parse_dictation_type
@@ -10,6 +11,8 @@ import signal
 from logger import Logger
 from hotwords import HotwordManager
 from conversation_context import ContextManager
+from pubsub import PubSub
+from motion_sensor import MotionDetectionSensor
 import datetime
 from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, save_image_without_caption
 from ttv.audio_generation import generate_audio, get_audio_duration
@@ -17,6 +20,28 @@ from ttv.video_generation import create_video_segment, create_still_video_with_f
 from music_lib import MusicGenerator
 from ttv.story_processor import process_story, generate_image_for_sentence
 from ttv.final_video_generation import assemble_final_video, concatenate_video_segments
+
+
+
+class GangliaRateLimiter:
+    def __init__(self):
+        self.last_request_time = None
+        self.request_interval = 60  # Set request interval to 60 seconds (1 minute)
+
+    def can_make_request(self):
+        """Check if a minute has passed since the last request."""
+        current_time = time.time()
+        if self.last_request_time is None:
+            self.last_request_time = current_time
+            return True  # Allow the first request
+        return (current_time - self.last_request_time) >= self.request_interval
+
+    def update_last_request_time(self):
+        """Update the timestamp of the last request."""
+        self.last_request_time = time.time()
+
+# Initialize the rate limiter
+rate_limiter = GangliaRateLimiter()
 
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
@@ -111,7 +136,7 @@ def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
         prompt = dictation.getDictatedInput(args.device_index, interruptable=False) if dictation else input()
 
 
-def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger):
+def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=None):
     hotword_detected, hotword_phrase = hotword_manager.detect_hotwords(prompt)
 
     if AI_TURN_INDICATOR:
@@ -120,6 +145,8 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
     if hotword_detected:
         # Hotword detected, skip query dispatcher
         response = hotword_phrase
+    elif predetermined_response:
+        response = prompt
     else:
         response = query_dispatcher.sendQuery(prompt)
 
@@ -177,6 +204,74 @@ def get_tmp_dir():
 
     return base_dir
 
+def handle_motion_event(image_path, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts):
+    """Handles the motion event by sending an image-based query with rate limiting."""
+    try:
+        # Send image and get AI response
+        response = query_dispatcher.sendQuery(
+            current_input="say hello to any humans in this image, making sure to comment on some unique feature or piece of clothing. Just focus on the humans, not the objects in the background",
+            image_path=image_path
+        )
+
+        Logger.print_info(f"AI response: {response}")
+
+        # Log the event
+        if session_logger:
+            session_logger.log_session_interaction(
+                SessionEvent("Motion Detected", response)
+            )
+
+        # Update the request time after a successful query
+        rate_limiter.update_last_request_time()
+
+        # Initiate AI turn based on the response
+        ai_turn(response, 
+                query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=True)
+
+        return response
+
+
+    except Exception as e:
+        Logger.print_error(f"Error handling motion event: {e}")
+        if session_logger:
+            session_logger.log_session_interaction(
+                SessionEvent("SYSTEM ERROR", f"Error handling motion event: {e}")
+            )
+
+
+def motion_sensor_event_handler(message, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts):
+    """Callback for the motion sensor event."""
+    # Extract the image path from the message
+    if "Image saved at:" in message:
+        image_path = message.split("Image saved at: ")[1].strip()
+
+        if rate_limiter.can_make_request():
+            Logger.print_info("Motion detected, sending query...")
+            # Create a new thread for the AI query to avoid blocking the main thread
+            Thread(target=handle_motion_event, args=(image_path, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts)).start()
+            rate_limiter.update_last_request_time()  # Update the request time after a successful query
+
+def setup_motion_sensor(pubsub, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts):
+    """Sets up the motion sensor and subscribes to its events."""
+    # Subscribe to the "motion_sensor" topic
+    pubsub.subscribe("motion_sensor", lambda message: motion_sensor_event_handler(message, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts))
+
+    # Create the motion sensor instance (it will publish events on its own)
+    motion_sensor = MotionDetectionSensor(pubsub, debug=False)
+
+    Logger.print_info("Motion sensor initialized and event handler subscribed.")
+
+def send_image_query_with_rate_limit(image_path, query_dispatcher):
+    """Send an image query ensuring no more than one request per minute."""
+    if rate_limiter.can_make_request():
+        # Send the image query
+        response = query_dispatcher.send_image_query(image_path)
+        rate_limiter.update_last_request_time()  # Update the request time after a successful query
+        return response
+    else:
+        Logger.print_info("Skipping query: Still within the 1-minute cooldown period.")
+        return None
+
 def main():
     global args
 
@@ -209,6 +304,10 @@ def main():
     Logger.print_legend()
 
     signal.signal(signal.SIGINT, signal_handler)
+
+        # Setup PubSub and motion sensor
+    pubsub = PubSub()
+    setup_motion_sensor(pubsub, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts)
 
     while True:
         try:
