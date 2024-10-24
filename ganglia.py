@@ -10,6 +10,7 @@ import signal
 from logger import Logger
 from hotwords import HotwordManager
 from conversation_context import ContextManager
+from fetch_and_display_logs import display_logs
 import datetime
 from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, save_image_without_caption
 from ttv.audio_generation import generate_audio, get_audio_duration
@@ -183,6 +184,10 @@ def main():
     args = load_config()
 
     setup_tmp_dir()
+
+    if args.display_log_hours:
+        display_logs(args.display_log_hours)
+        return  # Exit after displaying logs
 
     # If there's some spurious problem initializing, wait a bit and try again
     initialization_failed = True
