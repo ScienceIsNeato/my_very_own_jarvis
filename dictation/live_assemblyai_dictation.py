@@ -172,6 +172,6 @@ class LiveAssemblyAIDictation(Dictation):
 
             return receive_result
 
-    def getDictatedInput(self, device_index, interruptable=False):
+    def getDictatedInput(self, device_index):
         result = asyncio.run(self.send_receive(device_index))
         return result

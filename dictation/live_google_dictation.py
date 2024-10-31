@@ -19,6 +19,7 @@ class LiveGoogleDictation(Dictation):
         try:
             self.session_logger = None
             self.listening = True
+            self.paused = False
             self.client = speech.SpeechClient()
             self.audio_stream = pyaudio.PyAudio().open(
                 format=pyaudio.paInt16,
@@ -43,16 +44,29 @@ class LiveGoogleDictation(Dictation):
             interim_results=True,
         )
 
+    def pause_listening(self):
+            """Pause audio listening."""
+            self.paused = True
+            Logger.print_info("Audio listening paused.")
+
+    def resume_listening(self):
+        """Resume audio listening."""
+        self.paused = False
+        Logger.print_info("Audio listening resumed.")
+
     def generate_audio_chunks(self):
         """Generator that yields audio chunks from the audio stream."""
         while self.listening:
+            if self.paused:
+                time.sleep(0.1)  # Sleep briefly while paused to avoid busy waiting
+                continue
             yield self.audio_stream.read(1024, exception_on_overflow=False)
 
     def done_speaking(self):
         """Mark the dictation as complete."""
         self.listening = False
 
-    def transcribe_stream(self, stream, interruptable=False):
+    def transcribe_stream(self, stream):
         """Main transcription loop."""
         done_speaking_timer = None
         self.state = 'START'
@@ -68,12 +82,6 @@ class LiveGoogleDictation(Dictation):
                 continue
 
             current_input = result.alternatives[0].transcript.strip()
-
-            # Check for space bar press if interruptable is True
-            if interruptable and keyboard.is_pressed('space'):
-                Logger.print_info("Spacebar pressed! Stopping dictation.")
-                self.done_speaking()
-                break  # Exit the transcription loop
 
             if done_speaking_timer is not None:
                 done_speaking_timer.cancel()
@@ -141,10 +149,10 @@ class LiveGoogleDictation(Dictation):
         )
         return iter([])  # Return an empty iterator to gracefully end the transcription
 
-    def getDictatedInput(self, device_index, interruptable=False):
+    def getDictatedInput(self, device_index):
         """
         Start the transcription process, re-using the stream_with_retries method.
         """
         self.listening = True
-        transcript = self.transcribe_stream(self.generate_audio_chunks(), interruptable)
+        transcript = self.transcribe_stream(self.generate_audio_chunks())
         return transcript

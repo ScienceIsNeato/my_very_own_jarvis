@@ -1,5 +1,8 @@
+import tempfile
 from threading import Thread
 import time
+
+import cv2
 from query_dispatch import ChatGPTQueryDispatcher
 from parse_inputs import load_config, parse_tts_interface, parse_dictation_type
 from session_logger import CLISessionLogger, SessionEvent
@@ -106,15 +109,29 @@ def initialize_conversation(args):
 
     return USER_TURN_INDICATOR, AI_TURN_INDICATOR, tts, dictation, query_dispatcher, session_logger, hotword_manager
 
-def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
-    while True:  # Keep asking for input until a non-empty prompt is received.
+def user_turn(prompt, dictation, USER_TURN_INDICATOR, args, pubsub):
+    """Capture user input or stop when 'user_turn_end' event is triggered."""
+
+    # Flag to monitor end-turn state
+    end_turn = False
+
+    # Event handler to set end_turn flag when 'user_turn_end' event is published
+    def on_end_turn_event(message):
+        nonlocal end_turn
+        end_turn = True
+
+    # Subscribe to the 'user_turn_end' event
+    pubsub.subscribe("user_turn_end", on_end_turn_event)
+
+    # Main loop for user input
+    while not end_turn:
         if USER_TURN_INDICATOR:
             USER_TURN_INDICATOR.input_in()
 
         got_input = False
-        while not got_input:
+        while not got_input and not end_turn:
             try:
-                prompt = dictation.getDictatedInput(args.device_index, interruptable=False) if dictation else input()
+                prompt = dictation.getDictatedInput(args.device_index) if dictation else input()
 
                 # If the input is empty restart the loop
                 if not prompt.strip():
@@ -131,9 +148,13 @@ def user_turn(prompt, dictation, USER_TURN_INDICATOR, args):
                 should_end_conversation(None)
                 exit(0)
         
-        # Print a fun little prompt at the beginning of the user's turn
-        Logger.print_info(dictation.generate_random_phrase())
-        prompt = dictation.getDictatedInput(args.device_index, interruptable=False) if dictation else input()
+        # If turn isn't ended, log a prompt and continue getting input
+        if not end_turn:
+            Logger.print_info(dictation.generate_random_phrase())
+            prompt = dictation.getDictatedInput(args.device_index) if dictation else input()
+
+    # Unsubscribe after use to clean up
+    pubsub.unsubscribe("user_turn_end", on_end_turn_event)
 
 
 def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=None):
@@ -204,10 +225,20 @@ def get_tmp_dir():
 
     return base_dir
 
-def handle_motion_event(image_path, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts):
-    """Handles the motion event by sending an image-based query with rate limiting."""
+def handle_motion_event(frame, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation, pubsub):
+    """Handles the motion event by saving the image to disk just before sending the query."""
     try:
-        # Send image and get AI response
+        pubsub.publish("pause_main_loop", "Pausing main loop due to motion event.")
+        time.sleep(0.1)  # Allow time for the pause to take effect
+        pubsub.publish("user_turn_end", "Ending user turn due to external trigger")
+
+        # Save the image to disk temporarily
+        temp_dir = tempfile.gettempdir()
+        timestamp = int(time.time())
+        image_path = os.path.join(temp_dir, f"ganglia_image_{timestamp}.png")
+        cv2.imwrite(image_path, frame)
+        
+        # Send image and get AI response using the file path
         response = query_dispatcher.sendQuery(
             current_input="say hello to any humans in this image, making sure to comment on some unique feature or piece of clothing. Just focus on the humans, not the objects in the background",
             image_path=image_path
@@ -228,8 +259,9 @@ def handle_motion_event(image_path, query_dispatcher, session_logger, AI_TURN_IN
         ai_turn(response, 
                 query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=True)
 
-        return response
+        pubsub.publish("unpause_main_loop", "Resuming main loop after motion event.")
 
+        return response
 
     except Exception as e:
         Logger.print_error(f"Error handling motion event: {e}")
@@ -239,27 +271,24 @@ def handle_motion_event(image_path, query_dispatcher, session_logger, AI_TURN_IN
             )
 
 
-def motion_sensor_event_handler(message, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts):
+def motion_sensor_event_handler(frame, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation, pubsub):
     """Callback for the motion sensor event."""
-    # Extract the image path from the message
-    if "Image saved at:" in message:
-        image_path = message.split("Image saved at: ")[1].strip()
+    if rate_limiter.can_make_request():
+        Logger.print_info("Motion detected, sending query...")
+        # Create a new thread for the AI query to avoid blocking the main thread
+        Thread(target=handle_motion_event, args=(frame, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation, pubsub)).start()
+        rate_limiter.update_last_request_time()  # Update the request time after a successful query
 
-        if rate_limiter.can_make_request():
-            Logger.print_info("Motion detected, sending query...")
-            # Create a new thread for the AI query to avoid blocking the main thread
-            Thread(target=handle_motion_event, args=(image_path, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts)).start()
-            rate_limiter.update_last_request_time()  # Update the request time after a successful query
-
-def setup_motion_sensor(pubsub, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts):
+def setup_motion_sensor(pubsub, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation):
     """Sets up the motion sensor and subscribes to its events."""
     # Subscribe to the "motion_sensor" topic
-    pubsub.subscribe("motion_sensor", lambda message: motion_sensor_event_handler(message, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts))
+    pubsub.subscribe("motion_sensor", lambda message: motion_sensor_event_handler(message, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation, pubsub))
 
     # Create the motion sensor instance (it will publish events on its own)
-    motion_sensor = MotionDetectionSensor(pubsub, debug=False)
 
     Logger.print_info("Motion sensor initialized and event handler subscribed.")
+    motion_sensor = MotionDetectionSensor(pubsub, video_src=args.video_src, debug=False, max_events=1)
+    return motion_sensor
 
 def send_image_query_with_rate_limit(image_path, query_dispatcher):
     """Send an image query ensuring no more than one request per minute."""
@@ -274,12 +303,27 @@ def send_image_query_with_rate_limit(image_path, query_dispatcher):
 
 def main():
     global args
-
     args = load_config()
 
     setup_tmp_dir()
+    paused = False  # Flag to control main loop
 
-    # If there's some spurious problem initializing, wait a bit and try again
+    # Initialize PubSub and subscribe to pause/unpause events
+    pubsub = PubSub()
+
+    # Event handlers to update the paused flag
+    def on_pause_event(message):
+        nonlocal paused
+        paused = True
+
+    def on_unpause_event(message):
+        nonlocal paused
+        paused = False
+
+    pubsub.subscribe("pause_main_loop", on_pause_event)
+    pubsub.subscribe("unpause_main_loop", on_unpause_event)
+
+    # Initialization of components
     initialization_failed = True
     while initialization_failed:
         try:
@@ -290,28 +334,17 @@ def main():
             Logger.print_error(f"Error initializing conversation: {e}")
             time.sleep(20)
 
-    # Currently, the text-to-video functionality is its own code path
-    if args.text_to_video:
-        if not args.ttv_config:
-            Logger.print_error("JSON input file is required for --text-to-video.")
-            sys.exit(1)
-        current_datetime = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        output_path = f"/tmp/GANGLIA/ttv/final_output_{current_datetime}.mp4"
-        tts_client = parse_tts_interface(args.tts_interface)
-        text_to_video(args.ttv_config, args.skip_image_generation, output_path, tts_client, query_dispatcher)
-        sys.exit(0)  # Exit after processing the video generation to avoid entering the conversational loop
+    # Set up motion sensor with access to pubsub
+    motion_sensor = setup_motion_sensor(pubsub, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation)
 
-    Logger.print_legend()
-
-    signal.signal(signal.SIGINT, signal_handler)
-
-        # Setup PubSub and motion sensor
-    pubsub = PubSub()
-    setup_motion_sensor(pubsub, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts)
-
+    # Main loop
     while True:
+        if paused:
+            time.sleep(0.1)  # Avoid busy waiting
+            continue
+
         try:
-            prompt = user_turn(None, dictation, USER_TURN_INDICATOR, args)
+            prompt = user_turn(None, dictation, USER_TURN_INDICATOR, args, pubsub)
             if should_end_conversation(prompt):
                 Logger.print_info("User ended conversation")
                 ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
@@ -322,17 +355,14 @@ def main():
             if 'Exceeded maximum allowed stream duration' in str(e) or 'Long duration elapsed without audio' in str(e):
                 continue
             else:
-                # Treat the exception as part of the conversation
                 session_logger.log_session_interaction(
                     SessionEvent(
                         user_input="SYSTEM ERROR",
-                        response_output=f"Exception occurred: {str(e)}"
+                        response_output=f"Unexpected error: {str(e)}"
                     )
                 )
 
-
     end_conversation(session_logger)
-
     Logger.print_info("Thanks for chatting! Have a great day!")
 
 if __name__ == "__main__":

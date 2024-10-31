@@ -130,7 +130,7 @@ class TextToSpeech(ABC):
     def monitor_for_stop_words(self, dictation, duration):
         def should_stop():
             try:
-                input_text = dictation.getDictatedInput(0, interruptable=True)
+                input_text = dictation.getDictatedInput(0)
                 for word in self.stop_words:
                     if word in input_text.lower():
                         return True

@@ -6,7 +6,7 @@ from google.cloud import speech_v1p1beta1 as speech
 from threading import Timer
 
 class StaticGoogleDictation(Dictation):
-    def getDictatedInput(self, device_index, interruptable=False):
+    def getDictatedInput(self, device_index):
         Logger.print_debug("Testing audio input access...")
         recognizer = sr.Recognizer()
 
