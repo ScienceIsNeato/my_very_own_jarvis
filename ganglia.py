@@ -157,14 +157,28 @@ def user_turn(prompt, dictation, USER_TURN_INDICATOR, args, pubsub):
     pubsub.unsubscribe("user_turn_end", on_end_turn_event)
 
 
-def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=None):
+def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=None, pubsub=None):
     hotword_detected, hotword_phrase = hotword_manager.detect_hotwords(prompt)
 
     if AI_TURN_INDICATOR:
         AI_TURN_INDICATOR.input_in()
 
     if hotword_detected:
-        # Hotword detected, skip query dispatcher
+        # Hotword detected, check for "PREVIEW"
+        print
+        if hotword_phrase == "PREVIEW":
+            Logger.print_info("PREVIEW mode triggered...")
+            
+            # Setup the one-time motion detector with max_events=1
+            def preview_motion_sensor():
+                motion_sensor = MotionDetectionSensor(pubsub, video_src=args.video_src, debug=True, max_events=1)
+                motion_sensor.thread.join()  # Wait for the motion detection thread to complete
+                return
+
+            # Start the preview motion sensor in a new thread
+            Thread(target=preview_motion_sensor).start()
+
+        # Provide the hotword response as usual
         response = hotword_phrase
     elif predetermined_response:
         response = prompt
@@ -178,10 +192,6 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
         # Generate speech response
         _, file_path = tts.convert_text_to_speech(response)
         tts.play_speech_response(file_path, response)
-
-        # If this response is coming from a hotword, then we want to clear the screen shortly afterwards (scavenger hunt mode)
-        if hotword_detected:
-            clear_screen_after_hotword(tts)
 
     if session_logger:
         # Log interaction
@@ -257,7 +267,7 @@ def handle_motion_event(frame, query_dispatcher, session_logger, AI_TURN_INDICAT
 
         # Initiate AI turn based on the response
         ai_turn(response, 
-                query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=True)
+                query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=True, pubsub=pubsub, dictation=dictation)
 
         pubsub.publish("unpause_main_loop", "Resuming main loop after motion event.")
 
@@ -322,6 +332,9 @@ def main():
 
     pubsub.subscribe("pause_main_loop", on_pause_event)
     pubsub.subscribe("unpause_main_loop", on_unpause_event)
+    pubsub.subscribe("motion_sensor", lambda frame: motion_sensor_event_handler(
+        frame, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation, pubsub))
+
 
     # Initialization of components
     initialization_failed = True
@@ -333,9 +346,6 @@ def main():
         except Exception as e:
             Logger.print_error(f"Error initializing conversation: {e}")
             time.sleep(20)
-
-    # Set up motion sensor with access to pubsub
-    motion_sensor = setup_motion_sensor(pubsub, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation)
 
     # Main loop
     while True:
@@ -350,7 +360,7 @@ def main():
                 ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
                 end_conversation(session_logger)
                 break
-            ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
+            ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, pubsub=pubsub, dictation=dictation)
         except Exception as e:
             if 'Exceeded maximum allowed stream duration' in str(e) or 'Long duration elapsed without audio' in str(e):
                 continue

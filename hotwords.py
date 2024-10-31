@@ -1,4 +1,5 @@
 import json
+import re
 from logger import Logger
 
 
@@ -38,7 +39,9 @@ class HotwordManager:
         hotword_phrase = ""
 
         for hotword, phrase in self.hotwords_config.items():
-            if hotword in prompt:
+            # Use word boundary to ensure full word matches only
+            pattern = r'\b' + re.escape(hotword) + r'\b'
+            if re.search(pattern, prompt):
                 hotword_detected = True
                 hotword_phrase = phrase
                 break
