@@ -166,13 +166,15 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
     if hotword_detected:
         # Hotword detected, check for "PREVIEW"
         print
-        if hotword_phrase == "PREVIEW":
-            Logger.print_info("PREVIEW mode triggered...")
+        if hotword_phrase == "Let me see if that passphrase works and if I can access this new feature...":
             
             # Setup the one-time motion detector with max_events=1
             def preview_motion_sensor():
                 motion_sensor = MotionDetectionSensor(pubsub, video_src=args.video_src, debug=True, max_events=1)
                 motion_sensor.thread.join()  # Wait for the motion detection thread to complete
+                if session_logger:
+                    # Log interaction
+                    session_logger.log_session_interaction(SessionEvent(prompt, response))
                 return
 
             # Start the preview motion sensor in a new thread
@@ -267,7 +269,7 @@ def handle_motion_event(frame, query_dispatcher, session_logger, AI_TURN_INDICAT
 
         # Initiate AI turn based on the response
         ai_turn(response, 
-                query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=True, pubsub=pubsub, dictation=dictation)
+                query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, predetermined_response=True, pubsub=pubsub)
 
         pubsub.publish("unpause_main_loop", "Resuming main loop after motion event.")
 
@@ -360,7 +362,7 @@ def main():
                 ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger)
                 end_conversation(session_logger)
                 break
-            ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, pubsub=pubsub, dictation=dictation)
+            ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, tts, session_logger, pubsub=pubsub)
         except Exception as e:
             if 'Exceeded maximum allowed stream duration' in str(e) or 'Long duration elapsed without audio' in str(e):
                 continue
