@@ -51,20 +51,28 @@ class ChatGPTQueryDispatcher:
 
         Logger.print_debug("Sending query to AI server...")
 
-        chat = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "user", "content": content}
-            ]
-        )
+        if image_path == None:
+            # Use the conversation history in self.messages for the API call
+            chat = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=self.messages
+            )
+        else:
+        # Send the query as a single prompt
+            chat = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "user", "content": content}
+                ]
+            )
         reply = chat.choices[0].message.content
         self.messages.append({"role": "assistant", "content": reply})
 
         Logger.print_info(f"AI response received in {time() - start_time:.1f} seconds.")
 
+        # Log the response with a timestamp
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         temp_dir = tempfile.gettempdir()
-
         with open(os.path.join(temp_dir, f"chatgpt_output_{timestamp}_raw.txt"), "w") as file:
             file.write(reply)
 

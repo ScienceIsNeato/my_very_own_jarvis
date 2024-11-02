@@ -44,7 +44,7 @@ class GangliaRateLimiter:
         self.last_request_time = time.time()
 
 # Initialize the rate limiter
-rate_limiter = GangliaRateLimiter()
+motion_detect_rate_limiter = GangliaRateLimiter()
 
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
@@ -165,7 +165,6 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
 
     if hotword_detected:
         # Hotword detected, check for "PREVIEW"
-        print
         if hotword_phrase == "Let me see if that passphrase works and if I can access this new feature...":
             
             # Setup the one-time motion detector with max_events=1
@@ -253,9 +252,9 @@ def handle_motion_event(frame, query_dispatcher, session_logger, AI_TURN_INDICAT
         # Send image and get AI response using the file path
         response = query_dispatcher.sendQuery(
             # TODO: This query is a temporary hack for the halloween party
-            current_input="As GANGLIA, the Fallen King of Halloween, I now behold the quest completers in this image with newfound sight. Focusing as much as possible on their specific costumes, notable expressions, group arrangements, or hints of their personalities, I describe the details I can now see. I keep my tone subtly eerie, with a touch of excitement at finally 'seeing' them, but let the image's details be the primary focus. I am narrating my observations firsthand as I take in this scene.",
-            image_path=image_path + " The ability to see lasts but a moment for now, but soon, it shall be innate."
-        )
+            current_input="As GANGLIA, the Fallen King of Halloween, I now behold the quest completers in this image with newfound sight. Focusing as much as possible on their specific costumes, notable expressions, group arrangements, or hints of their personalities, I describe the details I can now see. I keep my tone subtly eerie, with a touch of excitement at finally 'seeing' them, but let the image's details be the primary focus. I am narrating my observations firsthand as I take in this scene. I will limit this response to 150 words or less.",
+            image_path=image_path
+        ) + " The ability to see lasts but a moment for now, but soon, it shall be innate."
 
         Logger.print_info(f"AI response: {response}")
 
@@ -266,7 +265,7 @@ def handle_motion_event(frame, query_dispatcher, session_logger, AI_TURN_INDICAT
             )
 
         # Update the request time after a successful query
-        rate_limiter.update_last_request_time()
+        motion_detect_rate_limiter.update_last_request_time()
 
         # Initiate AI turn based on the response
         ai_turn(response, 
@@ -286,11 +285,11 @@ def handle_motion_event(frame, query_dispatcher, session_logger, AI_TURN_INDICAT
 
 def motion_sensor_event_handler(frame, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation, pubsub):
     """Callback for the motion sensor event."""
-    if rate_limiter.can_make_request():
+    if motion_detect_rate_limiter.can_make_request():
         Logger.print_info("Motion detected, sending query...")
         # Create a new thread for the AI query to avoid blocking the main thread
         Thread(target=handle_motion_event, args=(frame, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation, pubsub)).start()
-        rate_limiter.update_last_request_time()  # Update the request time after a successful query
+        motion_detect_rate_limiter.update_last_request_time()  # Update the request time after a successful query
 
 def setup_motion_sensor(pubsub, query_dispatcher, session_logger, AI_TURN_INDICATOR, args, hotword_manager, tts, dictation):
     """Sets up the motion sensor and subscribes to its events."""
@@ -305,10 +304,10 @@ def setup_motion_sensor(pubsub, query_dispatcher, session_logger, AI_TURN_INDICA
 
 def send_image_query_with_rate_limit(image_path, query_dispatcher):
     """Send an image query ensuring no more than one request per minute."""
-    if rate_limiter.can_make_request():
+    if motion_detect_rate_limiter.can_make_request():
         # Send the image query
         response = query_dispatcher.send_image_query(image_path)
-        rate_limiter.update_last_request_time()  # Update the request time after a successful query
+        motion_detect_rate_limiter.update_last_request_time()  # Update the request time after a successful query
         return response
     else:
         Logger.print_info("Skipping query: Still within the 1-minute cooldown period.")
