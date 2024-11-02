@@ -249,11 +249,12 @@ def handle_motion_event(frame, query_dispatcher, session_logger, AI_TURN_INDICAT
         timestamp = int(time.time())
         image_path = os.path.join(temp_dir, f"ganglia_image_{timestamp}.png")
         cv2.imwrite(image_path, frame)
-        
+
         # Send image and get AI response using the file path
         response = query_dispatcher.sendQuery(
-            current_input="say hello to any humans in this image, making sure to comment on some unique feature or piece of clothing. Just focus on the humans, not the objects in the background",
-            image_path=image_path
+            # TODO: This query is a temporary hack for the halloween party
+            current_input="As GANGLIA, the Fallen King of Halloween, I now behold the quest completers in this image with newfound sight. Focusing as much as possible on their specific costumes, notable expressions, group arrangements, or hints of their personalities, I describe the details I can now see. I keep my tone subtly eerie, with a touch of excitement at finally 'seeing' them, but let the image's details be the primary focus. I am narrating my observations firsthand as I take in this scene.",
+            image_path=image_path + " The ability to see lasts but a moment for now, but soon, it shall be innate."
         )
 
         Logger.print_info(f"AI response: {response}")
