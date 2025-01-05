@@ -17,6 +17,7 @@ from logger import Logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from logger import Logger
+from utils import get_tempdir
 
 class TextToSpeech(ABC):
     def __init__(self):
@@ -62,7 +63,7 @@ class TextToSpeech(ABC):
                 Logger.print_debug(f"No audio url found in the response for chunk {index}: {chunk}")
                 return None, index, None, None
 
-            file_path = os.path.abspath(os.path.join(tempfile.gettempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}_{index}.mp3"))
+            file_path = os.path.abspath(os.path.join(get_tempdir(), f"chatgpt_response_{datetime.now().strftime('%Y%m%d-%H%M%S')}_{index}.mp3"))
             audio_response = request.Request.get(audio_url, timeout=30)
             with open(file_path, 'wb') as audio_file:
                 audio_file.write(audio_response.content)
@@ -178,7 +179,7 @@ class GoogleTTS(TextToSpeech):
 
             # Save the audio to a file
             snippet = '_'.join(text.split()[:3])  # Take the first 3 words of the text as a snippet
-            file_path = os.path.join(tempfile.gettempdir(), f"chatgpt_response_{snippet}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
+            file_path = os.path.join(get_tempdir(), f"chatgpt_response_{snippet}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
             with open(file_path, "wb") as out:
                 out.write(response.audio_content)
 
@@ -259,7 +260,7 @@ class CoquiTTS(TextToSpeech):
 
             files = [file for file in files if file]
 
-            list_file_path = os.path.join(tempfile.gettempdir(), "concat_list.txt")
+            list_file_path = os.path.join(get_tempdir(), "concat_list.txt")
             with open(list_file_path, 'w') as list_file:
                 list_file.write('\n'.join(f"file '{file}'" for file in files))
 

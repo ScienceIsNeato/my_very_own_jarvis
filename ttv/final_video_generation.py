@@ -6,6 +6,7 @@ from .video_generation import append_video_segments, create_still_video_with_fad
 from .audio_generation import get_audio_duration
 from logger import Logger
 import subprocess
+from utils import get_tempdir
 
 def concatenate_video_segments(video_segments, output_path):
     try:
@@ -27,7 +28,7 @@ def concatenate_video_segments(video_segments, output_path):
 
     return output_path
 
-def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path="/tmp/final_output.mp4"):
+def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path=None):
     """
     Assembles the final video from given segments, adds background music, and generates closing credits.
 
@@ -41,13 +42,19 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
     Returns:
         str: Path to the most recent successfully generated video.
     """
+    if not output_path:
+        temp_dir = get_tempdir()
+        output_path = os.path.join(temp_dir, "GANGLIA", "ttv", "final_output.mp4")
+    
     main_video_path = None
     main_video_with_background_music_path = None
     final_output_path = None
 
     try:
+        temp_dir = get_tempdir()
+        main_video_path = os.path.join(temp_dir, "GANGLIA", "ttv", "final_video.mp4")
         Logger.print_info("Concatenating video segments...")
-        main_video_path = concatenate_video_segments(video_segments, "/tmp/GANGLIA/final_video.mp4")
+        main_video_path = concatenate_video_segments(video_segments, main_video_path)
         final_output_path = main_video_path  # Update the final output path after this step
 
         if music_path:
