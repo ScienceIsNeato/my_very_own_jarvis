@@ -1,5 +1,6 @@
 import concurrent.futures
 import time
+import os
 from logger import Logger
 from music_lib import MusicGenerator
 from .image_generation import generate_image, generate_image_for_sentence, generate_blank_image
@@ -7,6 +8,7 @@ from .story_generation import generate_movie_poster, generate_filtered_story
 from .audio_generation import generate_audio
 from .video_generation import create_video_segment
 from tts import GoogleTTS
+from utils import get_tempdir
 
 tts = GoogleTTS()
 
@@ -29,7 +31,8 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
 
         Logger.print_info(f"{thread_id} Adding audio for image {i + 1} of {total_images} with input text: '{sentence}'")
         Logger.print_info(f"{thread_id} Creating video segment.")
-        video_segment_path = f"/tmp/GANGLIA/ttv/segment_{i}.mp4"
+        temp_dir = get_tempdir()
+        video_segment_path = os.path.join(temp_dir, "GANGLIA", "ttv", f"segment_{i}.mp4")
         create_video_segment(filename, audio_path, video_segment_path)
 
         return video_segment_path, sentence, i

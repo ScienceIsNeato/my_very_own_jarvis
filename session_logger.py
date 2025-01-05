@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import threading
 from dotenv import load_dotenv
+from utils import get_tempdir
 load_dotenv()
 import time
 from abc import ABC, abstractmethod
@@ -10,7 +11,6 @@ from uuid import uuid4
 from typing import List
 from datetime import datetime
 from logger import Logger
-import tempfile
 from google.cloud import storage
 
 class SessionEvent:
@@ -63,7 +63,7 @@ class CLISessionLogger:
     def __init__(self, options):
         self.session_id = str(uuid4())
         self.timestamp = time.strftime("%Y-%m-%dT%H.%M.%S")
-        self.file_name = os.path.join(tempfile.gettempdir(), f"GANGLIA_session_{self.timestamp}.json")
+        self.file_name = os.path.join(get_tempdir(), f"GANGLIA_session_{self.timestamp}.json")
         self.conversation = []
         self.bucket_name = os.getenv('GCP_BUCKET_NAME')
         self.project_name = os.getenv('GCP_PROJECT_NAME')

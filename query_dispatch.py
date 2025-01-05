@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from dotenv import load_dotenv
 from logger import Logger
-import tempfile
+from utils import get_tempdir
 from time import time
 
 class ChatGPTQueryDispatcher:
@@ -38,7 +38,7 @@ class ChatGPTQueryDispatcher:
         Logger.print_info(f"AI response received in {time() - start_time:.1f} seconds.")
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        temp_dir = tempfile.gettempdir()
+        temp_dir = get_tempdir()
 
         with open(os.path.join(temp_dir, f"chatgpt_output_{timestamp}_raw.txt"), "w") as file:
             file.write(reply)

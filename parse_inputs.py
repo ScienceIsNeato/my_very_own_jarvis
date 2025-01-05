@@ -99,6 +99,8 @@ def parse_args(args=None):
     parser.add_argument('--ttv-config', type=str, help='Path to the JSON input file for video generation.')
     parser.add_argument('--skip-image-generation', type=str, help='Use previously generated images when generating text-to-video')
     parser.add_argument('--google-voice-id', type=str, help='Google voice ID to use for TTS')
+    parser.add_argument('--display-log-hours', type=int, help="Display the last N hours of logs in transcript format.")
+    parser.add_argument('--show-log-errors', action='store_true', help="Display SYSTEM ERROR logs.")
 
     parsed_args = parser.parse_args(args)
 

@@ -10,6 +10,7 @@ import signal
 from logger import Logger
 from hotwords import HotwordManager
 from conversation_context import ContextManager
+from fetch_and_display_logs import display_logs
 import datetime
 from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, save_image_without_caption
 from ttv.audio_generation import generate_audio, get_audio_duration
@@ -17,6 +18,7 @@ from ttv.video_generation import create_video_segment, create_still_video_with_f
 from music_lib import MusicGenerator
 from ttv.story_processor import process_story, generate_image_for_sentence
 from ttv.final_video_generation import assemble_final_video, concatenate_video_segments
+from utils import get_tempdir, setup_tmp_dir
 
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
@@ -28,7 +30,7 @@ def initialize_conversation(args):
             USER_TURN_INDICATOR = UserTurnIndicator()
             AI_TURN_INDICATOR = AiTurnIndicator()
             Logger.print_debug("Turn Indicators initialized successfully.")
-        except Exception as e:
+        except (RuntimeError, IOError) as e:
             Logger.print_error(f"Failed to initialize Turn Indicators: {e}")
             sys.exit("Initialization failed. Exiting program...")
 
@@ -158,31 +160,16 @@ def clear_screen_after_hotword(tts):
     tts.play_speech_response(file_path, output)
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def setup_tmp_dir():
-    # Determine the base directory based on the operating system
-    if os.name == 'nt':  # Windows
-        base_dir = os.path.join(tempfile.gettempdir(), "GANGLIA")
-    else:  # Unix-based systems
-        base_dir = "/tmp/GANGLIA"
-
-    # Ensure the directory exists
-    os.makedirs(base_dir, exist_ok=True)
-
-def get_tmp_dir():
-    # Determine the base directory based on the operating system
-    if os.name == 'nt':  # Windows
-        base_dir = os.path.join(tempfile.gettempdir(), "GANGLIA")
-    else:  # Unix-based systems
-        base_dir = "/tmp/GANGLIA"
-
-    return base_dir
-
 def main():
     global args
 
     args = load_config()
 
-    setup_tmp_dir()
+    setup_tmp_dir()  # Create temp directory if it doesn't exist
+
+    if args.display_log_hours:
+        display_logs(args.display_log_hours)
+        return  # Exit after displaying logs
 
     # If there's some spurious problem initializing, wait a bit and try again
     initialization_failed = True

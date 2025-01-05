@@ -1,8 +1,14 @@
 from logger import Logger
 from .audio_generation import get_audio_duration
 from .ffmpeg_wrapper import run_ffmpeg_command
+from utils import get_tempdir
+import os
+import uuid
 
-def create_video_segment(image_path, audio_path, output_path):
+def create_video_segment(image_path, audio_path, output_path=None):
+    if not output_path:
+        temp_dir = get_tempdir()
+        output_path = os.path.join(temp_dir, "GANGLIA", "ttv", f"segment_{uuid.uuid4()}.mp4")
     Logger.print_info("Creating video segment.")
     ffmpeg_cmd = [
         "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
