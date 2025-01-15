@@ -1,0 +1,168 @@
+"""Module for determining optimal Region of Interest (ROI) for video captions.
+
+The ROI should be:
+1. Located in a low-activity area of the frame
+2. Taller than it is wide (portrait orientation)
+3. Approximately 1/5th to 1/10th of the frame size
+4. Positioned to minimize interference with main video content
+
+Note: Current implementation analyzes only the first frame.
+TODO: Expand to analyze multiple frames for true video content.
+"""
+
+from typing import Tuple, Optional
+import numpy as np
+from moviepy.video.io.VideoFileClip import VideoFileClip
+
+def calculate_activity_map(frame: np.ndarray, block_size: int = 32) -> np.ndarray:
+    """Calculate activity level for each block in the frame.
+    
+    Uses standard deviation of pixel values as a simple measure of activity.
+    Lower values indicate less activity/movement.
+    
+    Args:
+        frame: Image/video frame as numpy array (height, width, channels)
+        block_size: Size of blocks to analyze
+        
+    Returns:
+        2D numpy array of activity levels
+    """
+    height, width = frame.shape[:2]
+    gray = np.mean(frame, axis=2)  # Convert to grayscale
+    
+    # Calculate number of blocks in each dimension
+    blocks_h = height // block_size
+    blocks_w = width // block_size
+    
+    # Initialize activity map
+    activity_map = np.zeros((blocks_h, blocks_w))
+    
+    # Calculate standard deviation for each block
+    for i in range(blocks_h):
+        for j in range(blocks_w):
+            h_start = i * block_size
+            h_end = (i + 1) * block_size
+            w_start = j * block_size
+            w_end = (j + 1) * block_size
+            
+            block = gray[h_start:h_end, w_start:w_end]
+            activity_map[i, j] = np.std(block)
+    
+    return activity_map
+
+def find_roi_in_frame(frame, block_size=32):
+    """Find optimal ROI in a single frame."""
+    height, width = frame.shape[:2]
+    
+    # Calculate target ROI area (aim for 1/7th of frame area as a middle ground)
+    target_area = (width * height) / 7
+    
+    # Calculate ROI dimensions to achieve target area while being taller than wide
+    # Make height 1.5 times the width to ensure portrait orientation
+    roi_width = int(np.sqrt(target_area / 1.5))
+    roi_height = int(roi_width * 1.5)
+    
+    # Ensure dimensions don't exceed frame
+    roi_width = min(roi_width, width)
+    roi_height = min(roi_height, height)
+    
+    # Calculate activity map
+    activity_map = calculate_activity_map(frame, block_size)
+    
+    # Find position with minimum activity
+    valid_y = height - roi_height
+    valid_x = width - roi_width
+    
+    min_activity = float('inf')
+    best_x = 0
+    best_y = 0
+    
+    # Convert block coordinates to pixel coordinates
+    blocks_h = height // block_size
+    blocks_w = width // block_size
+    
+    for y in range(0, valid_y + 1, block_size):
+        for x in range(0, valid_x + 1, block_size):
+            # Convert pixel coordinates to block coordinates
+            block_y = y // block_size
+            block_x = x // block_size
+            
+            # Ensure we don't exceed activity map bounds
+            if block_y + (roi_height // block_size) > blocks_h or block_x + (roi_width // block_size) > blocks_w:
+                continue
+                
+            # Get activity for this region
+            region = activity_map[block_y:block_y+(roi_height // block_size), 
+                                block_x:block_x+(roi_width // block_size)]
+            activity = np.mean(region)  # Use mean instead of sum for better scaling
+            
+            if activity < min_activity:
+                min_activity = activity
+                best_x = x
+                best_y = y
+    
+    return (best_x, best_y, roi_width, roi_height)
+
+def find_optimal_roi(
+    video_path: str,
+    block_size: int = 32
+) -> Optional[Tuple[int, int, int, int]]:
+    """Find optimal ROI for captions in a video.
+    
+    Currently only analyzes the first frame.
+    TODO: Expand to analyze multiple frames for true video content.
+    
+    Args:
+        video_path: Path to video file
+        block_size: Size of blocks for activity analysis
+        
+    Returns:
+        Tuple of (x, y, width, height) defining the ROI rectangle,
+        or None if analysis fails
+    """
+    try:
+        video = VideoFileClip(video_path)
+        first_frame = video.get_frame(0)
+        video.close()
+        
+        return find_roi_in_frame(
+            frame=first_frame,
+            block_size=block_size
+        )
+        
+    except Exception as e:
+        print(f"Error finding optimal ROI: {str(e)}")
+        return None 
+
+def get_contrasting_color(frame: np.ndarray, roi: Tuple[int, int, int, int]) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
+    """
+    Determine the best contrasting text color and stroke color for the ROI background.
+    Uses color inversion to find the contrasting color.
+    
+    Args:
+        frame: Video frame as numpy array
+        roi: Tuple of (x, y, width, height) defining the ROI
+        
+    Returns:
+        Tuple of (text_color, stroke_color) as RGB tuples
+    """
+    x, y, width, height = roi
+    roi_region = frame[y:y+height, x:x+width]
+    
+    # Calculate average color in ROI
+    avg_color = np.mean(roi_region, axis=(0, 1))
+    r = int(avg_color[0])
+    g = int(avg_color[1])
+    b = int(avg_color[2])
+    
+    # Simple color inversion
+    text_r = 255 - r
+    text_g = 255 - g
+    text_b = 255 - b
+    
+    # Stroke is always 1/3 of the text color, rounded to match test expectations
+    stroke_r = text_r // 3
+    stroke_g = text_g // 3
+    stroke_b = text_b // 3
+    
+    return (text_r, text_g, text_b), (stroke_r, stroke_g, stroke_b) 

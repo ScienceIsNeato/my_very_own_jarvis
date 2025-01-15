@@ -4,6 +4,7 @@ from typing import List, Tuple, Optional
 import tempfile
 from dataclasses import dataclass
 from logger import Logger
+from .caption_roi import find_roi_in_frame, get_contrasting_color
 from .ffmpeg_wrapper import run_ffmpeg_command
 import subprocess
 from PIL import ImageFont, UnidentifiedImageError
@@ -326,11 +327,18 @@ def create_dynamic_captions(
 
         # Load the video
         video = VideoFileClip(input_video)
-        width, height = video.size
-
-        # Calculate safe text area dimensions
-        safe_width = int(width * 0.8)  # Use 80% of video width to ensure wrapping
-        safe_height = int(height * max_window_height_ratio)
+        
+        # Get first frame for ROI detection
+        first_frame = video.get_frame(0)
+        roi = find_roi_in_frame(first_frame)
+        if roi is None:
+            Logger.print_error("Failed to find ROI for captions")
+            return None
+            
+        # Extract ROI dimensions and determine text color
+        roi_x, roi_y, roi_width, roi_height = roi
+        text_color, stroke_color = get_contrasting_color(first_frame, roi)
+        Logger.print_info(f"Using {(text_color, stroke_color)} text for optimal contrast in ROI")
 
         # Process all captions into words
         all_words = []
@@ -343,13 +351,13 @@ def create_dynamic_captions(
             Logger.print_error("No words to display in captions")
             return None
 
-        # Create caption windows
+        # Create caption windows using ROI dimensions
         windows = create_caption_windows(
             words=all_words,
             min_font_size=min_font_size,
             max_font_size=max_font_size,
-            safe_width=safe_width,
-            safe_height=safe_height
+            safe_width=roi_width,
+            safe_height=roi_height
         )
 
         # Create text clips for each word
@@ -366,31 +374,31 @@ def create_dynamic_captions(
                     cursor_x=int(cursor_x),
                     cursor_y=int(cursor_y),
                     line_height=int(window.font_size * 1.2),
-                    roi_width=int(safe_width),
-                    roi_height=int(safe_height),
+                    roi_width=int(roi_width),
+                    roi_height=int(roi_height),
                     font_size=window.font_size,
                     max_font_size=max_font_size,
                     previous_word=previous_word
                 )
                 
-                # Create text clip
+                # Create text clip with contrasting color
                 txt_clip = TextClip(
                     text=word.text,
                     font=word.font_name,
                     method='caption',
-                    color='green',
-                    stroke_color='black',
+                    color=text_color,
+                    stroke_color=stroke_color,
                     stroke_width=1,
                     font_size=word.font_size,
-                    size=(word.width, int(word.font_size * 1.5)), # allow enough room for vertical alignment (a kind of hack)
+                    size=(word.width, int(word.font_size * 1.5)), # allow enough room for vertical alignment
                     margin=(0,0,0,int(word.font_size * 1.5),), # prevents bottom of text from being cut off
                     text_align='left',
                     duration=window.end_time - word.start_time  # Word persists until end of window
                 )
-                
+
                 # Set position and start time - ensure integer positions and adjust y for baseline
                 baseline_offset = int((word.font_size - window.font_size) * 0.2)  # Adjust baseline for larger fonts
-                txt_clip = txt_clip.with_position((int(margin + x_position), int(y_position - baseline_offset)))
+                txt_clip = txt_clip.with_position((int(roi_x + x_position), int(roi_y + y_position - baseline_offset)))
                 txt_clip = txt_clip.with_start(word.start_time)
                 
                 text_clips.append(txt_clip)
