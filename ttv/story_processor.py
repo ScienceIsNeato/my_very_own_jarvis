@@ -65,11 +65,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
             captions=captions,
             output_path=final_segment_path,
             min_font_size=32,
-            max_font_size=48,
-            box_color="black@0",  # Fully transparent background
-            position="bottom",
-            margin=40,
-            max_window_height_ratio=0.3
+            size_ratio=1.5  # Scale up to 48px
         )
 
         if captioned_path:

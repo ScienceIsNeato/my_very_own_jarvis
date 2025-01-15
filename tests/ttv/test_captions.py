@@ -90,9 +90,9 @@ def test_caption_text_completeness():
     windows = create_caption_windows(
         [Word(text=w, start_time=0, end_time=1) for w in words],
         min_font_size=32,
-        max_font_size=48,
         safe_width=safe_width,
-        safe_height=safe_height
+        safe_height=safe_height,
+        size_ratio=1.5  # Scale up to 48px
     )
     # Collect all words from all windows
     processed_words = []
@@ -121,9 +121,7 @@ def test_font_size_scaling():
         captions=captions,
         output_path=output_path,
         min_font_size=24,  # Smaller min to test scaling
-        max_font_size=72,  # Larger max to test scaling
-        margin=40,
-        max_window_height_ratio=0.3  # Limit window height to 30% of video height
+        size_ratio=3.0,  # Scale up to 72px
     )
     # Clean up
     os.unlink(input_video_path)
@@ -160,10 +158,8 @@ def test_caption_positioning():
         input_video=input_video_path,
         captions=captions,
         output_path=output_path,
-        margin=margin,
         min_font_size=32,  # Ensure readable text
-        max_font_size=48,  # Limit maximum size to avoid overflow
-        max_window_height_ratio=0.3  # Limit window height to 30% of video height
+        size_ratio=1.5,  # Scale up to 48px
     )
     # Clean up
     os.unlink(input_video_path)
@@ -281,9 +277,7 @@ def test_audio_aligned_captions():
             captions=captions,
             output_path=output_path,
             min_font_size=32,
-            max_font_size=48,
-            margin=40,
-            max_window_height_ratio=0.3
+            size_ratio=1.5,  # Scale up to 48px
         )
         assert result_path is not None, "Failed to create video with captions"
 
@@ -334,42 +328,29 @@ def test_text_wrapping_direction():
     # Set up dimensions
     video_width = 1920
     margin = 40
-    roi_width = video_width - (2 * margin)
-    font_size = 32  # Use minimum font size to be conservative
-    
-    # Create text that will definitely wrap by measuring actual widths
-    font = ImageFont.load_default()
-    
-    # Generate text until we have 3x the ROI width in pixels
-    words = []
-    total_width = 0
-    space_width = font.getlength(" ")
-    test_word = "testing"  # Use a consistent word to build up width
-    word_width = font.getlength(test_word)
-    
-    while total_width < roi_width * 3:
-        words.append(test_word)
-        total_width += word_width + space_width
-    
-    # Create caption with the generated text
-    text = " ".join(words)
-    captions = [CaptionEntry(text, 0.0, 2.0)]
-    
+    roi_width = video_width - (2 * margin)  # Full ROI width
+    min_font_size = 32  # Use minimum font size to be conservative
+    size_ratio = 1.5  # Scale up to 48px
+
+    # Create a very long text that will definitely wrap
+    test_text = "This is a test caption that should wrap to multiple lines. " * 3  # Repeat 3 times to ensure wrapping
+    captions = [CaptionEntry(test_text, 0.0, 2.0)]
+
     # Process caption into words
     words = split_into_words(captions[0])
-    
+
     # Create caption windows
     video_height = 1080  # Standard HD height
     safe_height = int(video_height * 0.3)  # 30% of video height
-    
+
     windows = create_caption_windows(
         words=words,
-        min_font_size=32,
-        max_font_size=48,
-        safe_width=roi_width,
-        safe_height=safe_height
+        min_font_size=min_font_size,
+        safe_width=roi_width,  # Pass full ROI width
+        safe_height=safe_height,
+        size_ratio=size_ratio
     )
-    
+
     assert len(windows) > 0, "No caption windows created"
     window = windows[0]  # We only created one caption
     
