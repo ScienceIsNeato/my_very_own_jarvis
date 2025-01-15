@@ -15,7 +15,7 @@ GANGLIA is a highly modularized, generic personal assistant. Built partially by 
 
 | Module              | Possible Values | Default |
 |---------------------|-----------------|---------|
-| Speech Recognition  | AssemblyAI, Static Google Cloud Speech-to-Text | Live Google Cloud Speech-to-Text |
+| Speech Recognition  | Static Google Cloud Speech-to-Text | Live Google Cloud Speech-to-Text |
 | Text To Speech      | Google, Natural Reader (Unavailable), Amazon Polly (Unavailable) | Google |
 | AI Backend          | GPT-3.5 (Unavailable), GPT-4 | GPT-4 |
 | Response Visualizer | CLI, NaturalReaderUI (Unavailable) | CLI |
@@ -70,7 +70,6 @@ Here's a table of features, their implementation names, and the corresponding en
 
 | Feature            | Implementation Name | Environment Variable      |
 |--------------------|---------------------|---------------------------|
-| Speech Recognition | AssemblyAI          | ASSEMBLYAI_TOKEN          |
 | AI Backend         | OpenAI GPT-4        | OPENAI_API_KEY            |
 
 ## TTS (Text To Speech)

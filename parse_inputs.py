@@ -13,7 +13,6 @@ def check_environment_variables():
 
     required_vars = [
         'OPENAI_API_KEY',
-        'ASSEMBLYAI_TOKEN',
         'GCP_BUCKET_NAME',
         'GCP_PROJECT_NAME',
         'SUNO_API_KEY',
@@ -79,7 +78,7 @@ def parse_args(args=None):
     parser.add_argument("--tts-interface", type=str, default="google", help="Text-to-speech interface to use. Available options: 'google'")
     parser.add_argument("--suppress-session-logging", action="store_true", help="Disable session logging (default: False)")
     parser.add_argument("--enable-turn-indicators", action="store_true", help="Enable turn indicators (default: False)")
-    parser.add_argument("--dictation-type", type=str, default="static_google", choices=["static_google", "live_google", "live_assemblyai"], help="Dictation type to use. Available options: 'static_google', 'live_google', 'live_assemblyai'")
+    parser.add_argument("--dictation-type", type=str, default="static_google", choices=["static_google", "live_google"], help="Dictation type to use. Available options: 'static_google', 'live_google'")
     parser.add_argument("--store-logs", action="store_true", help="Enable storing logs in the cloud (default: False)")
     parser.add_argument('--text-to-video', action='store_true', help='Generate video from text input.')
     parser.add_argument('--ttv-config', type=str, help='Path to the JSON input file for video generation.')
