@@ -118,24 +118,39 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
             filtered_story_json = None
 
         Logger.print_info("Submitting background music generation task...")
-        background_music_enabled = True
-        background_music_prompt = "ambient background music"
-        if config and "background_music" in config:
-            background_music_enabled = config["background_music"].get("enabled", True)
-            if "prompt" in config["background_music"]:
-                background_music_prompt = config["background_music"]["prompt"]
+        background_music_enabled = False
+        background_music_prompt = None
+        background_music_path = None
+        if config and config.background_music:
+            for source in config.background_music.sources:
+                if source.enabled:
+                    if source.type == "file":
+                        background_music_path = source.path
+                        break
+                    elif source.type == "prompt":
+                        background_music_enabled = True
+                        background_music_prompt = source.prompt
+                        break
 
         # Get closing credits music configuration
-        closing_credits_enabled = True
-        closing_credits_prompt = "upbeat closing credits music"
-        if config and "closing_credits_music" in config:
-            closing_credits_enabled = config["closing_credits_music"].get("enabled", True)
-            if "prompt" in config["closing_credits_music"]:
-                closing_credits_prompt = config["closing_credits_music"]["prompt"]
+        closing_credits_enabled = False
+        closing_credits_prompt = None
+        closing_credits_path = None
+        if config and config.closing_credits:
+            for source in config.closing_credits.sources:
+                if source.enabled:
+                    if source.type == "file":
+                        closing_credits_path = source.path
+                        break
+                    elif source.type == "prompt":
+                        closing_credits_enabled = True
+                        closing_credits_prompt = source.prompt
+                        break
 
-        # Submit background music generation if enabled
+        # Submit background music generation if enabled and no file path provided
         background_music_future = None
-        if not skip_generation and background_music_enabled:
+        if not skip_generation and background_music_enabled and not background_music_path:
+            Logger.print_info("Generating background music...")
             background_music_future = executor.submit(
                 music_gen.generate_music,
                 prompt=background_music_prompt,
@@ -144,9 +159,10 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 with_lyrics=False
             )
 
-        # Submit song with lyrics generation if enabled
+        # Submit song with lyrics generation if enabled and no file path provided
         song_with_lyrics_future = None
-        if not skip_generation and closing_credits_enabled:
+        if not skip_generation and closing_credits_enabled and not closing_credits_path:
+            Logger.print_info("Generating closing credits music...")
             song_with_lyrics_future = executor.submit(
                 music_gen.generate_music,
                 prompt=closing_credits_prompt,
@@ -156,6 +172,8 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 story_text="\n".join(story),  # Join story sentences with newlines
                 query_dispatcher=query_dispatcher
             )
+        else:
+            Logger.print_info("Using file-based music, skipping lyrics generation.")
 
         Logger.print_info("Submitting sentence processing tasks...")
         sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher) for i, sentence in enumerate(story)]
@@ -174,18 +192,16 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 video_segments[index] = video_segment_path
                 context += f" {sentence}"
         
-        # Get the background music path
-        background_music_path = None
-        if background_music_future:
+        # Get the background music path from future if we generated it
+        if not background_music_path and background_music_future:
             background_music_path = background_music_future.result()
             if not background_music_path:
                 Logger.print_error("Failed to generate background music.")
         
-        # Get the song with lyrics path
-        song_with_lyrics_path = None
-        if song_with_lyrics_future:
-            song_with_lyrics_path = song_with_lyrics_future.result()
-            if not song_with_lyrics_path:
+        # Get the song with lyrics path from future if we generated it
+        if not closing_credits_path and song_with_lyrics_future:
+            closing_credits_path = song_with_lyrics_future.result()
+            if not closing_credits_path:
                 Logger.print_error("Failed to generate song with lyrics.")
         
         # Get the movie poster path
@@ -202,7 +218,7 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 import traceback
                 Logger.print_error(f"Traceback: {traceback.format_exc()}")
 
-    return video_segments, background_music_path, song_with_lyrics_path, movie_poster_path
+    return video_segments, background_music_path, closing_credits_path, movie_poster_path
 
 
 def retry_on_rate_limit(func, *args, retries=5, wait_time=60, **kwargs):

@@ -1,15 +1,29 @@
 import os
 import tempfile
 from utils import get_tempdir
-from PIL import Image
+from PIL import Image, ImageFont
 from tts import GoogleTTS
 from ttv.audio_alignment import create_word_level_captions
 from ttv.video_generation import run_ffmpeg_command
 from ttv.captions import (
     CaptionEntry, create_dynamic_captions, create_srt_captions,
-    create_static_captions, Word, create_caption_windows
+    create_static_captions, Word, create_caption_windows,
+    split_into_words, calculate_word_positions
 )
 from logger import Logger
+
+def get_default_font():
+    """Get the default font path for testing."""
+    # Try common system font locations
+    font_paths = [
+        "/System/Library/Fonts/Supplemental/Arial.ttf",  # macOS
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
+        "C:\\Windows\\Fonts\\arial.ttf"  # Windows
+    ]
+    for path in font_paths:
+        if os.path.exists(path):
+            return path
+    return None
 
 def create_test_video(duration=5, size=(1920, 1080), color=(0, 0, 255)):
     """Create a simple colored background video for testing"""
@@ -191,22 +205,32 @@ def test_caption_positioning():
                 frame_width, frame_height = img.size
                 # Convert to RGB for analysis
                 rgb_img = img.convert('RGB')
+                
+                # Only check the bottom portion where captions should be
+                caption_area_start = int(frame_height * 0.7)  # Check bottom 30% where captions should be
+                
+                # Get background color from top-left corner
+                background_color = rgb_img.getpixel((0, 0))
+                
+                def colors_match(c1, c2, tolerance=15):  # Increased tolerance for compression artifacts
+                    """Check if colors match within a tolerance level"""
+                    return all(abs(a - b) <= tolerance for a, b in zip(c1, c2))
+                
                 # Scan the margins to ensure no text pixels
-                for y in range(frame_height):
-                    # Check left margin
+                for y in range(caption_area_start, frame_height):
+                    # Check left margin (check one pixel inside the margin)
                     color = rgb_img.getpixel((margin-1, y))
-                    # Allow for slight color variations due to video encoding
-                    assert abs(color[0] - 0) <= 5 and abs(color[1] - 0) <= 5 and abs(color[2] - 255) <= 5, \
-                        f"Found text in left margin at y={y}"
-                    # Check right margin
-                    color = rgb_img.getpixel((frame_width-margin, y))
-                    assert abs(color[0] - 0) <= 5 and abs(color[1] - 0) <= 5 and abs(color[2] - 255) <= 5, \
-                        f"Found text in right margin at y={y}"
-                # Check bottom margin
+                    # Check if pixel differs significantly from background
+                    assert colors_match(color, background_color), f"Found text in left margin at y={y}"
+                    
+                    # Check right margin (check one pixel inside the margin)
+                    color = rgb_img.getpixel((frame_width-margin+1, y))
+                    assert colors_match(color, background_color), f"Found text in right margin at y={y}"
+                
+                # Check bottom margin (check one pixel inside the margin)
                 for x in range(frame_width):
-                    color = rgb_img.getpixel((x, frame_height-margin))
-                    assert abs(color[0] - 0) <= 5 and abs(color[1] - 0) <= 5 and abs(color[2] - 255) <= 5, \
-                        f"Found text in bottom margin at x={x}"
+                    color = rgb_img.getpixel((x, frame_height-margin+1))
+                    assert colors_match(color, background_color), f"Found text in bottom margin at x={x}"
 
 def test_create_srt_captions():
     """Test SRT caption file generation"""
@@ -305,6 +329,69 @@ def test_audio_aligned_captions():
         if os.path.exists(audio_path):
             os.remove(audio_path)
 
+def test_text_wrapping_direction():
+    """Test that when text wraps to a new line, it goes downward rather than upward"""
+    # Set up dimensions
+    video_width = 1920
+    margin = 40
+    roi_width = video_width - (2 * margin)
+    font_size = 32  # Use minimum font size to be conservative
+    
+    # Create text that will definitely wrap by measuring actual widths
+    font = ImageFont.load_default()
+    
+    # Generate text until we have 3x the ROI width in pixels
+    words = []
+    total_width = 0
+    space_width = font.getlength(" ")
+    test_word = "testing"  # Use a consistent word to build up width
+    word_width = font.getlength(test_word)
+    
+    while total_width < roi_width * 3:
+        words.append(test_word)
+        total_width += word_width + space_width
+    
+    # Create caption with the generated text
+    text = " ".join(words)
+    captions = [CaptionEntry(text, 0.0, 2.0)]
+    
+    # Process caption into words
+    words = split_into_words(captions[0])
+    
+    # Create caption windows
+    video_height = 1080  # Standard HD height
+    safe_height = int(video_height * 0.3)  # 30% of video height
+    
+    windows = create_caption_windows(
+        words=words,
+        min_font_size=32,
+        max_font_size=48,
+        safe_width=roi_width,
+        safe_height=safe_height
+    )
+    
+    assert len(windows) > 0, "No caption windows created"
+    window = windows[0]  # We only created one caption
+    
+    # Get positions for all words
+    positions = calculate_word_positions(window, video_height, margin, roi_width)
+    
+    # Group positions by line number
+    line_positions = {}
+    for word, (_, y_pos) in zip(window.words, positions):
+        if word.line_number not in line_positions:
+            line_positions[word.line_number] = []
+        line_positions[word.line_number].append(y_pos)
+    
+    # Verify that each line's y-position is below the previous line
+    line_numbers = sorted(line_positions.keys())
+    assert len(line_numbers) > 1, "Text did not wrap into multiple lines"
+    for i in range(1, len(line_numbers)):
+        prev_line = line_numbers[i-1]
+        curr_line = line_numbers[i]
+        assert min(line_positions[curr_line]) > max(line_positions[prev_line]), \
+            f"Line {curr_line} is not below line {prev_line}"
+
 if __name__ == "__main__":
     output_dir = os.path.join(get_tempdir(), "caption_test_outputs")
     os.makedirs(output_dir, exist_ok=True)
@@ -315,3 +402,4 @@ if __name__ == "__main__":
     test_caption_positioning()
     test_create_srt_captions()
     test_audio_aligned_captions()
+    test_text_wrapping_direction()

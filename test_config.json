@@ -1,0 +1,26 @@
+{
+    "title": "Test Video",
+    "style": "digital art",
+    "story": [
+        "A test story",
+        "With a simple plot"
+    ],
+    "background_music": {
+        "sources": [
+            {
+                "type": "file",
+                "path": "tests/ttv/test_data/background_music.mp3",
+                "enabled": true
+            }
+        ]
+    },
+    "closing_credits": {
+        "sources": [
+            {
+                "type": "file",
+                "path": "tests/ttv/test_data/closing_credits.mp3",
+                "enabled": true
+            }
+        ]
+    }
+} 

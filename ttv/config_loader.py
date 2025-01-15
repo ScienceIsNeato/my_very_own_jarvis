@@ -26,6 +26,10 @@ class TTVConfig:
     background_music: Optional[MusicConfig] = None
     closing_credits: Optional[MusicConfig] = None
 
+    def __iter__(self):
+        """Make the config unpackable into (style, story, title)."""
+        return iter([self.style, self.story, self.title])
+
 def validate_music_source(source: MusicSource) -> None:
     """Validate that a music source has the correct fields based on its type."""
     if source.type == "file" and not source.path:

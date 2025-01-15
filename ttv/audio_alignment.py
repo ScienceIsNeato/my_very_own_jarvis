@@ -23,7 +23,7 @@ class WordTiming:
     start: float
     end: float
 
-def align_words_with_audio(audio_path: str, text: str) -> List[WordTiming]:
+def align_words_with_audio(audio_path: str, text: str, model_size: str = "tiny") -> List[WordTiming]:
     """
     Analyze audio file to generate word-level timings.
     Uses Whisper ASR to perform forced alignment between the audio and text.
@@ -31,6 +31,7 @@ def align_words_with_audio(audio_path: str, text: str) -> List[WordTiming]:
     Args:
         audio_path: Path to the audio file (should be wav format)
         text: The expected text content of the audio
+        model_size: Size of the Whisper model to use ("tiny", "base", "small")
         
     Returns:
         List of WordTiming objects containing word-level alignments
@@ -38,7 +39,7 @@ def align_words_with_audio(audio_path: str, text: str) -> List[WordTiming]:
     try:
         # Load Whisper model with safe settings
         model = whisper.load_model(
-            "tiny",
+            model_size,
             device="cpu",  # Force CPU usage
             download_root=None,  # Use default download location
             in_memory=True  # Keep model in memory
@@ -81,42 +82,50 @@ def align_words_with_audio(audio_path: str, text: str) -> List[WordTiming]:
         Logger.print_error(f"Traceback: {traceback.format_exc()}")
         return []
 
-def create_word_level_captions(audio_path: str, text: str = "") -> List[CaptionEntry]:
+def create_word_level_captions(audio_path: str, text: str = "", is_music: bool = False) -> List[CaptionEntry]:
     """
     Create word-level caption entries from audio file.
     
     Args:
         audio_path: Path to the audio file
         text: The text content of the audio, or empty string to auto-transcribe
+        is_music: Whether the audio contains music (uses a larger model and music-specific prompt)
         
     Returns:
         List of CaptionEntry objects, one per word
     """
     try:
+        # Choose model size based on whether we're processing music
+        model_size = "base" if is_music else "tiny"
+        
         if not text:
             # First transcribe the audio to get lyrics
             model = whisper.load_model(
-                "tiny",
+                model_size,
                 device="cpu",
                 download_root=None,
                 in_memory=True
             )
             
+            # Add an initial prompt if we're transcribing music
+            initial_prompt = "This is a song with lyrics. The lyrics are:" if is_music else None
+            
             result = model.transcribe(
                 audio_path,
                 language="en",
+                initial_prompt=initial_prompt,
                 fp16=False
             )
             
             if result and "text" in result:
                 text = result["text"].strip()
-                Logger.print_info(f"Transcribed lyrics: {text}")
+                Logger.print_info(f"Transcribed {'lyrics' if is_music else 'text'}: {text}")
             else:
                 Logger.print_error("Failed to transcribe audio")
                 return []
 
         # Now get word timings using the transcribed text
-        word_timings = align_words_with_audio(audio_path, text)
+        word_timings = align_words_with_audio(audio_path, text, model_size)
         if not word_timings:
             Logger.print_error(f"No word timings available for: {text}")
             return []

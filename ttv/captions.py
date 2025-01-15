@@ -7,10 +7,20 @@ from logger import Logger
 from .ffmpeg_wrapper import run_ffmpeg_command
 import subprocess
 from PIL import ImageFont, UnidentifiedImageError
+import os
 
 def get_default_font() -> str:
     """Get default font name."""
-    return "Arial"
+    # Try common font paths
+    font_paths = [
+        "/System/Library/Fonts/Supplemental/Arial.ttf",  # macOS
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",  # Linux
+        "C:\\Windows\\Fonts\\arial.ttf"  # Windows
+    ]
+    for path in font_paths:
+        if os.path.exists(path):
+            return path
+    return font_paths[0]  # Default to first path if none found
 
 @dataclass
 class Word:
@@ -20,8 +30,8 @@ class Word:
     end_time: float
     line_number: int = 0
     font_size: int = 0
-    x_position: float = 0
-    width: float = 0
+    x_position: int = 0
+    width: int = 0
     font_name: str = get_default_font()
 
     @classmethod
@@ -95,88 +105,202 @@ def split_into_words(caption: CaptionEntry, words_per_second: float = 2.0, font_
         current_time = end_time
     return result
 
+def calculate_word_position(
+    word: Word,
+    cursor_x: int,
+    cursor_y: int,
+    line_height: int,
+    roi_width: int,
+    roi_height: int,
+    font_size: int,
+    max_font_size: int,
+    previous_word: Optional[Word] = None
+) -> Tuple[int, int, int, int, bool]:
+    """
+    Calculate the position for a word based on current cursor and ROI constraints.
+    Returns (new_cursor_x, new_cursor_y, word_x, word_y, needs_new_window).
+    All pixel values are returned as integers.
+    """
+    # Get space width for current font
+    try:
+        font = ImageFont.truetype(word.font_name, font_size)
+    except OSError:
+        font = ImageFont.load_default()
+    space_width = int(font.getlength(" "))
+    
+    # Calculate word width at current font size
+    word.calculate_width(font_size)
+    word.font_size = font_size
+    word.width = int(word.width)
+    
+    # Add space width if not at start of line
+    total_width = word.width
+    if cursor_x > 0:
+        total_width += space_width
+    
+    # Use 80% of ROI width to force wrapping
+    effective_width = int(roi_width * 0.8)
+    
+    # Check if word fits on current line
+    if cursor_x + total_width <= effective_width:
+        # Word fits - place it at cursor
+        word_x = int(cursor_x + (space_width if cursor_x > 0 else 0))
+        word_y = int(cursor_y)
+        new_cursor_x = int(word_x + word.width)
+        new_cursor_y = int(cursor_y)
+        return new_cursor_x, new_cursor_y, word_x, word_y, False
+        
+    # Word doesn't fit - check if we have room for a new line
+    if cursor_y + (2 * line_height) <= roi_height:
+        # Try increasing previous word's size if it's the last on its line
+        if previous_word and previous_word.font_size == font_size:
+            test_size = font_size
+            prev_x = int(previous_word.x_position)
+            while test_size < max_font_size:
+                test_size += 1
+                previous_word.calculate_width(test_size)
+                previous_word.width = int(previous_word.width)
+                if prev_x + previous_word.width > effective_width:
+                    test_size -= 1
+                    previous_word.calculate_width(test_size)
+                    previous_word.width = int(previous_word.width)
+                    break
+            previous_word.font_size = test_size
+        
+        # Start new line
+        word_x = 0
+        word_y = int(cursor_y + line_height)
+        new_cursor_x = int(word.width)
+        new_cursor_y = word_y
+        return new_cursor_x, new_cursor_y, word_x, word_y, False
+        
+    # No room for new line - need new window
+    return 0, 0, 0, 0, True
+
 def create_caption_windows(
     words: List[Word],
     min_font_size: int,
     max_font_size: int,
-    safe_width: int,  # Available width for text
-    safe_height: int,  # Available height for text
+    safe_width: int,
+    safe_height: int,
     pause_between_windows: float = 0.5
 ) -> List[CaptionWindow]:
     """Group words into caption windows with appropriate font sizes and line breaks."""
     windows = []
-    def calculate_text_width(text: str, font_size: int) -> float:
-        """Estimate text width based on font size."""
-        return len(text) * font_size * 0.6  # Approximate character width
-    def try_fit_words(words_to_fit: List[Word], font_size: int) -> Tuple[List[List[Word]], bool]:
-        """
-        Try to fit words into lines with given font size.
-        Returns (line_groups, fits) where fits is True if text fits within constraints.
-        """
-        lines = []
-        current_line = []
-        current_width = 0
-        space_width = font_size * 0.6
-        for word in words_to_fit:
-            word_width = calculate_text_width(word.text, font_size)
-            # Add space width if not first word in line
-            if current_line:
-                word_width += space_width
-            if current_width + word_width <= safe_width:
-                current_line.append(word)
-                current_width += word_width
-            else:
-                if current_line:  # If we have words in current line
-                    lines.append(current_line)
-                    current_line = [word]
-                    current_width = calculate_text_width(word.text, font_size)
-                else:  # Word is too long for line by itself
-                    return [], False
-        if current_line:
-            lines.append(current_line)
-        # Check if total height fits
-        total_height = len(lines) * (font_size + 5)  # font size + line spacing
-        return lines, total_height <= safe_height
+    current_window_words = []
+    current_font_size = max_font_size
+    cursor_x = 0
+    cursor_y = 0
+    line_number = 0
+    
     i = 0
     while i < len(words):
-        # Start with maximum font size and try to fit as many words as possible
-        current_font_size = max_font_size
-        best_fit = None
+        # Try current font size
         while current_font_size >= min_font_size:
-            # Try to fit words with current font size
-            test_words = words[i:]
-            line_groups, fits = try_fit_words(test_words, current_font_size)
-            if fits and line_groups:
-                # Found a fit, save it
-                best_fit = (line_groups, current_font_size)
+            # Reset window state
+            current_window_words = []
+            cursor_x = 0
+            cursor_y = 0
+            line_number = 0
+            j = i
+            
+            window_complete = False
+            while j < len(words) and not window_complete:
+                word = words[j]
+                previous_word = current_window_words[-1] if current_window_words else None
+                
+                new_cursor_x, new_cursor_y, word_x, word_y, needs_new_window = calculate_word_position(
+                    word=word,
+                    cursor_x=int(cursor_x),
+                    cursor_y=int(cursor_y),
+                    line_height=int(current_font_size * 1.2),
+                    roi_width=int(safe_width),
+                    roi_height=int(safe_height),
+                    font_size=current_font_size,
+                    max_font_size=max_font_size,
+                    previous_word=previous_word
+                )
+                
+                if needs_new_window:
+                    window_complete = True
+                else:
+                    # Update word position and line number
+                    word.x_position = word_x
+                    word.line_number = int(word_y / (current_font_size * 1.2))
+                    current_window_words.append(word)
+                    cursor_x = new_cursor_x
+                    cursor_y = new_cursor_y
+                    if cursor_y > line_number * (current_font_size * 1.2):
+                        line_number += 1
+                    j += 1
+            
+            if current_window_words:
+                # Window fits with current font size
+                window = CaptionWindow(
+                    words=current_window_words,
+                    start_time=current_window_words[0].start_time,
+                    end_time=current_window_words[-1].end_time + pause_between_windows,
+                    font_size=current_font_size
+                )
+                windows.append(window)
+                i = j
                 break
-            # Reduce font size and try again
-            current_font_size = int(current_font_size * 0.9)  # Reduce by 10%
-        if best_fit is None:
-            # Couldn't fit even with minimum font size, force at least one word
-            line_groups = [[words[i]]]
-            current_font_size = min_font_size
-            i += 1
-        else:
-            line_groups, current_font_size = best_fit
-            # Count total words in all lines
-            words_used = sum(len(line) for line in line_groups)
-            i += words_used
-        # Create window with the fitted lines
-        flat_words = []
-        for line_num, line in enumerate(line_groups):
-            for word in line:
-                word.line_number = line_num
-                flat_words.append(word)
-        if flat_words:
+            else:
+                # Try smaller font size
+                current_font_size = int(current_font_size * 0.9)
+        
+        # If we couldn't fit any words with minimum font size, force at least one word
+        if current_font_size < min_font_size:
+            word = words[i]
+            word.font_size = min_font_size
+            word.calculate_width(min_font_size)
+            word.x_position = 0
+            word.line_number = 0
             window = CaptionWindow(
-                words=flat_words,
-                start_time=flat_words[0].start_time,
-                end_time=flat_words[-1].end_time + pause_between_windows,
-                font_size=current_font_size
+                words=[word],
+                start_time=word.start_time,
+                end_time=word.end_time + pause_between_windows,
+                font_size=min_font_size
             )
             windows.append(window)
+            i += 1
+            current_font_size = max_font_size
+    
     return windows
+
+def calculate_word_positions(
+    window: CaptionWindow,
+    video_height: int,
+    margin: int,
+    safe_width: int
+) -> List[Tuple[float, float]]:
+    """
+    Calculate the (x, y) positions for each word in a caption window.
+    Returns a list of (x, y) coordinates in the same order as window.words.
+    """
+    positions = []
+    line_height = int(window.font_size * 1.2)  # Add some spacing between lines
+    total_lines = max(w.line_number for w in window.words) + 1
+    window_height = total_lines * line_height
+    window_top = video_height - margin - window_height  # Start position of window
+    
+    # Calculate positions for each word
+    for word in window.words:
+        # Calculate y position
+        y_position = window_top + (word.line_number * line_height)  # Lines flow downward
+        
+        # Adjust y position for larger font sizes to align baselines
+        if word.font_size > window.font_size:
+            baseline_offset = (word.font_size - window.font_size)
+            y_position -= baseline_offset
+        
+        # X position is already calculated in try_fit_words and stored in word.x_position
+        # Just add the left margin
+        x_position = margin + word.x_position
+        
+        positions.append((x_position, y_position))
+    
+    return positions
 
 def create_dynamic_captions(
     input_video: str,
@@ -193,159 +317,113 @@ def create_dynamic_captions(
     max_window_height_ratio: float = 0.3  # Maximum height of caption window as ratio of video height
 ) -> Optional[str]:
     """
-    Add Instagram-style dynamic captions to a video.
-    Args:
-        input_video: Path to input video file
-        captions: List[CaptionEntry] objects
-        output_path: Path where the output video will be saved
-        min_font_size: Minimum font size for captions
-        max_font_size: Maximum font size for captions
-        font_name: Name of the font to use (should be a bold sans-serif)
-        box_color: Color and opacity of the background box
-        box_border: Width of the box border
-        position: Vertical position of captions ('bottom' or 'center')
-        margin: Margin from screen edges in pixels
-        words_per_second: Speed of word display
-        max_window_height_ratio: Maximum height of caption window as ratio of video height
+    Add Instagram-style dynamic captions to a video using MoviePy.
     """
     try:
-        # Get video dimensions using ffprobe
-        ffprobe_cmd = [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height",
-            "-of", "csv=p=0",
-            input_video
-        ]
-        dimensions = run_ffmpeg_command(ffprobe_cmd)
-        if not dimensions:
-            raise ValueError("Could not determine video dimensions")
-        
-        # Parse dimensions from ffprobe output
-        dimensions_str = dimensions.stdout.decode('utf-8') if hasattr(dimensions, 'stdout') else str(dimensions)
-        width, height = map(int, dimensions_str.strip().split(','))
-        
-        # Calculate safe text area dimensions (accounting for margins)
-        safe_width = width - (2 * margin)
-        safe_height = int(height * max_window_height_ratio)  # Maximum height for caption window
-        
-        # Adjust font sizes based on video dimensions
-        adjusted_max_font_size = min(max_font_size, safe_height // 3)  # Allow for at least 3 lines
-        adjusted_min_font_size = min(min_font_size, adjusted_max_font_size // 2)
-        
+        from moviepy.video.io.VideoFileClip import VideoFileClip
+        from moviepy.video.VideoClip import TextClip
+        from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+
+        # Load the video
+        video = VideoFileClip(input_video)
+        width, height = video.size
+
+        # Calculate safe text area dimensions
+        safe_width = int(width * 0.8)  # Use 80% of video width to ensure wrapping
+        safe_height = int(height * max_window_height_ratio)
+
         # Process all captions into words
         all_words = []
         for caption in captions:
             words = split_into_words(caption, words_per_second, font_name)
             if words:
                 all_words.extend(words)
-        
+
         if not all_words:
             Logger.print_error("No words to display in captions")
             return None
-        
-        # Group words into caption windows with dynamic sizing
+
+        # Create caption windows
         windows = create_caption_windows(
             words=all_words,
-            min_font_size=adjusted_min_font_size,
-            max_font_size=adjusted_max_font_size,
+            min_font_size=min_font_size,
+            max_font_size=max_font_size,
             safe_width=safe_width,
             safe_height=safe_height
         )
-        
-        if not windows:
-            Logger.print_error("Failed to create caption windows")
-            return None
-        
-        # Build the complex drawtext filter
-        drawtext_filters = []
+
+        # Create text clips for each word
+        text_clips = []
         for window in windows:
-            # Calculate base position for the window
-            if position == "bottom":
-                # Calculate total height of text block
-                max_line_number = max(word.line_number for word in window.words)
-                text_block_height = (window.font_size * (max_line_number + 1)) + (max_line_number * 5)  # font size + line spacing
-                # Position from bottom, ensuring last line is above margin
-                base_y = height - margin - text_block_height
-            else:
-                # Center the entire text block vertically
-                max_line_number = max(word.line_number for word in window.words)
-                text_block_height = (window.font_size * (max_line_number + 1)) + (max_line_number * 5)
-                base_y = (height - text_block_height) // 2
+            cursor_x = 0
+            cursor_y = 0
+            previous_word = None
             
-            # Calculate line widths for centering
-            line_words = {}
             for word in window.words:
-                if word.line_number not in line_words:
-                    line_words[word.line_number] = []
-                line_words[word.line_number].append(word)
-            
-            # Calculate line widths and starting positions
-            line_widths = {}
-            line_start_x = {}
-            for line_num, words in line_words.items():
-                # Calculate total width including spaces
-                total_width = 0
-                for i, word in enumerate(words):
-                    word.calculate_width(window.font_size)
-                    total_width += word.width
-                    if i < len(words) - 1:
-                        total_width += window.font_size * 0.3  # Space between words
-                
-                line_widths[line_num] = total_width
-                # Center the line horizontally
-                line_start_x[line_num] = (width - total_width) // 2
-            
-            # Position words within their lines
-            for line_num, words in line_words.items():
-                current_x = line_start_x[line_num]
-                for word in words:
-                    word.x_position = current_x
-                    current_x += word.width + (window.font_size * 0.3)  # Add space after word
-            
-            # Create drawtext filters for each word
-            for word in window.words:
-                # Calculate y position for the word
-                y_position = base_y + (word.line_number * (window.font_size + 5))  # 5px padding between lines
-                
-                # Escape special characters in text
-                escaped_text = word.text.replace("'", "\\'")
-                
-                filter_text = (
-                    f"drawtext=text='{escaped_text}'"
-                    f":font={font_name}"
-                    f":fontsize={window.font_size}"
-                    f":fontcolor=white"
-                    f":x={word.x_position}"
-                    f":y={y_position}"
-                    f":enable=between(t\\,{word.start_time}\\,{window.end_time})"
-                    f":box=1"
-                    f":boxcolor={box_color}"
-                    f":boxborderw={box_border}"
+                # Calculate position using cursor-based approach
+                new_cursor_x, new_cursor_y, x_position, y_position, _ = calculate_word_position(
+                    word=word,
+                    cursor_x=int(cursor_x),
+                    cursor_y=int(cursor_y),
+                    line_height=int(window.font_size * 1.2),
+                    roi_width=int(safe_width),
+                    roi_height=int(safe_height),
+                    font_size=window.font_size,
+                    max_font_size=max_font_size,
+                    previous_word=previous_word
                 )
-                drawtext_filters.append(filter_text)
-        
-        # Combine all filters with comma separation
-        complete_filter = ",".join(drawtext_filters)
-        
-        # Build and run FFmpeg command
-        ffmpeg_cmd = [
-            "ffmpeg", "-y",
-            "-i", input_video,
-            "-vf", complete_filter,
-            "-c:a", "copy",
-            output_path
-        ]
-        
-        result = run_ffmpeg_command(ffmpeg_cmd)
-        if result:
-            Logger.print_info(f"Successfully added dynamic captions to video: {output_path}")
-            return output_path
-        else:
-            Logger.print_error("Failed to add dynamic captions to video")
-            return None
-            
-    except (ValueError, OSError, subprocess.SubprocessError, UnidentifiedImageError) as e:
+                
+                # Create text clip
+                txt_clip = TextClip(
+                    text=word.text,
+                    font=word.font_name,
+                    method='caption',
+                    color='green',
+                    stroke_color='black',
+                    stroke_width=1,
+                    font_size=word.font_size,
+                    size=(word.width, int(word.font_size * 1.5)), # allow enough room for vertical alignment (a kind of hack)
+                    margin=(0,0,0,int(word.font_size * 1.5),), # prevents bottom of text from being cut off
+                    text_align='left',
+                    duration=window.end_time - word.start_time  # Word persists until end of window
+                )
+                
+                # Set position and start time - ensure integer positions and adjust y for baseline
+                baseline_offset = int((word.font_size - window.font_size) * 0.2)  # Adjust baseline for larger fonts
+                txt_clip = txt_clip.with_position((int(margin + x_position), int(y_position - baseline_offset)))
+                txt_clip = txt_clip.with_start(word.start_time)
+                
+                text_clips.append(txt_clip)
+                
+                # Update cursor and previous word for next iteration
+                cursor_x = new_cursor_x
+                cursor_y = new_cursor_y
+                previous_word = word
+
+        # Combine video with text overlays
+        final_video = CompositeVideoClip([video] + text_clips)
+
+        # Write output
+        final_video.write_videofile(
+            output_path,
+            codec='libx264',
+            audio_codec='aac',
+            temp_audiofile='temp-audio.m4a',
+            remove_temp=True,
+            # Performance optimizations:
+            preset='ultrafast',  # Faster encoding, slightly larger file size
+            threads=4  # Use multiple CPU cores
+        )
+
+        # Clean up
+        video.close()
+        final_video.close()
+        for clip in text_clips:
+            clip.close()
+
+        return output_path
+
+    except Exception as e:
         Logger.print_error(f"Error adding dynamic captions: {str(e)}")
         import traceback
         Logger.print_error(f"Traceback: {traceback.format_exc()}")
