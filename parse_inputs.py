@@ -2,11 +2,10 @@ import argparse
 import json
 import os
 import sys
-from tts import TextToSpeech, GoogleTTS, NaturalReadersTTS, CoquiTTS
+from tts import TextToSpeech, GoogleTTS
 from dictation.dictation import Dictation
 from dictation.static_google_dictation import StaticGoogleDictation
 from dictation.live_google_dictation import LiveGoogleDictation
-from dictation.live_assemblyai_dictation import LiveAssemblyAIDictation
 from logger import Logger
 
 def check_environment_variables():
@@ -57,22 +56,11 @@ def load_coqui_config():
         sys.exit(1)
 
 def parse_tts_interface(tts_interface: str) -> TextToSpeech:
-    if tts_interface.lower() == "natural_reader":
-        return NaturalReadersTTS()
-    elif tts_interface.lower() == "google":
+    if tts_interface.lower() == "google":
         return GoogleTTS()
-    elif tts_interface.lower() == "coqui":
-        try:
-            raise ValueError("CoquiTTS has been deprecated :( Please use another TTS interface.")
-            api_url, bearer_token, voice_id = load_coqui_config()
-            Logger.print_debug("api_url: ", api_url)
-            return CoquiTTS(api_url, bearer_token, voice_id)
-        except Exception as e:
-            Logger.print_error(f"Error initializing CoquiTTS: {str(e)}", file=sys.stderr)
-            raise ValueError("Unable to load coqui config.")
     else:
         raise ValueError(
-            "Invalid TTS interface provided. Available options: 'google', 'natural_reader', 'coqui'"
+            "Invalid TTS interface provided. Available options: 'google'"
         )
 
 def parse_dictation_type(dictation_type: str) -> Dictation:
@@ -80,17 +68,15 @@ def parse_dictation_type(dictation_type: str) -> Dictation:
         return StaticGoogleDictation()
     elif dictation_type.lower() == "live_google":
         return LiveGoogleDictation()
-    elif dictation_type.lower() == "live_assemblyai":
-        return LiveAssemblyAIDictation()
     else:
         raise ValueError(
-            "Invalid dictation type provided. Available options: 'static_google', 'live_assemblyai'"
+            "Invalid dictation type provided. Available options: 'static_google'"
         )
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser(description="GANGLIA - AI Assistant")
     parser.add_argument("--device-index", type=int, default=0, help="Index of the input device to use.")
-    parser.add_argument("--tts-interface", type=str, default="google", help="Text-to-speech interface to use. Available options: 'google', 'natural_reader'")
+    parser.add_argument("--tts-interface", type=str, default="google", help="Text-to-speech interface to use. Available options: 'google'")
     parser.add_argument("--suppress-session-logging", action="store_true", help="Disable session logging (default: False)")
     parser.add_argument("--enable-turn-indicators", action="store_true", help="Enable turn indicators (default: False)")
     parser.add_argument("--dictation-type", type=str, default="static_google", choices=["static_google", "live_google", "live_assemblyai"], help="Dictation type to use. Available options: 'static_google', 'live_google', 'live_assemblyai'")

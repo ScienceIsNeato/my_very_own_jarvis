@@ -1,12 +1,15 @@
 import concurrent.futures
 import time
 import os
+import json
 from logger import Logger
 from music_lib import MusicGenerator
-from .image_generation import generate_image, generate_image_for_sentence, generate_blank_image
+from .image_generation import generate_image, generate_blank_image, save_image_without_caption
 from .story_generation import generate_movie_poster, generate_filtered_story
 from .audio_generation import generate_audio
 from .video_generation import create_video_segment
+from .captions import CaptionEntry, create_dynamic_captions
+from .audio_alignment import create_word_level_captions
 from tts import GoogleTTS
 from utils import get_tempdir
 
@@ -17,30 +20,83 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
     try:
         if skip_generation:
             Logger.print_info(f"{thread_id} Skipping image generation as per the flag.")
-            return None
+            return None, sentence, i
 
         Logger.print_info(f"{thread_id} Converting text to speech...")
         audio_path = generate_audio(tts, sentence)
         if not audio_path:
-            return None, sentence, i  # Ensure it returns 3 values
+            Logger.print_error(f"{thread_id} Failed to generate audio for sentence: {sentence}")
+            return None, sentence, i
 
         Logger.print_info(f"{thread_id} Generating image for sentence.")
         filename, success = generate_image(sentence, context, style, i + 1, total_images, query_dispatcher)
         if not success:
+            Logger.print_warning(f"{thread_id} Image generation failed, using blank image.")
             filename = generate_blank_image(sentence, i)
+        else:
+            # Save image without caption since we'll add dynamic captions later
+            temp_image = filename.replace(".png", "_nocaption.png")
+            if not save_image_without_caption(filename, temp_image):
+                Logger.print_error(f"{thread_id} Failed to save image without caption")
+                return None, sentence, i
+            filename = temp_image
 
-        Logger.print_info(f"{thread_id} Adding audio for image {i + 1} of {total_images} with input text: '{sentence}'")
-        Logger.print_info(f"{thread_id} Creating video segment.")
+        Logger.print_info(f"{thread_id} Creating initial video segment.")
         temp_dir = get_tempdir()
-        video_segment_path = os.path.join(temp_dir, "GANGLIA", "ttv", f"segment_{i}.mp4")
-        create_video_segment(filename, audio_path, video_segment_path)
+        initial_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}_initial.mp4")
+        if not create_video_segment(filename, audio_path, initial_segment_path):
+            Logger.print_error(f"{thread_id} Failed to create video segment")
+            return None, sentence, i
 
-        return video_segment_path, sentence, i
+        # Add dynamic captions using word-level alignment
+        Logger.print_info(f"{thread_id} Adding dynamic captions to video segment.")
+        try:
+            captions = create_word_level_captions(audio_path, sentence)
+            if not captions:
+                Logger.print_error(f"{thread_id} Failed to create word-level captions")
+                return None, sentence, i
+        except Exception as e:
+            Logger.print_error(f"{thread_id} Error creating word-level captions: {e}")
+            return None, sentence, i
+
+        final_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}.mp4")
+        captioned_path = create_dynamic_captions(
+            input_video=initial_segment_path,
+            captions=captions,
+            output_path=final_segment_path,
+            min_font_size=32,
+            max_font_size=48,
+            box_color="black@0",  # Fully transparent background
+            position="bottom",
+            margin=40,
+            max_window_height_ratio=0.3
+        )
+
+        if captioned_path:
+            return captioned_path, sentence, i
+        else:
+            Logger.print_error(f"{thread_id} Failed to add captions, using uncaptioned video")
+            return initial_segment_path, sentence, i
+
     except Exception as e:
-        Logger.print_error(f"{thread_id} Error processing sentence '{sentence}': {e}")
-        return None, sentence, i 
+        Logger.print_error(f"{thread_id} Error processing sentence '{sentence}': {str(e)}")
+        import traceback
+        Logger.print_error(f"{thread_id} Traceback: {traceback.format_exc()}")
+        return None, sentence, i
 
-def process_story(tts, style, story, skip_generation, query_dispatcher, story_title):
+def process_story(tts, style, story, skip_generation, query_dispatcher, story_title, config=None):
+    """
+    Process a story by generating images, audio, and video segments.
+    
+    Args:
+        tts: Text-to-speech interface
+        style: Style for image generation
+        story: List of story sentences
+        skip_generation: Whether to skip generation steps
+        query_dispatcher: Query dispatcher for API calls
+        story_title: Title of the story
+        config: Optional dictionary containing configuration options including music settings
+    """
     total_images = len(story)
     Logger.print_info(f"Total images to generate: {total_images}")
 
@@ -49,42 +105,67 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
     music_gen = MusicGenerator()
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        full_story_text = " ".join(story)
+        # Create a properly formatted story JSON for the movie poster
+        try:
+            filtered_story_json = json.dumps({
+                "style": style,
+                "title": story_title,
+                "story": story  # Pass the list of sentences, not the joined text
+            })
+            Logger.print_info(f"Created story JSON for movie poster: {filtered_story_json}")
+        except Exception as e:
+            Logger.print_error(f"Error creating story JSON: {str(e)}")
+            filtered_story_json = None
 
         Logger.print_info("Submitting background music generation task...")
-        background_music_future = executor.submit(
-            music_gen.generate_music,
-            prompt="ambient 16-bit video game music", # TODO: need to move this to the configuration file
-            model="chirp-v3-0",
-            duration=180,
-            with_lyrics=False,
-            story_text=None,
-            retries=5,
-            wait_time=60,
-            query_dispatcher=query_dispatcher
-        )
+        background_music_enabled = True
+        background_music_prompt = "ambient background music"
+        if config and "background_music" in config:
+            background_music_enabled = config["background_music"].get("enabled", True)
+            if "prompt" in config["background_music"]:
+                background_music_prompt = config["background_music"]["prompt"]
 
-        Logger.print_info("Submitting song with lyrics generation task...")
-        song_with_lyrics_future = executor.submit(
-            music_gen.generate_music,
-            prompt="epic rock in the style of The Darkness", # TODO: need to move this to the configuration file
-            model="chirp-v3-0",
-            duration=180,
-            with_lyrics=True,
-            story_text=full_story_text,
-            retries=5,
-            wait_time=60,
-            query_dispatcher=query_dispatcher
-        )
+        # Get closing credits music configuration
+        closing_credits_enabled = True
+        closing_credits_prompt = "upbeat closing credits music"
+        if config and "closing_credits_music" in config:
+            closing_credits_enabled = config["closing_credits_music"].get("enabled", True)
+            if "prompt" in config["closing_credits_music"]:
+                closing_credits_prompt = config["closing_credits_music"]["prompt"]
+
+        # Submit background music generation if enabled
+        background_music_future = None
+        if not skip_generation and background_music_enabled:
+            background_music_future = executor.submit(
+                music_gen.generate_music,
+                prompt=background_music_prompt,
+                model="chirp-v3-0",
+                duration=20,
+                with_lyrics=False
+            )
+
+        # Submit song with lyrics generation if enabled
+        song_with_lyrics_future = None
+        if not skip_generation and closing_credits_enabled:
+            song_with_lyrics_future = executor.submit(
+                music_gen.generate_music,
+                prompt=closing_credits_prompt,
+                model="chirp-v3-0",
+                duration=20,
+                with_lyrics=True,
+                story_text="\n".join(story),  # Join story sentences with newlines
+                query_dispatcher=query_dispatcher
+            )
 
         Logger.print_info("Submitting sentence processing tasks...")
         sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher) for i, sentence in enumerate(story)]
         
-        # Obtain the filtered story JSON before submitting the movie poster generation task
-        filtered_story_json = generate_filtered_story(full_story_text, style, story_title, query_dispatcher)
-
-        Logger.print_info("Submitting movie poster generation task...")
-        movie_poster_future = executor.submit(generate_movie_poster, filtered_story_json, style, story_title, query_dispatcher)
+        if filtered_story_json:
+            Logger.print_info("Submitting movie poster generation task...")
+            movie_poster_future = executor.submit(generate_movie_poster, filtered_story_json, style, story_title, query_dispatcher)
+        else:
+            Logger.print_warning("Skipping movie poster generation due to JSON creation error")
+            movie_poster_future = None
         
         for future in concurrent.futures.as_completed(sentence_futures):
             result = future.result()
@@ -94,21 +175,32 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 context += f" {sentence}"
         
         # Get the background music path
-        background_music_path = background_music_future.result()
-        if not background_music_path:
-            Logger.print_error("Failed to generate background music.")
+        background_music_path = None
+        if background_music_future:
+            background_music_path = background_music_future.result()
+            if not background_music_path:
+                Logger.print_error("Failed to generate background music.")
         
         # Get the song with lyrics path
-        song_with_lyrics_path = song_with_lyrics_future.result()
-        if not song_with_lyrics_path:
-            Logger.print_error("Failed to generate song with lyrics.")
+        song_with_lyrics_path = None
+        if song_with_lyrics_future:
+            song_with_lyrics_path = song_with_lyrics_future.result()
+            if not song_with_lyrics_path:
+                Logger.print_error("Failed to generate song with lyrics.")
         
-        try:
-            movie_poster_path = movie_poster_future.result()
-            Logger.print_info(f"Movie poster generated: {movie_poster_path}")
-        except Exception as e:
-            Logger.print_error(f"Error generating movie poster: {e}")
-            movie_poster_path = None
+        # Get the movie poster path
+        movie_poster_path = None
+        if movie_poster_future:
+            try:
+                movie_poster_path = movie_poster_future.result()
+                if movie_poster_path:
+                    Logger.print_info(f"Movie poster generated: {movie_poster_path}")
+                else:
+                    Logger.print_error("Movie poster generation returned None")
+            except Exception as e:
+                Logger.print_error(f"Error generating movie poster: {str(e)}")
+                import traceback
+                Logger.print_error(f"Traceback: {traceback.format_exc()}")
 
     return video_segments, background_music_path, song_with_lyrics_path, movie_poster_path
 

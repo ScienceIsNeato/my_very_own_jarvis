@@ -1,0 +1,37 @@
+{
+    "style": "digital art",
+    "title": "The Curious Cat",
+    "story": [
+        "A small black cat sat by the window.",
+        "She watched the birds flutter past with curious eyes.",
+        "Suddenly, a bright red butterfly caught her attention."
+    ],
+    "background_music": {
+        "sources": [
+            {
+                "type": "file",
+                "path": "tests/test_data/background_music.mp3",
+                "enabled": true
+            },
+            {
+                "type": "prompt",
+                "prompt": "background music for a Ken Burns documentary",
+                "enabled": false
+            }
+        ]
+    },
+    "closing_credits": {
+        "sources": [
+            {
+                "type": "file",
+                "path": "tests/test_data/closing_credits.mp3",
+                "enabled": true
+            },
+            {
+                "type": "prompt",
+                "prompt": "epic rock song in the style of The Darkness",
+                "enabled": false
+            }
+        ]
+    }
+}

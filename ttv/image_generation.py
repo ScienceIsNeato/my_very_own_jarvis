@@ -58,26 +58,8 @@ def save_image_with_caption(image_url, filename, caption, current_step, total_st
             file.write(response.content)
     download_end_time = datetime.now()
     Logger.print_info(f"Image downloaded in {(download_end_time - download_start_time).total_seconds()} seconds.")
-    image = Image.open(filename)
-    draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype("Arial.ttf", 20)
-    margin = 10
-    max_width = image.width - 2 * margin
-    wrapped_text = textwrap.fill(caption, width=40)
-    wrapped_text += f" ({current_step}/{total_steps})"
-    text_size = draw.textsize(wrapped_text, font=font)
-    text_height = text_size[1] * wrapped_text.count('\n') + margin * (wrapped_text.count('\n') + 1)
-    new_image_height = image.height + text_height + margin * 2
-    new_image = Image.new("RGB", (image.width, new_image_height), "white")
-    new_image.paste(image, (0, 0))
-    draw = ImageDraw.Draw(new_image)
-    draw.multiline_text((margin, image.height + margin), wrapped_text, fill="black", font=font, spacing=5)
-    saving_start_time = datetime.now()
-    new_image.save(filename)
-    saving_end_time = datetime.now()
-    Logger.print_info(f"Image saved in {(saving_end_time - saving_start_time).total_seconds()} seconds.")
     end_time = datetime.now()
-    Logger.print_info(f"Total time to save image with caption: {(end_time - start_time).total_seconds()} seconds. Saved to {filename}")
+    Logger.print_info(f"Total time to save image: {(end_time - start_time).total_seconds()} seconds. Saved to {filename}")
 
 def generate_blank_image(sentence, image_index):
     blank_image = Image.new('RGB', (1024, 1024), 'white')
@@ -89,12 +71,30 @@ def generate_blank_image(sentence, image_index):
     blank_image.save(blank_filename)
     return blank_filename
 
-def save_image_without_caption(image_url, filename):
-    response = requests.get(image_url)
-    if response.status_code == 200:
-        with open(filename, 'wb') as file:
-            file.write(response.content)
-    Logger.print_info(f"Movie poster saved to {filename}")
+def save_image_without_caption(image_source, filename):
+    """Save image without caption, handling both URLs and local files.
+    
+    Args:
+        image_source: Either a URL to download from or a local file path
+        filename: Destination path for the image
+    """
+    try:
+        if image_source.startswith(('http://', 'https://')):
+            # Handle URL case
+            response = requests.get(image_source)
+            if response.status_code == 200:
+                with open(filename, 'wb') as file:
+                    file.write(response.content)
+        else:
+            # Handle local file case
+            img = Image.open(image_source)
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            img.save(filename)
+        Logger.print_info(f"Image saved to {filename}")
+    except Exception as e:
+        Logger.print_error(f"Error saving image: {e}")
+        return None
+    return filename
 
 def generate_image_for_sentence(sentence, context, style, image_index, total_images, query_dispatcher):
     filename, success = generate_image(sentence, context, style, image_index, total_images, query_dispatcher=query_dispatcher)

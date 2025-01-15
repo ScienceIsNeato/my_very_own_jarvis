@@ -55,7 +55,7 @@ python GANGLIA.py [-d DEVICE_INDEX] [-t TTS_INTERFACE] [--static-response]
 Here's a description of each command-line argument:
 
 - `-d DEVICE_INDEX` or `--device_index DEVICE_INDEX`: Sets the index of the input device to use. The default value is 0.
-- `-t TTS_INTERFACE` or `--tts_interface TTS_INTERFACE`: Sets the text-to-speech interface to use. Available options are 'google' or 'natural_reader'. The default value is 'google'.
+- `-t TTS_INTERFACE` or `--tts_interface TTS_INTERFACE`: Sets the text-to-speech interface to use. Available options are 'google'. The default value is 'google'.
 - `--help` or `-h`: Displays usage instructions and a list of available options.
 
 Once GANGLIA is running, it will listen for voice prompts. When you're ready to ask a question or make a request, simply speak into your microphone. Once you've finished speaking, GANGLIA will generate a response using OpenAI's GPT-3 engine and speak it aloud using the pyttsx3 library.
@@ -140,3 +140,39 @@ GANGLIA was created by William R Martin.
 ## Contact
 
 If you have any questions or feedback about GANGLIA, please contact Will Martin at unique dot will dot martin at gmail.
+
+## Text-to-Video Configuration
+
+When using the text-to-video feature, you can customize various aspects of the video generation through a configuration file. Here's an example configuration:
+
+```json
+{
+    "style": "digital art",
+    "story": [
+        "First sentence of the story",
+        "Second sentence of the story"
+    ],
+    "background_music": {
+        "enabled": true,
+        "prompt": "ambient piano music with a gentle mood"
+    },
+    "closing_credits_music": {
+        "enabled": true,
+        "prompt": "upbeat celebratory music with lyrics"
+    }
+}
+```
+
+### Music Configuration Options
+
+Both `background_music` and `closing_credits_music` are optional configurations that control the music generation for your video:
+
+- `background_music`: Controls the background music that plays during the main video
+  - `enabled`: Boolean (default: true) - Set to false to disable background music
+  - `prompt`: String - The prompt used to generate the background music
+
+- `closing_credits_music`: Controls the music with lyrics that plays during the closing credits
+  - `enabled`: Boolean (default: true) - Set to false to disable closing credits music
+  - `prompt`: String - The prompt used to generate the closing credits music
+
+If either configuration is omitted, the feature will be enabled with default prompts.

@@ -50,8 +50,8 @@ def main():
 
     # Play the audio using ffplay
     try:
-        subprocess.run(["ffplay", "-nodisp", "-autoexit", audio_path])
-    except Exception as e:
+        subprocess.run(["ffplay", "-nodisp", "-autoexit", audio_path], check=True)
+    except (OSError, subprocess.SubprocessError) as e:
         Logger.print_error(f"Failed to play audio: {e}")
 
 if __name__ == "__main__":

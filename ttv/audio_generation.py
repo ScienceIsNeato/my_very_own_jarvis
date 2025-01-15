@@ -11,7 +11,7 @@ def generate_audio(tts, sentence):
         else:
             Logger.print_error(f"Audio generation failed for: '{sentence}'")
             return None
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
         Logger.print_error(f"Audio generation failed for: '{sentence}'. Error: {e}")
         return None
 
@@ -20,6 +20,5 @@ def get_audio_duration(audio_file):
         ["ffprobe", "-v", "error", "-show_entries",
          "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_file],
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT
-    )
+        check=True)
     return float(result.stdout)
