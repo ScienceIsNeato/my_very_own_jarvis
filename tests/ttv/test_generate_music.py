@@ -1,16 +1,6 @@
 import os
-import sys
 import subprocess
-import re
 from datetime import datetime
-
-# Add GANGLIA_HOME to sys.path to resolve imports
-ganlgia_home = os.getenv('GANGLIA_HOME')
-if not ganlgia_home:
-    raise EnvironmentError("Environment variable 'GANGLIA_HOME' is not set.")
-
-sys.path.insert(0, ganlgia_home)
-
 from logger import Logger
 from music_lib import MusicGenerator
 from dotenv import load_dotenv

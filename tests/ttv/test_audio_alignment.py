@@ -1,10 +1,7 @@
 """Tests for audio alignment functionality."""
 
-import sys
-sys.path.append("..")  # Add parent directory to Python path
-# pylint: disable=import-error,wrong-import-position
-from tts import GoogleTTS
 import os
+from tts import GoogleTTS
 from ttv.audio_alignment import align_words_with_audio, create_word_level_captions
 
 def test_word_alignment():

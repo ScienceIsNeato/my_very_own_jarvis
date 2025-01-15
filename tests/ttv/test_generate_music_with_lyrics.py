@@ -1,16 +1,6 @@
 import os
-import sys
 import subprocess
-import re
 from datetime import datetime
-
-# Ensure all environment variables are set
-ganlgia_home = os.getenv('GANGLIA_HOME')
-if not ganlgia_home:
-    raise EnvironmentError("Environment variable 'GANGLIA_HOME' is not set.")
-
-sys.path.insert(0, ganlgia_home)
-
 from logger import Logger
 from query_dispatch import ChatGPTQueryDispatcher
 from music_lib import MusicGenerator
