@@ -53,11 +53,11 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         try:
             captions = create_word_level_captions(audio_path, sentence)
             if not captions:
-                Logger.print_error(f"{thread_id} Failed to create word-level captions")
-                return None, sentence, i
+                Logger.print_info(f"{thread_id} Falling back to simple caption for segment")
+                captions = [CaptionEntry(sentence, 0.0, float('inf'))]  # Use entire duration
         except Exception as e:
-            Logger.print_error(f"{thread_id} Error creating word-level captions: {e}")
-            return None, sentence, i
+            Logger.print_info(f"{thread_id} Falling back to simple caption due to error: {e}")
+            captions = [CaptionEntry(sentence, 0.0, float('inf'))]  # Use entire duration
 
         final_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}.mp4")
         captioned_path = create_dynamic_captions(

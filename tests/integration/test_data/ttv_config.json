@@ -1,0 +1,29 @@
+{
+  "style": "digital art",
+  "story": [
+    "A mysterious figure emerges from the shadows",
+    "They walk through a glowing portal of swirling energy",
+    "Strange symbols float in the air around them",
+    "The portal closes with a thunderous boom",
+    "Everything returns to darkness"
+  ],
+  "title": "Integration Test Video",
+  "background_music": {
+    "sources": [
+      {
+        "type": "file",
+        "path": "/Users/pacey/Documents/SourceCode/GANGLIA/tests/integration/test_data/background_music.mp3",
+        "enabled": true
+      }
+    ]
+  },
+  "closing_credits": {
+    "sources": [
+      {
+        "type": "file",
+        "path": "/Users/pacey/Documents/SourceCode/GANGLIA/tests/integration/test_data/short_closing_credits.mp3",
+        "enabled": true
+      }
+    ]
+  }
+}
