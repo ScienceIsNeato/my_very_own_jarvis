@@ -57,8 +57,10 @@ def test_static_captions():
         CaptionEntry("Testing Captions", 0.5, 1.0)
     ]
     
-    # Create output path
-    output_path = os.path.join(get_tempdir(), "output_static_test.mp4")
+    # Use standard temp directory
+    temp_dir = os.path.join("/tmp", "GANGLIA", "ttv")
+    os.makedirs(temp_dir, exist_ok=True)
+    output_path = os.path.join(temp_dir, "static_captions_test.mp4")
     
     # Test the function
     result = create_static_captions(
@@ -67,13 +69,18 @@ def test_static_captions():
         output_path=output_path
     )
     
-    # Clean up
+    # Clean up input only
     os.unlink(input_video_path)
     
     # Verify results
     assert result is not None, "Failed to create video with static captions"
     assert os.path.exists(output_path), f"Output file not created: {output_path}"
     assert os.path.getsize(output_path) > 0, "Output file is empty"
+    
+    # Play the video
+    play_cmd = ["ffplay", "-autoexit", output_path]
+    run_ffmpeg_command(play_cmd)
+    Logger.print_info(f"Static captions test video saved to: {output_path}")
 
 def test_caption_text_completeness():
     """Test that all words from the original caption appear in the dynamic captions"""
@@ -106,8 +113,12 @@ def test_font_size_scaling():
     video_size = (1280, 720)  # 720p test video
     input_video_path = create_test_video(size=video_size)
     assert input_video_path is not None, "Failed to create test video"
-    # Create output path
-    output_path = os.path.join(get_tempdir(), "output_font_test.mp4")
+    
+    # Use standard temp directory
+    temp_dir = os.path.join("/tmp", "GANGLIA", "ttv")
+    os.makedirs(temp_dir, exist_ok=True)
+    output_path = os.path.join(temp_dir, "font_size_scaling_test.mp4")
+    
     # Test with various caption lengths
     test_cases = [
         "Short caption",  # Should use larger font
@@ -115,6 +126,7 @@ def test_font_size_scaling():
         "🎉 Testing with emojis and special characters !@#$%"
     ]
     captions = [CaptionEntry(text, idx * 2.0, (idx + 1) * 2.0) for idx, text in enumerate(test_cases)]
+    
     # Add dynamic captions
     result_path = create_dynamic_captions(
         input_video=input_video_path,
@@ -123,11 +135,18 @@ def test_font_size_scaling():
         min_font_size=24,  # Smaller min to test scaling
         size_ratio=3.0,  # Scale up to 72px
     )
-    # Clean up
+    
+    # Clean up input only
     os.unlink(input_video_path)
+    
     assert result_path is not None, "Failed to create video with font size testing"
     assert os.path.exists(output_path), f"Output file not created: {output_path}"
     assert os.path.getsize(output_path) > 0, "Output file is empty"
+    
+    # Play the video
+    play_cmd = ["ffplay", "-autoexit", output_path]
+    run_ffmpeg_command(play_cmd)
+    Logger.print_info(f"Font size scaling test video saved to: {output_path}")
 
 def test_caption_positioning():
     """Test that captions stay within the safe viewing area"""
@@ -135,8 +154,12 @@ def test_caption_positioning():
     video_size = (1920, 1080)
     input_video_path = create_test_video(size=video_size)
     assert input_video_path is not None, "Failed to create test video"
-    # Create output path
-    output_path = os.path.join(get_tempdir(), "output_position_test.mp4")
+    
+    # Use standard temp directory
+    temp_dir = os.path.join("/tmp", "GANGLIA", "ttv")
+    os.makedirs(temp_dir, exist_ok=True)
+    output_path = os.path.join(temp_dir, "caption_positioning_test.mp4")
+    
     # Test with long captions that might overflow
     test_cases = [
         # Long single line to test horizontal overflow
@@ -152,6 +175,7 @@ def test_caption_positioning():
         CaptionEntry(text, idx * 2.0, (idx + 1) * 2.0)
         for idx, text in enumerate(test_cases)
     ]
+    
     # Add dynamic captions with specific margin
     margin = 40
     result_path = create_dynamic_captions(
@@ -161,11 +185,19 @@ def test_caption_positioning():
         min_font_size=32,  # Ensure readable text
         size_ratio=1.5,  # Scale up to 48px
     )
-    # Clean up
+    
+    # Clean up input only
     os.unlink(input_video_path)
+    
     assert result_path is not None, "Failed to create video with position testing"
     assert os.path.exists(output_path), f"Output file not created: {output_path}"
     assert os.path.getsize(output_path) > 0, "Output file is empty"
+    
+    # Play the video
+    play_cmd = ["ffplay", "-autoexit", output_path]
+    run_ffmpeg_command(play_cmd)
+    Logger.print_info(f"Caption positioning test video saved to: {output_path}")
+    
     # Verify video dimensions and format using ffprobe
     ffprobe_cmd = [
         "ffprobe", "-v", "error",
@@ -180,53 +212,55 @@ def test_caption_positioning():
     width, height = map(int, dimensions.stdout.decode('utf-8').strip().split(','))
     assert width == video_size[0], "Output video width does not match input"
     assert height == video_size[1], "Output video height does not match input"
-    # Create a temporary directory for frame extraction
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Extract frames where captions should be visible
-        frames_cmd = [
-            "ffmpeg", "-i", output_path,
-            "-vf", "fps=1",  # Extract one frame per second
-            "-frame_pts", "1",  # Include presentation timestamp
-            os.path.join(temp_dir, "frame_%d.png")
-        ]
-        result = run_ffmpeg_command(frames_cmd)
-        assert result is not None, "Failed to extract frames"
-        # Check each frame to ensure text is within bounds
-        for frame_file in os.listdir(temp_dir):
-            if not frame_file.endswith('.png'):
-                continue
-            frame_path = os.path.join(temp_dir, frame_file)
-            with Image.open(frame_path) as img:
-                # Get frame dimensions
-                frame_width, frame_height = img.size
-                # Convert to RGB for analysis
-                rgb_img = img.convert('RGB')
+    
+    # Extract frames for analysis
+    frames_dir = os.path.join(temp_dir, "caption_positioning_frames")
+    os.makedirs(frames_dir, exist_ok=True)
+    frames_cmd = [
+        "ffmpeg", "-i", output_path,
+        "-vf", "fps=1",  # Extract one frame per second
+        "-frame_pts", "1",  # Include presentation timestamp
+        os.path.join(frames_dir, "frame_%d.png")
+    ]
+    result = run_ffmpeg_command(frames_cmd)
+    assert result is not None, "Failed to extract frames"
+    Logger.print_info(f"Caption positioning test frames saved to: {frames_dir}")
+    
+    # Check each frame to ensure text is within bounds
+    for frame_file in os.listdir(frames_dir):
+        if not frame_file.endswith('.png'):
+            continue
+        frame_path = os.path.join(frames_dir, frame_file)
+        with Image.open(frame_path) as img:
+            # Get frame dimensions
+            frame_width, frame_height = img.size
+            # Convert to RGB for analysis
+            rgb_img = img.convert('RGB')
+            
+            # Only check the bottom portion where captions should be
+            caption_area_start = int(frame_height * 0.7)  # Check bottom 30% where captions should be
+            
+            # Get background color from top-left corner
+            background_color = rgb_img.getpixel((0, 0))
+            
+            def colors_match(c1, c2, tolerance=15):  # Increased tolerance for compression artifacts
+                """Check if colors match within a tolerance level"""
+                return all(abs(a - b) <= tolerance for a, b in zip(c1, c2))
+            
+            # Scan the margins to ensure no text pixels
+            for y in range(caption_area_start, frame_height):
+                # Check left margin
+                color = rgb_img.getpixel((margin-1, y))
+                assert colors_match(color, background_color), f"Found text in left margin at y={y}"
                 
-                # Only check the bottom portion where captions should be
-                caption_area_start = int(frame_height * 0.7)  # Check bottom 30% where captions should be
-                
-                # Get background color from top-left corner
-                background_color = rgb_img.getpixel((0, 0))
-                
-                def colors_match(c1, c2, tolerance=15):  # Increased tolerance for compression artifacts
-                    """Check if colors match within a tolerance level"""
-                    return all(abs(a - b) <= tolerance for a, b in zip(c1, c2))
-                
-                # Scan the margins to ensure no text pixels
-                for y in range(caption_area_start, frame_height):
-                    # Check left margin (check one pixel inside the margin)
-                    color = rgb_img.getpixel((margin-1, y))
-                    # Check if pixel differs significantly from background
-                    assert colors_match(color, background_color), f"Found text in left margin at y={y}"
-                    
-                    # Check right margin (check one pixel inside the margin)
-                    color = rgb_img.getpixel((frame_width-margin+1, y))
-                    assert colors_match(color, background_color), f"Found text in right margin at y={y}"
-                
-                # Check bottom margin (check one pixel inside the margin)
-                for x in range(frame_width):
-                    color = rgb_img.getpixel((x, frame_height-margin+1))
-                    assert colors_match(color, background_color), f"Found text in bottom margin at x={x}"
+                # Check right margin
+                color = rgb_img.getpixel((frame_width-margin+1, y))
+                assert colors_match(color, background_color), f"Found text in right margin at y={y}"
+            
+            # Check bottom margin
+            for x in range(frame_width):
+                color = rgb_img.getpixel((x, frame_height-margin+1))
+                assert colors_match(color, background_color), f"Found text in bottom margin at x={x}"
 
 def test_create_srt_captions():
     """Test SRT caption file generation"""
@@ -234,16 +268,24 @@ def test_create_srt_captions():
         CaptionEntry("First caption", 0.0, 2.5),
         CaptionEntry("Second caption", 2.5, 5.0)
     ]
-    output_path = os.path.join(get_tempdir(), "test_captions.srt")
+    
+    # Use standard temp directory
+    temp_dir = os.path.join("/tmp", "GANGLIA", "ttv")
+    os.makedirs(temp_dir, exist_ok=True)
+    output_path = os.path.join(temp_dir, "test_captions.srt")
+    
     result_path = create_srt_captions(captions, output_path)
     assert result_path is not None, "Failed to create SRT file"
     assert os.path.exists(output_path), f"SRT file not created: {output_path}"
+    
     with open(output_path, 'r') as f:
         content = f.read()
         assert "First caption" in content, "First caption not found in SRT"
         assert "Second caption" in content, "Second caption not found in SRT"
         assert "00:00:00,000" in content, "Start time not formatted correctly"
         assert "00:00:02,500" in content, "End time not formatted correctly"
+    
+    Logger.print_info(f"SRT caption file saved to: {output_path}")
 
 def test_audio_aligned_captions():
     """Test creation of a video with audio-aligned captions"""
@@ -268,8 +310,10 @@ def test_audio_aligned_captions():
         captions = create_word_level_captions(audio_path, test_text)
         assert len(captions) > 0, "No captions generated from audio"
 
-        # Create output path for the final video
-        output_path = os.path.join(get_tempdir(), "output_with_audio_captions.mp4")
+        # Use standard temp directory
+        temp_dir = os.path.join("/tmp", "GANGLIA", "ttv")
+        os.makedirs(temp_dir, exist_ok=True)
+        output_path = os.path.join(temp_dir, "audio_aligned_captions.mp4")
 
         # Add dynamic captions
         result_path = create_dynamic_captions(
@@ -282,7 +326,7 @@ def test_audio_aligned_captions():
         assert result_path is not None, "Failed to create video with captions"
 
         # Add audio to the video with improved FFmpeg command
-        final_output = os.path.join(get_tempdir(), "final_output_with_audio.mp4")
+        final_output = os.path.join(temp_dir, "audio_aligned_captions_with_audio.mp4")
         ffmpeg_cmd = [
             "ffmpeg", "-y",
             "-i", output_path,     # Video with captions
@@ -311,13 +355,13 @@ def test_audio_aligned_captions():
         probe_result = run_ffmpeg_command(probe_cmd)
         assert probe_result is not None and probe_result.stdout, "No audio stream found in output video"
 
-        # Play the video if requested (disabled by default in automated tests)
-        if os.environ.get("PLAY_TEST_OUTPUT"):
-            play_cmd = ["ffplay", "-autoexit", final_output]
-            run_ffmpeg_command(play_cmd)
+        # Play the video
+        play_cmd = ["ffplay", "-autoexit", final_output]
+        run_ffmpeg_command(play_cmd)
+        Logger.print_info(f"Audio-aligned captions test video saved to: {final_output}")
 
     finally:
-        # Cleanup
+        # Clean up input only
         if os.path.exists(input_video_path):
             os.remove(input_video_path)
         if os.path.exists(audio_path):
@@ -373,6 +417,56 @@ def test_text_wrapping_direction():
         assert min(line_positions[curr_line]) > max(line_positions[prev_line]), \
             f"Line {curr_line} is not below line {prev_line}"
 
+def test_captions_on_dynamic_background():
+    """Test caption visibility and readability on a dynamic background with moving elements."""
+    # Use the standard GANGLIA temp directory
+    temp_dir = os.path.join("/tmp", "GANGLIA", "ttv")
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    # Create a dynamic background video with moving elements
+    background_path = os.path.join(temp_dir, "dynamic_background.mp4")
+    duration = 5  # 5 second test video
+    
+    # Generate dynamic background using test pattern and scrolling text
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        # Generate test pattern (creates moving colorful patterns)
+        "-f", "lavfi", 
+        "-i", f"testsrc=size=1280x720:rate=30:duration={duration}",
+        # Add scrolling text
+        "-vf", f"drawtext=text='Test Background':fontsize=60:fontcolor=white:x=w-mod(n*10\,w+tw):y=h/2",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        background_path
+    ]
+    result = run_ffmpeg_command(ffmpeg_cmd)
+    assert result is not None, "Failed to create dynamic background"
+    
+    # Create test captions that will appear at different times
+    captions = [
+        CaptionEntry("Testing caption visibility", 0.0, 2.5),
+        CaptionEntry("Against dynamic background", 2.5, 5.0)
+    ]
+    
+    # Add dynamic captions
+    output_path = os.path.join(temp_dir, "dynamic_test_with_captions.mp4")
+    result_path = create_dynamic_captions(
+        input_video=background_path,
+        captions=captions,
+        output_path=output_path,
+        min_font_size=32,
+        size_ratio=1.5  # Scale up to 48px
+    )
+    
+    assert result_path is not None, "Failed to create video with dynamic background"
+    assert os.path.exists(output_path), f"Output file not created: {output_path}"
+    assert os.path.getsize(output_path) > 0, "Output file is empty"
+    
+    # Play the video
+    play_cmd = ["ffplay", "-autoexit", output_path]
+    run_ffmpeg_command(play_cmd)
+    
+    Logger.print_info(f"Test video saved to: {output_path}")
+
 if __name__ == "__main__":
     output_dir = os.path.join(get_tempdir(), "caption_test_outputs")
     os.makedirs(output_dir, exist_ok=True)
@@ -384,3 +478,4 @@ if __name__ == "__main__":
     test_create_srt_captions()
     test_audio_aligned_captions()
     test_text_wrapping_direction()
+    test_captions_on_dynamic_background()  # Run our new test in isolation
