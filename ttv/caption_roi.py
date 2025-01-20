@@ -13,6 +13,7 @@ TODO: Expand to analyze multiple frames for true video content.
 from typing import Tuple, Optional
 import numpy as np
 from moviepy.video.io.VideoFileClip import VideoFileClip
+from colorsys import rgb_to_hsv, hsv_to_rgb
 
 def calculate_activity_map(frame: np.ndarray, block_size: int = 32) -> np.ndarray:
     """Calculate activity level for each block in the frame.
@@ -166,14 +167,20 @@ def get_contrasting_color(frame: np.ndarray, roi: Tuple[int, int, int, int]) -> 
     
     # Calculate average color in ROI
     avg_color = np.mean(roi_region, axis=(0, 1))
-    r = int(avg_color[0])
-    g = int(avg_color[1])
-    b = int(avg_color[2])
+    r, g, b = int(avg_color[0]), int(avg_color[1]), int(avg_color[2])
     
-    # Simple color inversion
-    text_r = 255 - r
-    text_g = 255 - g
-    text_b = 255 - b
+    # Calculate complementary color
+    comp_r, comp_g, comp_b = 255 - r, 255 - g, 255 - b
+    
+    # Convert to HSV
+    h, s, v = rgb_to_hsv(comp_r / 255.0, comp_g / 255.0, comp_b / 255.0)
+    
+    # Set intensity to 1
+    h, s, v = h, s, 1.0
+    
+    # Convert back to RGB
+    text_r, text_g, text_b = hsv_to_rgb(h, s, v)
+    text_r, text_g, text_b = int(text_r * 255), int(text_g * 255), int(text_b * 255)
     
     # Stroke is always 1/3 of the text color, rounded to match test expectations
     stroke_r = text_r // 3

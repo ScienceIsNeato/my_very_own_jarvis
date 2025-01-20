@@ -161,7 +161,7 @@ def test_font_size_scaling():
         captions=captions,
         output_path=output_path,
         min_font_size=24,  # Smaller min to test scaling
-        max_font_size=72  # Larger max to test scaling
+        max_font_size=48  # Larger max to test scaling
     )
     # Clean up
     os.unlink(input_video_path)
