@@ -16,6 +16,6 @@ def text_to_video(ttv_config, skip_generation, output_path, tts, query_dispatche
         video_segments, background_music_path, song_with_lyrics_path, movie_poster_path = process_story(tts, style, story, skip_generation, query_dispatcher, story_title, config)
   
         if video_segments:
-            assemble_final_video(video_segments, background_music_path, song_with_lyrics_path, movie_poster_path, output_path)
+            assemble_final_video(video_segments, background_music_path, song_with_lyrics_path, movie_poster_path, output_path, config)
     except Exception as e:
         Logger.print_error(f"Error in text_to_video: {e}")

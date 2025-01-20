@@ -8,46 +8,48 @@ from .image_generation import generate_image, generate_blank_image, save_image_w
 from .story_generation import generate_movie_poster, generate_filtered_story
 from .audio_generation import generate_audio
 from .video_generation import create_video_segment
-from .captions import CaptionEntry, create_dynamic_captions
+from .captions import CaptionEntry, create_dynamic_captions, create_static_captions
 from .audio_alignment import create_word_level_captions
 from tts import GoogleTTS
 from utils import get_tempdir
 
 tts = GoogleTTS()
 
-def process_sentence(i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher):
-    thread_id = f"[Thread-{i}]"
-    try:
-        if skip_generation:
-            Logger.print_info(f"{thread_id} Skipping image generation as per the flag.")
-            return None, sentence, i
+def process_sentence(i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher, config):
+    """Process a single sentence into a video segment."""
+    thread_id = f"[Thread {i+1}/{total_images}]"
+    Logger.print_info(f"{thread_id} Processing sentence: {sentence}")
 
-        Logger.print_info(f"{thread_id} Converting text to speech...")
-        audio_path = generate_audio(tts, sentence)
-        if not audio_path:
-            Logger.print_error(f"{thread_id} Failed to generate audio for sentence: {sentence}")
-            return None, sentence, i
-
-        Logger.print_info(f"{thread_id} Generating image for sentence.")
-        filename, success = generate_image(sentence, context, style, i + 1, total_images, query_dispatcher)
+    # Generate image for this sentence
+    filename = None
+    if skip_generation:
+        filename = generate_blank_image(sentence, i)
+    else:
+        filename, success = generate_image(sentence, context, style, i, total_images, query_dispatcher)
         if not success:
-            Logger.print_warning(f"{thread_id} Image generation failed, using blank image.")
-            filename = generate_blank_image(sentence, i)
-        else:
-            # Save image without caption since we'll add dynamic captions later
-            temp_image = filename.replace(".png", "_nocaption.png")
-            if not save_image_without_caption(filename, temp_image):
-                Logger.print_error(f"{thread_id} Failed to save image without caption")
-                return None, sentence, i
-            filename = temp_image
-
-        Logger.print_info(f"{thread_id} Creating initial video segment.")
-        temp_dir = get_tempdir()
-        initial_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}_initial.mp4")
-        if not create_video_segment(filename, audio_path, initial_segment_path):
-            Logger.print_error(f"{thread_id} Failed to create video segment")
             return None, sentence, i
+    if not filename:
+        return None, sentence, i
 
+    # Generate audio for this sentence
+    Logger.print_info(f"{thread_id} Generating audio for sentence.")
+    success, audio_path = tts.convert_text_to_speech(sentence)
+    if not success:
+        Logger.print_error(f"{thread_id} Failed to generate audio")
+        return None, sentence, i
+
+    # Create initial video segment
+    Logger.print_info(f"{thread_id} Creating initial video segment.")
+    temp_dir = get_tempdir()
+    initial_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}_initial.mp4")
+    if not create_video_segment(filename, audio_path, initial_segment_path):
+        Logger.print_error(f"{thread_id} Failed to create video segment")
+        return None, sentence, i
+
+    # Get caption style from config
+    caption_style = getattr(config, 'caption_style', 'static')
+
+    if caption_style == "dynamic":
         # Add dynamic captions using word-level alignment
         Logger.print_info(f"{thread_id} Adding dynamic captions to video segment.")
         try:
@@ -73,12 +75,23 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         else:
             Logger.print_error(f"{thread_id} Failed to add captions, using uncaptioned video")
             return initial_segment_path, sentence, i
+    else:
+        # Add static captions
+        Logger.print_info(f"{thread_id} Adding static captions to video segment.")
+        final_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}.mp4")
+        captions = [CaptionEntry(sentence, 0.0, float('inf'))]  # Show for entire duration
+        captioned_path = create_static_captions(
+            input_video=initial_segment_path,
+            captions=captions,
+            output_path=final_segment_path,
+            font_size=40
+        )
 
-    except Exception as e:
-        Logger.print_error(f"{thread_id} Error processing sentence '{sentence}': {str(e)}")
-        import traceback
-        Logger.print_error(f"{thread_id} Traceback: {traceback.format_exc()}")
-        return None, sentence, i
+        if captioned_path:
+            return captioned_path, sentence, i
+        else:
+            Logger.print_error(f"{thread_id} Failed to add captions, using uncaptioned video")
+            return initial_segment_path, sentence, i
 
 def process_story(tts, style, story, skip_generation, query_dispatcher, story_title, config=None):
     """
@@ -118,30 +131,31 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
         background_music_prompt = None
         background_music_path = None
         if config and config.background_music:
-            for source in config.background_music.sources:
-                if source.enabled:
-                    if source.type == "file":
-                        background_music_path = source.path
-                        break
-                    elif source.type == "prompt":
-                        background_music_enabled = True
-                        background_music_prompt = source.prompt
-                        break
+            if config.background_music.file:
+                background_music_path = config.background_music.file
+                Logger.print_info(f"Using file-based background music: {background_music_path}")
+            elif config.background_music.prompt:
+                Logger.print_info("Submitting background music generation task...")
+                background_music_future = query_dispatcher.submit_task(
+                    "generate_background_music",
+                    config.background_music.prompt
+                )
 
         # Get closing credits music configuration
         closing_credits_enabled = False
         closing_credits_prompt = None
         closing_credits_path = None
         if config and config.closing_credits:
-            for source in config.closing_credits.sources:
-                if source.enabled:
-                    if source.type == "file":
-                        closing_credits_path = source.path
-                        break
-                    elif source.type == "prompt":
-                        closing_credits_enabled = True
-                        closing_credits_prompt = source.prompt
-                        break
+            if config.closing_credits.music:
+                if config.closing_credits.music.file:
+                    closing_credits_path = config.closing_credits.music.file
+                    Logger.print_info(f"Using file-based closing credits music: {closing_credits_path}")
+                elif config.closing_credits.music.prompt:
+                    Logger.print_info("Submitting closing credits music generation task...")
+                    song_with_lyrics_future = query_dispatcher.submit_task(
+                        "generate_song_with_lyrics",
+                        config.closing_credits.music.prompt
+                    )
 
         # Submit background music generation if enabled and no file path provided
         background_music_future = None
@@ -172,7 +186,7 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
             Logger.print_info("Using file-based music, skipping lyrics generation.")
 
         Logger.print_info("Submitting sentence processing tasks...")
-        sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher) for i, sentence in enumerate(story)]
+        sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher, config) for i, sentence in enumerate(story)]
         
         if filtered_story_json:
             Logger.print_info("Submitting movie poster generation task...")

@@ -142,36 +142,77 @@ If you have any questions or feedback about GANGLIA, please contact Will Martin 
 
 ## Text-to-Video Configuration
 
-When using the text-to-video feature, you can customize various aspects of the video generation through a configuration file. Here's an example configuration:
+When using the text-to-video feature, you can customize various aspects of the video generation through a configuration file. A template configuration file is provided at `config/ttv_config.template.json`.
+
+### Configuration Options
+
+Here's a comprehensive list of all available configuration options:
+
+#### Required Fields
+
+- `style` (string): The visual style to apply to generated images. Example: "digital art", "photorealistic", "anime"
+- `story` (array of strings): The story to convert into a video, with each string representing one scene
+- `title` (string): The title of the video, used in credits and file naming
+
+#### Optional Fields
+
+- `caption_style` (string, default: "static"): Controls how captions are displayed in the video
+  - `"static"`: Traditional subtitles that appear at the bottom of the screen
+  - `"dynamic"`: Word-by-word captions that are synchronized with the audio and use dynamic positioning and sizing
+
+- `background_music` (object): Configuration for the background music that plays during the main video
+  - Can be either file-based or prompt-based:
+    ```json
+    {
+        "file": "path/to/music.mp3",  // Use an existing audio file
+        "prompt": null
+    }
+    ```
+    or
+    ```json
+    {
+        "file": null,
+        "prompt": "ambient piano music with a gentle mood"  // Generate music using this prompt
+    }
+    ```
+
+- `closing_credits` (object): Configuration for the closing credits section
+  - `music` (object): Music to play during credits
+    - Same format as background_music (file or prompt-based)
+  - `poster` (object): Image to show during credits
+    - Can be file-based or prompt-based:
+      ```json
+      {
+          "file": "path/to/poster.png",  // Use an existing image
+          "prompt": null
+      }
+      ```
+      or
+      ```json
+      {
+          "file": null,
+          "prompt": "A beautiful sunset scene"  // Generate image using this prompt
+      }
+      ```
+
+### Example Configuration
+
+See `config/ttv_config.template.json` for a complete example configuration. Here's a minimal example:
 
 ```json
 {
     "style": "digital art",
     "story": [
-        "First sentence of the story",
-        "Second sentence of the story"
+        "A mysterious figure emerges from the shadows",
+        "They walk through a glowing portal"
     ],
-    "background_music": {
-        "enabled": true,
-        "prompt": "ambient piano music with a gentle mood"
-    },
-    "closing_credits_music": {
-        "enabled": true,
-        "prompt": "upbeat celebratory music with lyrics"
-    }
+    "title": "The Portal",
+    "caption_style": "dynamic"
 }
 ```
 
-### Music Configuration Options
+### Notes
 
-Both `background_music` and `closing_credits_music` are optional configurations that control the music generation for your video:
-
-- `background_music`: Controls the background music that plays during the main video
-  - `enabled`: Boolean (default: true) - Set to false to disable background music
-  - `prompt`: String - The prompt used to generate the background music
-
-- `closing_credits_music`: Controls the music with lyrics that plays during the closing credits
-  - `enabled`: Boolean (default: true) - Set to false to disable closing credits music
-  - `prompt`: String - The prompt used to generate the closing credits music
-
-If either configuration is omitted, the feature will be enabled with default prompts.
+- All paths in the configuration file should be relative to the project root
+- When using file-based resources (music/images), ensure the files exist before running
+- When using prompt-based generation, ensure you have the necessary API access configured
