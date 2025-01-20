@@ -7,7 +7,7 @@ from logger import Logger
 from .caption_roi import find_roi_in_frame, get_contrasting_color
 from .ffmpeg_wrapper import run_ffmpeg_command
 import subprocess
-from PIL import ImageFont, UnidentifiedImageError
+from PIL import ImageFont
 import os
 
 def get_default_font() -> str:
@@ -310,8 +310,10 @@ def create_dynamic_captions(
     min_font_size: int = 32,
     max_font_size: int = 48,
     font_name: str = get_default_font(),
- # Margin from screen edges in pixels
+    # Margin from screen edges in pixels
     words_per_second: float = 2.0,
+    shadow_offset: Tuple[int, int] = (6, 6),  # Increased shadow offset
+    border_thickness: int = 4  # Increased border thickness
 ) -> Optional[str]:
     """
     Add Instagram-style dynamic captions to a video using MoviePy.
@@ -377,27 +379,60 @@ def create_dynamic_captions(
                     previous_word=previous_word
                 )
                 
-                # Create text clip with contrasting color
+                # Calculate extra padding needed for border and shadow
+                horizontal_padding = border_thickness * 2 + int(shadow_offset[0] * 1.5)
+                
+                # Create outer shadow clip with larger offset
+                outer_shadow_clip = TextClip(
+                    text=word.text,
+                    font=word.font_name,
+                    method='caption',
+                    color=(0, 0, 0),  # Black shadow
+                    stroke_color=(0, 0, 0),
+                    stroke_width=border_thickness,
+                    font_size=word.font_size,
+                    size=(word.width + horizontal_padding, int(word.font_size * 1.5)),  # Add padding
+                    margin=(horizontal_padding//2, 0, 0, int(word.font_size * 1.5),),  # Add left margin
+                    text_align='left',
+                    duration=window.end_time - word.start_time
+                ).with_position((int(roi_x + x_position - horizontal_padding//2 + shadow_offset[0] * 1.5), 
+                               int(roi_y + y_position + shadow_offset[1] * 1.5))).with_opacity(0.3).with_start(word.start_time)
+
+                # Create inner shadow clip with regular offset
+                inner_shadow_clip = TextClip(
+                    text=word.text,
+                    font=word.font_name,
+                    method='caption',
+                    color=(0, 0, 0),  # Black shadow
+                    stroke_color=(0, 0, 0),
+                    stroke_width=border_thickness,
+                    font_size=word.font_size,
+                    size=(word.width + horizontal_padding, int(word.font_size * 1.5)),  # Add padding
+                    margin=(horizontal_padding//2, 0, 0, int(word.font_size * 1.5),),  # Add left margin
+                    text_align='left',
+                    duration=window.end_time - word.start_time
+                ).with_position((int(roi_x + x_position - horizontal_padding//2 + shadow_offset[0]), 
+                               int(roi_y + y_position + shadow_offset[1]))).with_opacity(0.6).with_start(word.start_time)
+                
+                # Create text clip with contrasting color and enhancements
                 txt_clip = TextClip(
                     text=word.text,
                     font=word.font_name,
                     method='caption',
                     color=text_color,
                     stroke_color=stroke_color,
-                    stroke_width=1,
+                    stroke_width=border_thickness,
                     font_size=word.font_size,
-                    size=(word.width, int(word.font_size * 1.5)), # allow enough room for vertical alignment
-                    margin=(0,0,0,int(word.font_size * 1.5),), # prevents bottom of text from being cut off
+                    size=(word.width + horizontal_padding, int(word.font_size * 1.5)),  # Add padding
+                    margin=(horizontal_padding//2, 0, 0, int(word.font_size * 1.5),),  # Add left margin
                     text_align='left',
                     duration=window.end_time - word.start_time  # Word persists until end of window
-                )
-
-                # Set position and start time - ensure integer positions and adjust y for baseline
-                baseline_offset = int((word.font_size - window.font_size) * 0.2)  # Adjust baseline for larger fonts
-                txt_clip = txt_clip.with_position((int(roi_x + x_position), int(roi_y + y_position - baseline_offset)))
-                txt_clip = txt_clip.with_start(word.start_time)
+                ).with_position((int(roi_x + x_position - horizontal_padding//2), 
+                               int(roi_y + y_position))).with_start(word.start_time)
                 
-                text_clips.append(txt_clip)
+                text_clips.append(outer_shadow_clip)  # Add outer shadow first (furthest back)
+                text_clips.append(inner_shadow_clip)  # Add inner shadow next
+                text_clips.append(txt_clip)  # Add text last (on top)
                 
                 # Update cursor and previous word for next iteration
                 cursor_x = new_cursor_x
