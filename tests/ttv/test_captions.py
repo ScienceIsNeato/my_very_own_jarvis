@@ -1,5 +1,7 @@
 import os
 import tempfile
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from utils import get_tempdir
 from PIL import Image, ImageFont
 from tts import GoogleTTS
@@ -128,9 +130,9 @@ def test_caption_text_completeness():
     windows = create_caption_windows(
         [Word(text=w, start_time=0, end_time=1) for w in words],
         min_font_size=32,
+        max_font_size=48,
         safe_width=safe_width,
-        safe_height=safe_height,
-        size_ratio=1.5  # Scale up to 48px
+        safe_height=safe_height
     )
     # Collect all words from all windows
     processed_words = []
@@ -159,7 +161,7 @@ def test_font_size_scaling():
         captions=captions,
         output_path=output_path,
         min_font_size=24,  # Smaller min to test scaling
-        size_ratio=3.0,  # Scale up to 72px
+        max_font_size=72  # Larger max to test scaling
     )
     # Clean up
     os.unlink(input_video_path)
@@ -194,13 +196,12 @@ def test_caption_positioning():
         for idx, text in enumerate(test_cases)
     ]
     # Add dynamic captions with specific margin
-    margin = 40
     result_path = create_dynamic_captions(
         input_video=input_video_path,
         captions=captions,
         output_path=output_path,
         min_font_size=32,  # Ensure readable text
-        size_ratio=1.5,  # Scale up to 48px
+        max_font_size=48  # Scale up to 48px
     )
     # Clean up
     os.unlink(input_video_path)
@@ -260,7 +261,7 @@ def test_audio_aligned_captions():
             captions=captions,
             output_path=output_path,
             min_font_size=32,
-            size_ratio=1.5,  # Scale up to 48px
+            max_font_size=48  # Scale up to 48px
         )
         assert result_path is not None, "Failed to create video with captions"
 
@@ -311,7 +312,6 @@ def test_text_wrapping_direction():
     margin = 40
     roi_width = video_width - (2 * margin)  # Full ROI width
     min_font_size = 32  # Use minimum font size to be conservative
-    size_ratio = 1.5  # Scale up to 48px
 
     # Create a very long text that will definitely wrap
     test_text = "This is a test caption that should wrap to multiple lines. " * 3  # Repeat 3 times to ensure wrapping

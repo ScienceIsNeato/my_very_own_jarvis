@@ -14,15 +14,19 @@ def test_roi_dimensions():
     
     x, y, width, height = roi
     
-    # Test ROI is within frame bounds
-    assert x >= 0 and x + width <= 1920, "ROI x-coordinates out of bounds"
-    assert y >= 0 and y + height <= 1080, "ROI y-coordinates out of bounds"
+    # Calculate 10% border size
+    border_x = int(1920 * 0.1)
+    border_y = int(1080 * 0.1)
+    
+    # Test ROI is within frame bounds, considering the border
+    assert x >= border_x and x + width <= 1920 - border_x, "ROI x-coordinates out of bounds"
+    assert y >= border_y and y + height <= 1080 - border_y, "ROI y-coordinates out of bounds"
     
     # Test ROI has portrait orientation (taller than wide)
     assert height > width, "ROI should be taller than wide"
     
     # Test ROI size is reasonable (around 1/7th of frame area)
-    frame_area = 1080 * 1920
+    frame_area = (1080 - 2 * border_y) * (1920 - 2 * border_x)
     roi_area = width * height
     ratio = roi_area / frame_area
     assert 0.1 <= ratio <= 0.2, f"ROI area ratio {ratio} outside expected range"
