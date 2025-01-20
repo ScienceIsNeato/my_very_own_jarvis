@@ -189,7 +189,7 @@ class MusicGenerator:
             else:
                 # Status could be 'submitted', 'queued', 'streaming'
                 time_elapsed = time.time() - start_time
-                Logger.print_info(f"Song {song_id} is still processing. Time elapsed: {time_elapsed}. Waiting for {retry_interval} seconds before retrying.")
+                Logger.print_info(f"Song {song_id} is still processing. Time elapsed: {time_elapsed:.1f}. Waiting for {retry_interval} seconds before retrying.")
                 time.sleep(retry_interval)
         else:
             Logger.print_error(f"Song {song_id} did not complete within the expected time.")

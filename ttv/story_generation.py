@@ -2,7 +2,6 @@ import json
 import os
 import openai
 import time
-
 import requests
 from logger import Logger
 
@@ -91,7 +90,7 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
                 save_image_without_caption(image_url, filename)
                 return filename
             else:
-                Logger.print_error(f"No image was returned for the movie poster.")
+                Logger.print_error("No image was returned for the movie poster.")
                 return None
         except Exception as e:
             if 'Rate limit exceeded' in str(e):
@@ -112,7 +111,7 @@ def filter_text(sentence, context, style, query_dispatcher, retries=5, wait_time
         f"Context: {context}\n"
         f"Style: {style}\n\n"
         "Please ensure that the filtered text does not contain any sensitive or inappropriate content.\n\n"
-        "Please return the filtered story in the following JSON format:\n"
+        "Please return ONLY a JSON object in this exact format (no other text):\n"
         "{\n"
         "  \"text\": \"<insert result here>\"\n"
         "}"
@@ -121,26 +120,43 @@ def filter_text(sentence, context, style, query_dispatcher, retries=5, wait_time
     for attempt in range(retries):
         try:
             response = query_dispatcher.sendQuery(prompt)
-            response_json = json.loads(response)
+            
+            # Try to extract JSON from the response if it's not pure JSON
+            try:
+                # First try parsing the whole response
+                response_json = json.loads(response)
+            except json.JSONDecodeError:
+                # If that fails, try to find JSON-like content within the response
+                start = response.find('{')
+                end = response.rfind('}') + 1
+                if start >= 0 and end > start:
+                    try:
+                        response_json = json.loads(response[start:end])
+                    except json.JSONDecodeError:
+                        # If we still can't parse it, fall back to original sentence
+                        return {"text": sentence}
+                else:
+                    # No JSON-like content found, fall back to original sentence
+                    return {"text": sentence}
 
             filtered_sentence = response_json.get("text", sentence)  # Fallback to original sentence if key is not found
-            Logger.print_debug(f"Filtered sentence: {filtered_sentence}")
-
+            if filtered_sentence != sentence:
+                Logger.print_debug(f"Filtered sentence: {filtered_sentence}")
             return {"text": filtered_sentence}
-        except Exception as e:
-            if 'Rate limit exceeded' in str(e):
-                Logger.print_warning(f"Rate limit exceeded while filtering text. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
-                time.sleep(wait_time)
-            else:
-                Logger.print_error(f"Error filtering text: {e}")
-                return {"text": sentence}  # Fallback to original sentence in case of other errors
+
+        except (openai.error.RateLimitError, openai.error.APIError):
+            Logger.print_warning(f"Rate limit or API error. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+            time.sleep(wait_time)
+        except requests.exceptions.RequestException as e:
+            Logger.print_error(f"Network error: {e}")
+            return {"text": sentence}
 
     Logger.print_error(f"Failed to filter text after {retries} attempts due to rate limiting.")
-    return {"text": sentence}  # Fallback to original sentence after retries
+    return {"text": sentence}
 
 
 def save_image_without_caption(image_url, filename):
-    response = requests.get(image_url)
+    response = requests.get(image_url, timeout=30)  # 30 second timeout
     if response.status_code == 200:
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, 'wb') as file:

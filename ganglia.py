@@ -12,11 +12,11 @@ from hotwords import HotwordManager
 from conversation_context import ContextManager
 from fetch_and_display_logs import display_logs
 import datetime
-from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, save_image_without_caption
+from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, save_image_without_caption, generate_image_for_sentence
 from ttv.audio_generation import generate_audio, get_audio_duration
 from ttv.video_generation import create_video_segment, create_still_video_with_fade
 from music_lib import MusicGenerator
-from ttv.story_processor import process_story, generate_image_for_sentence
+from ttv.story_processor import process_story
 from ttv.final_video_generation import assemble_final_video, concatenate_video_segments
 from utils import get_tempdir, setup_tmp_dir
 

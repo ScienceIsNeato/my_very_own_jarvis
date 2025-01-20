@@ -49,7 +49,7 @@ def test_audio_input(device_index):
         print("Audio saved to recorded_audio.wav")
 
         # Convert the WAV file to an MP3 file
-        subprocess.run(['ffmpeg', '-y', '-i', 'recorded_audio.wav', 'recorded_audio.mp3'])
+        subprocess.run(['ffmpeg', '-y', '-i', 'recorded_audio.wav', 'recorded_audio.mp3'], check=True)
 
         print("Playing recorded audio...")
         # Play the recorded audio using ffplay

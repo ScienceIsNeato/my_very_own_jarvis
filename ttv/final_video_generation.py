@@ -7,6 +7,9 @@ from .audio_generation import get_audio_duration
 from logger import Logger
 import subprocess
 from utils import get_tempdir
+from typing import Optional, List
+from .audio_alignment import create_word_level_captions
+from .captions import create_dynamic_captions, create_static_captions, CaptionEntry
 
 def concatenate_video_segments(video_segments, output_path):
     try:
@@ -28,23 +31,24 @@ def concatenate_video_segments(video_segments, output_path):
 
     return output_path
 
-def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path=None):
+def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path=None, config=None):
     """
     Assembles the final video from given segments, adds background music, and generates closing credits.
 
     Args:
         video_segments (list): List of paths to video segments.
-        music_path (str, optional): Path to the background music file. Defaults to None.
-        song_with_lyrics_path (str, optional): Path to the song with lyrics file for closing credits. Defaults to None.
-        movie_poster_path (str, optional): Path to the movie poster image for closing credits. Defaults to None.
+        music_path (str, optional): Path to the background music file. If None, no background music is added.
+        song_with_lyrics_path (str, optional): Path to the song with lyrics file for closing credits. If None, no closing credits are added.
+        movie_poster_path (str, optional): Path to the movie poster image for closing credits. Required if song_with_lyrics_path is provided.
         output_path (str, optional): Path to save the final output video. Defaults to "/tmp/final_output.mp4".
+        config (TTVConfig, optional): Configuration object containing caption style and other settings.
 
     Returns:
         str: Path to the most recent successfully generated video.
     """
     if not output_path:
         temp_dir = get_tempdir()
-        output_path = os.path.join(temp_dir, "GANGLIA", "ttv", "final_output.mp4")
+        output_path = os.path.join(temp_dir, "ttv", "final_output.mp4")
     
     main_video_path = None
     main_video_with_background_music_path = None
@@ -52,7 +56,7 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
 
     try:
         temp_dir = get_tempdir()
-        main_video_path = os.path.join(temp_dir, "GANGLIA", "ttv", "final_video.mp4")
+        main_video_path = os.path.join(temp_dir, "ttv", "final_video.mp4")
         Logger.print_info("Concatenating video segments...")
         main_video_path = concatenate_video_segments(video_segments, main_video_path)
         final_output_path = main_video_path  # Update the final output path after this step
@@ -62,69 +66,120 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
             main_video_with_background_music_path = add_background_music_to_video(main_video_path, music_path)
             final_output_path = main_video_with_background_music_path  # Update the final output path after this step
         else:
+            Logger.print_info("Skipping background music (disabled in config)")
             main_video_with_background_music_path = main_video_path
 
         if movie_poster_path and song_with_lyrics_path:
             Logger.print_info("Generating closing credits...")
-            closing_credits = generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path)
-            # now all we have to do is stitch together the main content and the credits
-            fully_assembled_movie_path = append_video_segments([main_video_with_background_music_path, closing_credits], output_path)
-            final_output_path = fully_assembled_movie_path
+            closing_credits = generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config)
+            if closing_credits:
+                # now all we have to do is stitch together the main content and the credits
+                fully_assembled_movie_path = append_video_segments([main_video_with_background_music_path, closing_credits], output_path)
+                final_output_path = fully_assembled_movie_path
+            else:
+                Logger.print_error("Failed to generate closing credits, using main video without credits")
+                final_output_path = main_video_with_background_music_path
         else:
+            Logger.print_info("Skipping closing credits (disabled in config)")
             final_output_path = main_video_with_background_music_path
 
-        subprocess.run(["ffplay", "-autoexit", final_output_path])
+        subprocess.run(["ffplay", "-autoexit", final_output_path], check=True)
         return final_output_path
 
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         Logger.print_error(f"Error creating final video with music: {e}")
         return final_output_path if final_output_path else main_video_path if main_video_path else "/tmp/final_video.mp4"
 
-def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path):
-    """
-    Generates a closing credits video from a still image and an audio file.
+def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config=None):
+    """Generate closing credits video with dynamic captions for song lyrics."""
+    # Create initial video with poster and music
+    temp_dir = get_tempdir()
+    initial_credits_video_path = os.path.join(temp_dir, "initial_credits.mp4")
+    closing_credits_video_path = os.path.join(temp_dir, "closing_credits.mp4")
 
-    Args:
-        movie_poster_path (str): Path to the still image to be used.
-        song_with_lyrics_path (str): Path to the audio file to be used.
-        output_path (str): Path to save the generated closing credits video.
+    # Get video duration from audio file
+    ffprobe_cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        song_with_lyrics_path
+    ]
+    result = run_ffmpeg_command(ffprobe_cmd)
+    if not result:
+        Logger.print_error("Failed to get audio duration")
+        return None
+    duration = float(result.stdout.decode('utf-8').strip())
 
-    Returns:
-        str: Path to the generated closing credits video.
-    """
-    closing_credits_video_path = "/tmp/GANGLIA/ttv/closing_credits_video.mp4"
-    
-    # Ensure the directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-    # Create a video from the still image and audio with fade-in effect
+    # Create video from poster image with duration matching audio
     ffmpeg_cmd = [
-        "ffmpeg", "-y", "-loop", "1", "-i", movie_poster_path, "-i", song_with_lyrics_path,
-        "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k", "-pix_fmt", "yuv420p",
-        "-vf", "fade=in:st=3:d=2", "-shortest", closing_credits_video_path
+        "ffmpeg", "-y",
+        "-loop", "1",
+        "-i", movie_poster_path,
+        "-i", song_with_lyrics_path,
+        "-c:v", "libx264",
+        "-tune", "stillimage",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-pix_fmt", "yuv420p",
+        "-shortest",
+        initial_credits_video_path
     ]
 
-    Logger.print_info(f"Creating closing credits video from {movie_poster_path} and {song_with_lyrics_path}")
     result = run_ffmpeg_command(ffmpeg_cmd)
-    if result:
-        Logger.print_info(f"Generated closing credits video at {closing_credits_video_path}")
+    if not result:
+        Logger.print_error("Failed to generate initial closing credits video")
+        return None
+
+    # Get caption style from config
+    caption_style = getattr(config, 'caption_style', 'static') if config else 'static'
+
+    # Create captions for the song lyrics - let Whisper transcribe without a prompt
+    captions = create_word_level_captions(song_with_lyrics_path, "")
+    if not captions:
+        Logger.print_error("Failed to create captions for closing credits")
+        return initial_credits_video_path
+
+    if caption_style == "dynamic":
+        # Add dynamic captions to the video
+        captioned_path = create_dynamic_captions(
+            input_video=initial_credits_video_path,
+            captions=captions,
+            output_path=closing_credits_video_path,
+            min_font_size=32,
+            size_ratio=1.5  # Scale up to 48px
+        )
+    else:
+        # Combine all captions into one for static display
+        combined_text = " ".join(c.text for c in captions)
+        static_captions = [CaptionEntry(combined_text, 0.0, duration)]
+        
+        # Add static captions to the video
+        captioned_path = create_static_captions(
+            input_video=initial_credits_video_path,
+            captions=static_captions,
+            output_path=closing_credits_video_path,
+            font_size=40
+        )
+
+    if captioned_path:
+        Logger.print_info(f"Generated closing credits video with captions at {closing_credits_video_path}")
         return closing_credits_video_path
     else:
-        Logger.print_error("Failed to generate closing credits video")
-        return None
+        Logger.print_error("Failed to add captions to closing credits video")
+        return initial_credits_video_path
 
 def play_video_if_error(video_segments, main_video_path=None, main_video_with_background_music_path=None, final_output_path=None):
     try:
         if final_output_path:
             Logger.print_info(f"Playing final video with closing credits: {final_output_path}")
-            subprocess.run(["ffplay", "-autoexit", final_output_path])
+            subprocess.run(["ffplay", "-autoexit", final_output_path], check=True)
         elif main_video_with_background_music_path:
             Logger.print_info(f"Playing final video with background music: {main_video_with_background_music_path}")
-            subprocess.run(["ffplay", "-autoexit", main_video_with_background_music_path])
+            subprocess.run(["ffplay", "-autoexit", main_video_with_background_music_path], check=True)
         elif main_video_path:
             Logger.print_info(f"Playing final video: {main_video_path}")
-            subprocess.run(["ffplay", "-autoexit", main_video_path])
-    except Exception as e:
+            subprocess.run(["ffplay", "-autoexit", main_video_path], check=True)
+    except (OSError, subprocess.SubprocessError) as e:
         Logger.print_error(f"Error playing video: {e}")
 
 def add_background_music_to_video(final_video_path, music_path):
@@ -162,7 +217,7 @@ def add_background_music_to_video(final_video_path, music_path):
         else:
             Logger.print_error("Background music generation failed. Playing final video without background music.")
             main_video_with_background_music_path = final_video_path
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         Logger.print_error(f"Error adding background music: {e}")
         main_video_with_background_music_path = final_video_path
     return main_video_with_background_music_path

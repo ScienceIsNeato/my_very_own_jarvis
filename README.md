@@ -15,7 +15,7 @@ GANGLIA is a highly modularized, generic personal assistant. Built partially by 
 
 | Module              | Possible Values | Default |
 |---------------------|-----------------|---------|
-| Speech Recognition  | AssemblyAI, Static Google Cloud Speech-to-Text | Live Google Cloud Speech-to-Text |
+| Speech Recognition  | Static Google Cloud Speech-to-Text | Live Google Cloud Speech-to-Text |
 | Text To Speech      | Google, Natural Reader (Unavailable), Amazon Polly (Unavailable) | Google |
 | AI Backend          | GPT-3.5 (Unavailable), GPT-4 | GPT-4 |
 | Response Visualizer | CLI, NaturalReaderUI (Unavailable) | CLI |
@@ -55,7 +55,7 @@ python GANGLIA.py [-d DEVICE_INDEX] [-t TTS_INTERFACE] [--static-response]
 Here's a description of each command-line argument:
 
 - `-d DEVICE_INDEX` or `--device_index DEVICE_INDEX`: Sets the index of the input device to use. The default value is 0.
-- `-t TTS_INTERFACE` or `--tts_interface TTS_INTERFACE`: Sets the text-to-speech interface to use. Available options are 'google' or 'natural_reader'. The default value is 'google'.
+- `-t TTS_INTERFACE` or `--tts_interface TTS_INTERFACE`: Sets the text-to-speech interface to use. Available options are 'google'. The default value is 'google'.
 - `--help` or `-h`: Displays usage instructions and a list of available options.
 
 Once GANGLIA is running, it will listen for voice prompts. When you're ready to ask a question or make a request, simply speak into your microphone. Once you've finished speaking, GANGLIA will generate a response using OpenAI's GPT-3 engine and speak it aloud using the pyttsx3 library.
@@ -70,7 +70,6 @@ Here's a table of features, their implementation names, and the corresponding en
 
 | Feature            | Implementation Name | Environment Variable      |
 |--------------------|---------------------|---------------------------|
-| Speech Recognition | AssemblyAI          | ASSEMBLYAI_TOKEN          |
 | AI Backend         | OpenAI GPT-4        | OPENAI_API_KEY            |
 
 ## TTS (Text To Speech)
@@ -140,3 +139,80 @@ GANGLIA was created by William R Martin.
 ## Contact
 
 If you have any questions or feedback about GANGLIA, please contact Will Martin at unique dot will dot martin at gmail.
+
+## Text-to-Video Configuration
+
+When using the text-to-video feature, you can customize various aspects of the video generation through a configuration file. A template configuration file is provided at `config/ttv_config.template.json`.
+
+### Configuration Options
+
+Here's a comprehensive list of all available configuration options:
+
+#### Required Fields
+
+- `style` (string): The visual style to apply to generated images. Example: "digital art", "photorealistic", "anime"
+- `story` (array of strings): The story to convert into a video, with each string representing one scene
+- `title` (string): The title of the video, used in credits and file naming
+
+#### Optional Fields
+
+- `caption_style` (string, default: "static"): Controls how captions are displayed in the video
+  - `"static"`: Traditional subtitles that appear at the bottom of the screen
+  - `"dynamic"`: Word-by-word captions that are synchronized with the audio and use dynamic positioning and sizing
+
+- `background_music` (object): Configuration for the background music that plays during the main video
+  - Can be either file-based or prompt-based:
+    ```json
+    {
+        "file": "path/to/music.mp3",  // Use an existing audio file
+        "prompt": null
+    }
+    ```
+    or
+    ```json
+    {
+        "file": null,
+        "prompt": "ambient piano music with a gentle mood"  // Generate music using this prompt
+    }
+    ```
+
+- `closing_credits` (object): Configuration for the closing credits section
+  - `music` (object): Music to play during credits
+    - Same format as background_music (file or prompt-based)
+  - `poster` (object): Image to show during credits
+    - Can be file-based or prompt-based:
+      ```json
+      {
+          "file": "path/to/poster.png",  // Use an existing image
+          "prompt": null
+      }
+      ```
+      or
+      ```json
+      {
+          "file": null,
+          "prompt": "A beautiful sunset scene"  // Generate image using this prompt
+      }
+      ```
+
+### Example Configuration
+
+See `config/ttv_config.template.json` for a complete example configuration. Here's a minimal example:
+
+```json
+{
+    "style": "digital art",
+    "story": [
+        "A mysterious figure emerges from the shadows",
+        "They walk through a glowing portal"
+    ],
+    "title": "The Portal",
+    "caption_style": "dynamic"
+}
+```
+
+### Notes
+
+- All paths in the configuration file should be relative to the project root
+- When using file-based resources (music/images), ensure the files exist before running
+- When using prompt-based generation, ensure you have the necessary API access configured

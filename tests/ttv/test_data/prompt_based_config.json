@@ -1,0 +1,24 @@
+{
+    "style": "digital art",
+    "story": [
+        "A small black cat sat by the window.",
+        "She watched the birds flutter past with curious eyes.",
+        "Suddenly, a bright red butterfly caught her attention."
+    ],
+    "title": "The Curious Cat",
+    "caption_style": "dynamic",
+    "background_music": {
+        "file": null,
+        "prompt": "Create ambient electronic music that captures the curiosity of a cat"
+    },
+    "closing_credits": {
+        "music": {
+            "file": null,
+            "prompt": "Create upbeat celebratory music with cat-themed lyrics"
+        },
+        "poster": {
+            "file": null,
+            "prompt": "A curious black cat watching a red butterfly, digital art style"
+        }
+    }
+} 

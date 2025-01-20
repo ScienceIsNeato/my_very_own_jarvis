@@ -6,18 +6,39 @@ import os
 import uuid
 
 def create_video_segment(image_path, audio_path, output_path=None):
-    if not output_path:
-        temp_dir = get_tempdir()
-        output_path = os.path.join(temp_dir, "GANGLIA", "ttv", f"segment_{uuid.uuid4()}.mp4")
-    Logger.print_info("Creating video segment.")
-    ffmpeg_cmd = [
-        "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
-        "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
-        "-pix_fmt", "yuv420p", "-shortest", "-t", str(get_audio_duration(audio_path) + 1), output_path
-    ]
-    result = run_ffmpeg_command(ffmpeg_cmd)
-    if result:
-        Logger.print_info(f"Video segment created at {output_path}")
+    """Create a video segment from an image and audio file.
+    
+    Args:
+        image_path: Path to the image file
+        audio_path: Path to the audio file
+        output_path: Optional path for the output video. If not provided, generates one.
+        
+    Returns:
+        str: Path to the created video segment, or None if creation failed
+    """
+    try:
+        if not output_path:
+            temp_dir = get_tempdir()
+            output_path = os.path.join(temp_dir, "ttv", f"segment_{uuid.uuid4()}.mp4")
+        
+        Logger.print_info("Creating video segment.")
+        ffmpeg_cmd = [
+            "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
+            "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
+            "-pix_fmt", "yuv420p", "-shortest", "-t", str(get_audio_duration(audio_path) + 1), output_path
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if result:
+            Logger.print_info(f"Video segment created at {output_path}")
+            return output_path
+        else:
+            Logger.print_error("Failed to create video segment")
+            return None
+    except Exception as e:
+        Logger.print_error(f"Error creating video segment: {str(e)}")
+        import traceback
+        Logger.print_error(f"Traceback: {traceback.format_exc()}")
+        return None
 
 def create_still_video_with_fade(image_path, audio_path, output_path):
     Logger.print_info("Creating still video with fade.")
