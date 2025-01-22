@@ -24,8 +24,11 @@ def create_video_segment(image_path, audio_path, output_path=None):
         Logger.print_info(f"Creating video segment: output_path={output_path}, audio_path={audio_path}, image_path={image_path}")
         ffmpeg_cmd = [
             "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
-            "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
-            "-pix_fmt", "yuv420p", "-shortest", "-t", str(get_audio_duration(audio_path) + 1), output_path
+            "-c:v", "libx264", "-tune", "stillimage", 
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",  # Explicit audio parameters
+            "-pix_fmt", "yuv420p", "-shortest", 
+            "-t", str(get_audio_duration(audio_path) + 1), 
+            output_path
         ]
         result = run_ffmpeg_command(ffmpeg_cmd)
         if result:

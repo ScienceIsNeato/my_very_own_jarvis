@@ -9,6 +9,7 @@ from .ffmpeg_wrapper import run_ffmpeg_command
 import subprocess
 from PIL import ImageFont
 import os
+import uuid
 
 def get_default_font() -> str:
     """Get default font name."""
@@ -184,7 +185,6 @@ def create_caption_windows(
     max_font_size: int,
     safe_width: int,
     safe_height: int,
-    pause_between_windows: float = 0.5
 ) -> List[CaptionWindow]:
     """Group words into caption windows with appropriate font sizes and line breaks."""
     windows = []
@@ -240,7 +240,7 @@ def create_caption_windows(
                 window = CaptionWindow(
                     words=current_window_words,
                     start_time=current_window_words[0].start_time,
-                    end_time=current_window_words[-1].end_time + pause_between_windows,
+                    end_time=current_window_words[-1].end_time,
                     font_size=current_font_size
                 )
                 windows.append(window)
@@ -260,7 +260,7 @@ def create_caption_windows(
             window = CaptionWindow(
                 words=[word],
                 start_time=word.start_time,
-                end_time=word.end_time + pause_between_windows,
+                end_time=word.end_time,
                 font_size=min_font_size
             )
             windows.append(window)
@@ -318,6 +318,7 @@ def create_dynamic_captions(
     """
     Add Instagram-style dynamic captions to a video using MoviePy.
     """
+    temp_files = []  # Keep track of temp files for cleanup
     try:
         from moviepy.video.io.VideoFileClip import VideoFileClip
         from moviepy.video.VideoClip import TextClip
@@ -442,17 +443,52 @@ def create_dynamic_captions(
         # Combine video with text overlays
         final_video = CompositeVideoClip([video] + text_clips)
 
-        # Write output
+        # Generate unique filenames for temporary files
+        temp_audio = os.path.join(os.path.dirname(output_path), f"temp_audio_{uuid.uuid4()}.m4a")
+        temp_files.append(temp_audio)
+        
+        # Extract audio from input video
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", input_video,
+            "-vn",  # No video
+            "-acodec", "copy",  # Copy audio codec
+            temp_audio
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if not result:
+            Logger.print_error("Failed to extract audio")
+            return None
+
+        # Write video without audio first
+        temp_video = os.path.join(os.path.dirname(output_path), f"temp_video_{uuid.uuid4()}.mp4")
+        temp_files.append(temp_video)
+        
         final_video.write_videofile(
-            output_path,
+            temp_video,
             codec='libx264',
-            audio_codec='aac',
-            temp_audiofile='temp-audio.m4a',
-            remove_temp=True,
-            # Performance optimizations:
-            preset='ultrafast',  # Faster encoding, slightly larger file size
-            threads=4  # Use multiple CPU cores
+            audio=False,  # No audio in this step
+            preset='ultrafast',
+            threads=4
         )
+
+        # Combine video with original audio
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", temp_video,     # Video with captions
+            "-i", temp_audio,     # Original audio
+            "-map", "0:v:0",      # Map video from first input
+            "-map", "1:a:0",      # Map audio from second input
+            "-c:v", "copy",       # Copy video stream without re-encoding
+            "-c:a", "aac",        # Encode audio as AAC
+            "-b:a", "192k",       # Set audio bitrate
+            "-shortest",          # Match duration to shortest stream
+            output_path
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if not result:
+            Logger.print_error("Failed to combine video with audio")
+            return None
 
         # Clean up
         video.close()
@@ -460,6 +496,7 @@ def create_dynamic_captions(
         for clip in text_clips:
             clip.close()
 
+        Logger.print_info(f"Successfully added dynamic captions to video: {output_path}")
         return output_path
 
     except Exception as e:
@@ -467,6 +504,14 @@ def create_dynamic_captions(
         import traceback
         Logger.print_error(f"Traceback: {traceback.format_exc()}")
         return None
+    finally:
+        # Clean up temporary files
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except Exception as e:
+                Logger.print_error(f"Error cleaning up temporary file {temp_file}: {e}")
 
 def create_srt_captions(
     captions: List[CaptionEntry],
@@ -516,6 +561,7 @@ def create_static_captions(
         position: Vertical position of captions ('bottom' or 'center')
         margin: Margin from screen edges in pixels
     """
+    temp_files = []  # Keep track of temp files for cleanup
     try:
         # Get video dimensions
         ffprobe_cmd = [
@@ -559,26 +605,71 @@ def create_static_captions(
         # Combine all filters
         complete_filter = ",".join(drawtext_filters)
         
-        # Run FFmpeg command
+        # Generate unique filenames for temporary files
+        temp_audio = os.path.join(os.path.dirname(output_path), f"temp_audio_{uuid.uuid4()}.m4a")
+        temp_files.append(temp_audio)
+        
+        # Extract audio from input video
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", input_video,
+            "-vn",  # No video
+            "-acodec", "copy",  # Copy audio codec
+            temp_audio
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if not result:
+            Logger.print_error("Failed to extract audio")
+            return None
+
+        # Create video with captions
+        temp_video = os.path.join(os.path.dirname(output_path), f"temp_video_{uuid.uuid4()}.mp4")
+        temp_files.append(temp_video)
+        
         ffmpeg_cmd = [
             "ffmpeg", "-y",
             "-i", input_video,
             "-vf", complete_filter,
-            "-c:a", "copy",
-            output_path
+            "-an",  # No audio in this step
+            temp_video
         ]
-        
         result = run_ffmpeg_command(ffmpeg_cmd)
-        if result:
-            Logger.print_info(f"Successfully added static captions to video: {output_path}")
-            return output_path
-        else:
+        if not result:
             Logger.print_error("Failed to add static captions to video")
             return None
-            
+
+        # Combine video with original audio
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", temp_video,     # Video with captions
+            "-i", temp_audio,     # Original audio
+            "-map", "0:v:0",      # Map video from first input
+            "-map", "1:a:0",      # Map audio from second input
+            "-c:v", "copy",       # Copy video stream without re-encoding
+            "-c:a", "aac",        # Encode audio as AAC
+            "-b:a", "192k",       # Set audio bitrate
+            "-shortest",          # Match duration to shortest stream
+            output_path
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if not result:
+            Logger.print_error("Failed to combine video with audio")
+            return None
+
+        Logger.print_info(f"Successfully added static captions to video: {output_path}")
+        return output_path
+
     except (ValueError, OSError, subprocess.CalledProcessError) as e:
         Logger.print_error(f"Error adding static captions: {e}")
         return None 
+    finally:
+        # Clean up temporary files
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except Exception as e:
+                Logger.print_error(f"Error cleaning up temporary file {temp_file}: {e}")
 
     # TODO: Fix bug where long static captions overflow the screen width.
     #       Need to implement text wrapping for static captions similar to dynamic captions

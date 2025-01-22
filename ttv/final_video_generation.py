@@ -14,23 +14,48 @@ import json
 
 def concatenate_video_segments(video_segments, output_path):
     try:
+        # First, ensure all segments have consistent audio streams
+        reencoded_segments = []
+        for segment in video_segments:
+            reencoded_segment = segment.replace(".mp4", "_reencoded.mp4")
+            ffmpeg_cmd = [
+                "ffmpeg", "-y", "-i", segment,
+                "-c:v", "copy",  # Copy video stream
+                "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",  # Consistent audio parameters
+                reencoded_segment
+            ]
+            Logger.print_info(f"Re-encoding video segment: {segment} to {reencoded_segment}")
+            result = run_ffmpeg_command(ffmpeg_cmd)
+            if result:
+                Logger.print_info(f"Re-encoded video segment created: reencoded_segment={reencoded_segment}")
+                reencoded_segments.append(reencoded_segment)
+            else:
+                Logger.print_error(f"Error re-encoding video segment: {segment}")
+                return None
+
+        # Create concat list with re-encoded segments
         concat_list_path = "/tmp/concat_list.txt"
         with open(concat_list_path, "w") as f:
-            for segment in video_segments:
+            for segment in reencoded_segments:
                 f.write(f"file '{segment}'\n")
-        Logger.print_info(f"Concatenating video segments: {video_segments}")
+        
+        Logger.print_info(f"Concatenating video segments: {reencoded_segments}")
         ffmpeg_cmd = [
             "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
-            "-pix_fmt", "yuv420p", "-c:v", "libx264", "-crf", "23", "-preset", "medium",
-            "-c:a", "aac", "-b:a", "192k", output_path
+            "-c:v", "copy",  # Copy video stream
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",  # Consistent audio parameters
+            output_path
         ]
         result = run_ffmpeg_command(ffmpeg_cmd)
         if result:
             Logger.print_info(f"Main video created at {output_path}")
+            return output_path
+        else:
+            Logger.print_error("Failed to concatenate video segments")
+            return None
     except Exception as e:
         Logger.print_error(f"Error concatenating video segments: {e}")
-
-    return output_path
+        return None
 
 def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path=None, config=None):
     """
@@ -193,32 +218,36 @@ def add_background_music_to_video(final_video_path, music_path):
 
     # Ensure music_path is a string, not a dictionary
     if isinstance(music_path, dict):
-        # Assuming the dictionary has a key 'path' that holds the music file path
         music_path = music_path.get('path')
         if music_path is None:
             Logger.print_error("Music path is missing in the dictionary")
             return None
 
     background_music_volume = 0.3  # Adjust this value to change the relative volume of the background music
-
     main_video_with_background_music_path = "/tmp/GANGLIA/ttv/main_video_with_background_music.mp4"
+    
     try:
-        if music_path:
-            ffmpeg_cmd = [
-                "ffmpeg", "-y", "-i", final_video_path, "-i", music_path, "-filter_complex",
-                f"[0:a]volume=1.0[v];[1:a]volume={background_music_volume}[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2",
-                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", main_video_with_background_music_path
-            ]
-            result = run_ffmpeg_command(ffmpeg_cmd)
-            if result is not None:
-                Logger.print_info(f"Final video with background music created at {main_video_with_background_music_path}")
-            else:
-                Logger.print_error("Failed to add background music. Playing final video without background music.")
-                main_video_with_background_music_path = final_video_path
+        # Mix the audio streams with consistent parameters
+        ffmpeg_cmd = [
+            "ffmpeg", "-y", 
+            "-i", final_video_path, 
+            "-i", music_path,
+            "-filter_complex",
+            f"[0:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[v];"
+            f"[1:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume={background_music_volume}[m];"
+            "[v][m]amix=inputs=2:duration=first:dropout_transition=2",
+            "-c:v", "copy",  # Copy video stream
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",  # Consistent audio parameters
+            main_video_with_background_music_path
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if result:
+            Logger.print_info(f"Final video with background music created at {main_video_with_background_music_path}")
+            return main_video_with_background_music_path
         else:
-            Logger.print_error("Background music generation failed. Playing final video without background music.")
-            main_video_with_background_music_path = final_video_path
-    except (OSError, subprocess.SubprocessError) as e:
+            Logger.print_error("Failed to add background music")
+            return final_video_path
+
+    except Exception as e:
         Logger.print_error(f"Error adding background music: {e}")
-        main_video_with_background_music_path = final_video_path
-    return main_video_with_background_music_path
+        return final_video_path

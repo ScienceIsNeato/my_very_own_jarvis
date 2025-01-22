@@ -1,3 +1,19 @@
+"""Integration tests for the Text-to-Video (TTV) pipeline.
+
+This module contains integration tests that verify the end-to-end functionality
+of the TTV pipeline, including:
+- Audio/video segment generation and synchronization
+- Background music integration
+- Closing credits generation
+- Final video assembly and validation
+
+Each test case validates:
+1. Audio/video duration matches for each segment
+2. Final video path and existence
+3. Total video duration including credits
+4. Proper cleanup of temporary files
+"""
+
 import os
 import time
 import pytest
@@ -179,10 +195,49 @@ def get_video_duration(video_file):
         return 0.0
 
 
+def test_long_story_ttv_execution_direct():
+    """Test direct execution of TTV command with a longer story and verify output."""
+    print("\n=== Starting Long Story TTV Integration Test ===")
+    
+    # Run the TTV command and capture output
+    config_path = "tests/integration/test_data/long_story_ttv_config.json"
+    command = f"PYTHONUNBUFFERED=1 python ganglia.py --text-to-video --ttv-config {config_path}"
+    output = ""  # Initialize output here
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    for line in iter(process.stdout.readline, b''):
+        decoded_line = line.decode('utf-8')
+        print(decoded_line, end='')  # Print to console
+        sys.stdout.flush()  # Ensure immediate output
+        output += decoded_line
+    process.stdout.close()
+    process.wait()
+
+    # Save output to a file for debugging
+    with open("/tmp/GANGLIA/test_output_long.log", "w") as f:
+        f.write(output)
+
+    # Calculate closing credits duration
+    closing_credits_path = 'tests/integration/test_data/sample_closing_credits.mp3'
+    closing_credits_duration = get_audio_duration(closing_credits_path)
+    print(f"\n✓ Closing credits duration: {closing_credits_duration:.2f}s")
+
+    # Add closing credits duration to total video duration
+    total_video_duration = validate_audio_video_durations(output) + closing_credits_duration
+
+    # Perform validations
+    final_video_path = validate_final_video_path(output)
+    validate_total_duration(output, total_video_duration)
+
+    # Clean up
+    os.remove(final_video_path)
+    print("\n=== Test Complete ===\n")
+
+
 if __name__ == "__main__":
     # Directly run the test function
     try:
         test_minimal_ttv_execution_direct()
+        test_long_story_ttv_execution_direct()
     except AssertionError as e:
         print(f"Test failed: {e}")
     else:
