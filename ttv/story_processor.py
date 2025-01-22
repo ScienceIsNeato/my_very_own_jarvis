@@ -151,9 +151,9 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 )
 
         # Get closing credits music configuration
-
         closing_credits_path = None
         closing_credits_future = None
+        closing_credits_lyrics = None
         if config and config.closing_credits:
             if config.closing_credits.music:
                 if config.closing_credits.music.file:
@@ -203,9 +203,13 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
         
         # Get the closing credits path from future if we generated it
         if closing_credits_future:
-            closing_credits_path = closing_credits_future.result()
-            if not closing_credits_path:
-                Logger.print_error("Failed to generate song with lyrics.")
+            closing_credits_result = closing_credits_future.result()
+            if isinstance(closing_credits_result, tuple) and len(closing_credits_result) == 2:
+                closing_credits_path, closing_credits_lyrics = closing_credits_result
+                Logger.print_info(f"Generated closing credits with lyrics: {closing_credits_lyrics}")
+            else:
+                closing_credits_path = closing_credits_result
+                Logger.print_error("Failed to get lyrics from closing credits generation.")
         
         # Get the movie poster path
         movie_poster_path = None
@@ -221,7 +225,7 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 import traceback
                 Logger.print_error(f"Traceback: {traceback.format_exc()}")
 
-    return video_segments, background_music_path, closing_credits_path, movie_poster_path
+    return video_segments, background_music_path, closing_credits_path, movie_poster_path, closing_credits_lyrics
 
 
 def retry_on_rate_limit(func, *args, retries=5, wait_time=60, **kwargs):

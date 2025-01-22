@@ -57,7 +57,7 @@ def concatenate_video_segments(video_segments, output_path):
         Logger.print_error(f"Error concatenating video segments: {e}")
         return None
 
-def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path=None, config=None):
+def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path=None, config=None, closing_credits_lyrics=None):
     """
     Assembles the final video from given segments, adds background music, and generates closing credits.
 
@@ -68,6 +68,7 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
         movie_poster_path (str, optional): Path to the movie poster image for closing credits. Required if song_with_lyrics_path is provided.
         output_path (str, optional): Path to save the final output video. Defaults to "/tmp/final_output.mp4".
         config (TTVConfig, optional): Configuration object containing caption style and other settings.
+        closing_credits_lyrics (str, optional): The lyrics to use for word alignment in closing credits.
 
     Returns:
         str: Path to the most recent successfully generated video.
@@ -97,7 +98,7 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
 
         if movie_poster_path and song_with_lyrics_path:
             Logger.print_info("Generating closing credits...")
-            closing_credits = generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config)
+            closing_credits = generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config, closing_credits_lyrics)
             if closing_credits:
                 # now all we have to do is stitch together the main content and the credits
                 fully_assembled_movie_path = append_video_segments([main_video_with_background_music_path, closing_credits], output_path)
@@ -116,7 +117,7 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
         Logger.print_error(f"Error creating final video with music: {e}")
         return final_output_path if final_output_path else main_video_path if main_video_path else "/tmp/final_video.mp4"
 
-def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config=None):
+def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config=None, lyrics=None):
     """Generate closing credits video with dynamic captions for song lyrics."""
     # Create initial video with poster and music
     temp_dir = get_tempdir()
@@ -159,8 +160,8 @@ def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_pa
     # Get caption style from config
     caption_style = getattr(config, 'caption_style', 'static') if config else 'static'
 
-    # Create captions for the song lyrics - let Whisper transcribe without a prompt
-    captions = create_word_level_captions(song_with_lyrics_path, "")
+    # Create captions for the song lyrics - use provided lyrics if available
+    captions = create_word_level_captions(song_with_lyrics_path, lyrics if lyrics else "")
     if not captions:
         Logger.print_error("Failed to create captions for closing credits")
         return initial_credits_video_path

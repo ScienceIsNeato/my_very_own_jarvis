@@ -25,7 +25,7 @@ def create_video_segment(image_path, audio_path, output_path=None):
         ffmpeg_cmd = [
             "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
             "-c:v", "libx264", "-tune", "stillimage", 
-            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",  # Explicit audio parameters
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
             "-pix_fmt", "yuv420p", "-shortest", 
             "-t", str(get_audio_duration(audio_path) + 1), 
             output_path
