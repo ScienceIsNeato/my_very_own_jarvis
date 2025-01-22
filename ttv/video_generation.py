@@ -21,7 +21,7 @@ def create_video_segment(image_path, audio_path, output_path=None):
             temp_dir = get_tempdir()
             output_path = os.path.join(temp_dir, "ttv", f"segment_{uuid.uuid4()}.mp4")
         
-        Logger.print_info("Creating video segment.")
+        Logger.print_info(f"Creating video segment: output_path={output_path}, audio_path={audio_path}, image_path={image_path}")
         ffmpeg_cmd = [
             "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
             "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
@@ -29,7 +29,7 @@ def create_video_segment(image_path, audio_path, output_path=None):
         ]
         result = run_ffmpeg_command(ffmpeg_cmd)
         if result:
-            Logger.print_info(f"Video segment created at {output_path}")
+            Logger.print_info(f"Video segment created: output_path={output_path}")
             return output_path
         else:
             Logger.print_error("Failed to create video segment")
@@ -57,7 +57,7 @@ def create_still_video_with_fade(image_path, audio_path, output_path):
     ]
     result = run_ffmpeg_command(ffmpeg_cmd)
     if result:
-        Logger.print_info(f"Still video with fade created at {output_path}")
+        Logger.print_info(f"Still video with fade created: output_path={output_path}")
     return output_path
 
 
@@ -75,7 +75,7 @@ def create_final_video(video_segments, output_path):
         ]
         result = run_ffmpeg_command(ffmpeg_cmd)
         if result:
-            Logger.print_info(f"Main video created at {output_path}")
+            Logger.print_info(f"Main video created: output_path={output_path}")
     except Exception as e:
         Logger.print_error(f"Error concatenating video segments: {e}")
 
@@ -94,7 +94,7 @@ def append_video_segments(video_segments, output_path):
             Logger.print_info(f"Re-encoding video segment: {segment} to {reencoded_segment}")
             result = run_ffmpeg_command(ffmpeg_cmd)
             if result:
-                Logger.print_info(f"Re-encoded video segment created at {reencoded_segment}")
+                Logger.print_info(f"Re-encoded video segment created: reencoded_segment={reencoded_segment}")
                 reencoded_segments.append(reencoded_segment)
             else:
                 Logger.print_error(f"Error re-encoding video segment: {segment}")
@@ -111,7 +111,7 @@ def append_video_segments(video_segments, output_path):
         ]
         result = run_ffmpeg_command(ffmpeg_cmd)
         if result:
-            Logger.print_info(f"Final video with closing credits created at {output_path}")
+            Logger.print_info(f"Final video with closing credits created: output_path={output_path}")
         else:
             Logger.print_error("Error appending re-encoded video segments")
 

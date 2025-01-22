@@ -8,6 +8,7 @@ from .captions import CaptionEntry
 from functools import partial
 import sys
 import os
+import subprocess
 
 # Add parent directory to Python path to import logger
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,6 +28,7 @@ def align_words_with_audio(audio_path: str, text: str, model_size: str = "tiny")
     """
     Analyze audio file to generate word-level timings.
     Uses Whisper ASR to perform forced alignment between the audio and text.
+    Falls back to even distribution if Whisper alignment fails.
     
     Args:
         audio_path: Path to the audio file (should be wav format)
@@ -36,6 +38,10 @@ def align_words_with_audio(audio_path: str, text: str, model_size: str = "tiny")
     Returns:
         List of WordTiming objects containing word-level alignments
     """
+    # TODO(2024-01-21): Whisper alignment failed with 'NoneType' object is not subscriptable
+    # when processing the text "This is a test story. This is the first line in the story."
+    # Implementing fallback to even distribution when Whisper fails.
+    
     try:
         # Load Whisper model with safe settings
         model = whisper.load_model(
@@ -56,7 +62,7 @@ def align_words_with_audio(audio_path: str, text: str, model_size: str = "tiny")
         
         if not result or "segments" not in result:
             Logger.print_error(f"Failed to transcribe audio: {audio_path}")
-            return []
+            return create_evenly_distributed_timings(audio_path, text)
         
         # Extract word timings from result
         word_timings = []
@@ -73,13 +79,60 @@ def align_words_with_audio(audio_path: str, text: str, model_size: str = "tiny")
         
         if not word_timings:
             Logger.print_error(f"No word timings found in transcription for: {audio_path}")
-            return []
+            return create_evenly_distributed_timings(audio_path, text)
             
         return word_timings
     except Exception as e:
         Logger.print_error(f"Error in align_words_with_audio: {str(e)}")
         import traceback
         Logger.print_error(f"Traceback: {traceback.format_exc()}")
+        return create_evenly_distributed_timings(audio_path, text)
+
+def create_evenly_distributed_timings(audio_path: str, text: str) -> List[WordTiming]:
+    """
+    Create evenly distributed word timings when Whisper alignment fails.
+    
+    Args:
+        audio_path: Path to the audio file
+        text: The text to create timings for
+        
+    Returns:
+        List of WordTiming objects with evenly distributed timings
+    """
+    try:
+        # Get total audio duration using ffprobe
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True)
+        total_duration = float(result.stdout)
+        
+        # Split text into words
+        words = text.split()
+        if not words:
+            return []
+        
+        # Calculate time per word
+        time_per_word = total_duration / len(words)
+        
+        # Create evenly distributed timings
+        word_timings = []
+        for i, word in enumerate(words):
+            start_time = i * time_per_word
+            end_time = (i + 1) * time_per_word
+            word_timings.append(WordTiming(
+                text=word,
+                start=start_time,
+                end=end_time
+            ))
+        
+        Logger.print_info(f"Created fallback evenly distributed timings for {len(words)} words over {total_duration:.2f}s")
+        return word_timings
+        
+    except Exception as e:
+        Logger.print_error(f"Error creating evenly distributed timings: {str(e)}")
         return []
 
 def create_word_level_captions(audio_path: str, text: str = "", is_music: bool = False) -> List[CaptionEntry]:

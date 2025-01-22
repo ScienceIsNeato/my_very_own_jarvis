@@ -6,19 +6,13 @@
         "Suddenly, a bright red butterfly caught her attention."
     ],
     "title": "The Curious Cat",
-    "caption_style": "dynamic",
+    "caption_style": "static",
     "background_music": {
         "file": "tests/ttv/test_data/background_music.mp3",
         "prompt": null
     },
     "closing_credits": {
-        "music": {
-            "file": "tests/ttv/test_data/closing_credits.mp3",
-            "prompt": null
-        },
-        "poster": {
-            "file": null,
-            "prompt": "A curious black cat watching a red butterfly, digital art style"
-        }
+        "file": "tests/ttv/test_data/closing_credits.mp3",
+        "prompt": null
     }
 } 

@@ -20,6 +20,12 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
     thread_id = f"[Thread {i+1}/{total_images}]"
     Logger.print_info(f"{thread_id} Processing sentence: {sentence}")
 
+    # Create necessary directories
+    temp_dir = get_tempdir()
+    os.makedirs(os.path.join(temp_dir, "ttv"), exist_ok=True)
+    os.makedirs(os.path.join(temp_dir, "tts"), exist_ok=True)
+    os.makedirs(os.path.join(temp_dir, "images"), exist_ok=True)
+
     # Generate image for this sentence
     filename = None
     if skip_generation:
@@ -67,7 +73,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
             captions=captions,
             output_path=final_segment_path,
             min_font_size=32,
-            size_ratio=1.5  # Scale up to 48px
+            max_font_size=48
         )
 
         if captioned_path:
@@ -127,24 +133,27 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
             filtered_story_json = None
 
         Logger.print_info("Submitting background music generation task...")
-        background_music_enabled = False
-        background_music_prompt = None
+
         background_music_path = None
+        background_music_future = None
         if config and config.background_music:
             if config.background_music.file:
                 background_music_path = config.background_music.file
                 Logger.print_info(f"Using file-based background music: {background_music_path}")
             elif config.background_music.prompt:
                 Logger.print_info("Submitting background music generation task...")
-                background_music_future = query_dispatcher.submit_task(
-                    "generate_background_music",
-                    config.background_music.prompt
+                background_music_future = executor.submit(
+                    music_gen.generate_music,
+                    prompt=config.background_music.prompt,
+                    model="chirp-v3-0",
+                    duration=20,
+                    with_lyrics=False
                 )
 
         # Get closing credits music configuration
-        closing_credits_enabled = False
-        closing_credits_prompt = None
+
         closing_credits_path = None
+        closing_credits_future = None
         if config and config.closing_credits:
             if config.closing_credits.music:
                 if config.closing_credits.music.file:
@@ -152,39 +161,23 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                     Logger.print_info(f"Using file-based closing credits music: {closing_credits_path}")
                 elif config.closing_credits.music.prompt:
                     Logger.print_info("Submitting closing credits music generation task...")
-                    song_with_lyrics_future = query_dispatcher.submit_task(
-                        "generate_song_with_lyrics",
-                        config.closing_credits.music.prompt
+                    closing_credits_future = executor.submit(
+                        music_gen.generate_music,
+                        prompt=config.closing_credits.music.prompt,
+                        model="chirp-v3-0",
+                        duration=20,
+                        with_lyrics=True,
+                        story_text="\n".join(story),
+                        query_dispatcher=query_dispatcher
                     )
 
-        # Submit background music generation if enabled and no file path provided
-        background_music_future = None
-        if not skip_generation and background_music_enabled and not background_music_path:
-            Logger.print_info("Generating background music...")
-            background_music_future = executor.submit(
-                music_gen.generate_music,
-                prompt=background_music_prompt,
-                model="chirp-v3-0",
-                duration=20,
-                with_lyrics=False
-            )
+        # Create necessary directories
+        temp_dir = get_tempdir()
+        os.makedirs(os.path.join(temp_dir, "ttv"), exist_ok=True)
+        os.makedirs(os.path.join(temp_dir, "music"), exist_ok=True)
+        os.makedirs(os.path.join(temp_dir, "tts"), exist_ok=True)
 
-        # Submit song with lyrics generation if enabled and no file path provided
-        song_with_lyrics_future = None
-        if not skip_generation and closing_credits_enabled and not closing_credits_path:
-            Logger.print_info("Generating closing credits music...")
-            song_with_lyrics_future = executor.submit(
-                music_gen.generate_music,
-                prompt=closing_credits_prompt,
-                model="chirp-v3-0",
-                duration=20,
-                with_lyrics=True,
-                story_text="\n".join(story),  # Join story sentences with newlines
-                query_dispatcher=query_dispatcher
-            )
-        else:
-            Logger.print_info("Using file-based music, skipping lyrics generation.")
-
+        # Submit sentence processing tasks...
         Logger.print_info("Submitting sentence processing tasks...")
         sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher, config) for i, sentence in enumerate(story)]
         
@@ -203,14 +196,14 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                 context += f" {sentence}"
         
         # Get the background music path from future if we generated it
-        if not background_music_path and background_music_future:
+        if background_music_future:
             background_music_path = background_music_future.result()
             if not background_music_path:
                 Logger.print_error("Failed to generate background music.")
         
-        # Get the song with lyrics path from future if we generated it
-        if not closing_credits_path and song_with_lyrics_future:
-            closing_credits_path = song_with_lyrics_future.result()
+        # Get the closing credits path from future if we generated it
+        if closing_credits_future:
+            closing_credits_path = closing_credits_future.result()
             if not closing_credits_path:
                 Logger.print_error("Failed to generate song with lyrics.")
         

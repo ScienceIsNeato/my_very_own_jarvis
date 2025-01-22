@@ -128,7 +128,7 @@ def test_caption_text_completeness():
     safe_width = width - (2 * margin)
     safe_height = int(height * max_window_height_ratio)
     windows = create_caption_windows(
-        [Word(text=w, start_time=0, end_time=1) for w in words],
+        words=[Word(text=w, start_time=0, end_time=1) for w in words],
         min_font_size=32,
         max_font_size=48,
         safe_width=safe_width,

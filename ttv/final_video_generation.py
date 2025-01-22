@@ -10,6 +10,7 @@ from utils import get_tempdir
 from typing import Optional, List
 from .audio_alignment import create_word_level_captions
 from .captions import create_dynamic_captions, create_static_captions, CaptionEntry
+import json
 
 def concatenate_video_segments(video_segments, output_path):
     try:
@@ -146,7 +147,7 @@ def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_pa
             captions=captions,
             output_path=closing_credits_video_path,
             min_font_size=32,
-            size_ratio=1.5  # Scale up to 48px
+            max_font_size=48
         )
     else:
         # Combine all captions into one for static display

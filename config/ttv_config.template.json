@@ -1,26 +1,18 @@
 {
-    "style": "digital art",
+    "style": "cinematic dark fantasy",
     "story": [
-        "(1/5) A mysterious figure emerges from the shadows",
-        "(2/5) They walk through a glowing portal of swirling energy",
-        "(3/5) Strange symbols float in the air around them",
-        "(4/5) The portal closes with a thunderous boom",
-        "(5/5) Everything returns to darkness"
+        "In the depths of an ancient forest, twisted branches reach toward a moonless sky",
+        "A weathered stone archway stands alone, covered in glowing runes of forgotten magic",
+        "Wisps of ethereal light dance through the air, leading deeper into the darkness",
+        "A shadowy figure emerges from the mist, their cloak billowing in an unseen wind",
+        "Ancient secrets await those brave enough to cross the threshold"
     ],
-    "title": "The Portal",
+    "title": "The Gateway",
     "caption_style": "dynamic",
     "background_music": {
-        "file": "tests/ttv/test_data/background_music.mp3",
-        "prompt": null
+        "file": "assets/music/dark_ambient.mp3"
     },
     "closing_credits": {
-        "music": {
-            "file": "tests/ttv/test_data/closing_credits.mp3",
-            "prompt": null
-        },
-        "poster": {
-            "file": null,
-            "prompt": "A swirling portal of energy with mystical symbols floating around it, digital art style"
-        }
+        "file": "assets/music/outro_theme.mp3"
     }
 } 

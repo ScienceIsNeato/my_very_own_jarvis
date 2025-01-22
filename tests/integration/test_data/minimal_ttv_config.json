@@ -1,0 +1,15 @@
+{
+    "style": "minimal",
+    "story": [
+        "This is a test story. This is the first line in the story.",
+        "This is the second line in the story."
+    ],
+    "title": "Minimal Test",
+    "caption_style": "dynamic",
+    "background_music": {
+        "file": "tests/integration/test_data/sample_background_music.mp3"
+    },
+    "closing_credits": {
+        "file": "tests/integration/test_data/sample_closing_credits.mp3"
+    }
+}

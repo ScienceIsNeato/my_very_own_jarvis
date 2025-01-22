@@ -14,7 +14,7 @@ class MusicConfig:
 class ClosingCreditsConfig:
     """Configuration for closing credits section."""
     music: MusicConfig
-    poster: MusicConfig  # Reusing MusicConfig since it has the same file/prompt structure
+    poster: Optional[MusicConfig] = None
 
 @dataclass
 class TTVConfig:
@@ -71,20 +71,27 @@ def load_input(ttv_config: str) -> TTVConfig:
         ValueError: If music configuration is invalid"""
     with open(ttv_config, 'r', encoding='utf-8') as json_file:
         data = json.load(json_file)
+        print("Loaded data:", data)  # Debugging statement to inspect loaded data
+
+    # Debugging statements to trace MusicConfig initialization
+    print("Background music data:", data.get("background_music"))
+    print("Closing credits data:", data.get("closing_credits"))
 
     # Create music configs if present
     background_music = None
-    if "background_music" in data:
-        background_music = MusicConfig(**data["background_music"])
+    if "background_music" in data and data["background_music"]:
+        background_music = MusicConfig(
+            file=data["background_music"].get("file"),
+            prompt=data["background_music"].get("prompt")
+        )
         validate_music_config(background_music)
 
     closing_credits = None
-    if "closing_credits" in data:
-        music = MusicConfig(**data["closing_credits"]["music"])
-        poster = MusicConfig(**data["closing_credits"]["poster"])
-        validate_music_config(music)
-        validate_music_config(poster)
-        closing_credits = ClosingCreditsConfig(music=music, poster=poster)
+    if "closing_credits" in data and data["closing_credits"]:
+        closing_credits = ClosingCreditsConfig(music=MusicConfig(
+            file=data["closing_credits"].get("file"),
+            prompt=data["closing_credits"].get("prompt")
+        ))
 
     # Validate caption style
     caption_style = validate_caption_style(data.get("caption_style"))
