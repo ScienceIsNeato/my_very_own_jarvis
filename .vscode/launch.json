@@ -9,7 +9,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--text-to-video",
-                "--ttv-config", "/Users/pacey/Documents/Sourcecode/GANGLIA/tests/integration/test_data/minimal_ttv_config.json",
+                "--ttv-config", "tests/integration/test_data/generated_pipeline_config.json",
             ],
             "justMyCode": true
         }

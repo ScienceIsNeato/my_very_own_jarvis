@@ -170,7 +170,7 @@ def create_word_level_captions(audio_path: str, text: str = "", is_music: bool =
         model_size = "base" if is_music else "tiny"
         
         if not text:
-            # First transcribe the audio to get lyrics
+            # Only transcribe if no text was provided
             model = whisper.load_model(
                 model_size,
                 device="cpu",
@@ -194,8 +194,11 @@ def create_word_level_captions(audio_path: str, text: str = "", is_music: bool =
             else:
                 Logger.print_error("Failed to transcribe audio")
                 return []
+        else:
+            # Use provided text directly
+            Logger.print_info(f"Using provided {'lyrics' if is_music else 'text'}: {text}")
 
-        # Now get word timings using the transcribed text
+        # Now get word timings using the text
         word_timings = align_words_with_audio(audio_path, text, model_size)
         if not word_timings:
             Logger.print_error(f"No word timings available for: {text}")

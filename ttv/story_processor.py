@@ -164,9 +164,9 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
         closing_credits_path = None
         closing_credits_future = None
         closing_credits_lyrics = None
-        if config and config.closing_credits:
-            file_path = getattr(config.closing_credits, 'file', '')
-            prompt = getattr(config.closing_credits, 'prompt', '')
+        if config and hasattr(config, 'closing_credits') and config.closing_credits:
+            file_path = getattr(config.closing_credits, 'file', None)
+            prompt = getattr(config.closing_credits, 'prompt', None)
             if file_path:
                 closing_credits_path = file_path
                 Logger.print_info(f"Using file-based closing credits music: {closing_credits_path}")
@@ -182,7 +182,7 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
                     query_dispatcher=query_dispatcher
                 )
             else:
-                Logger.print_info("No closing credits configuration found (missing both file and prompt)")
+                Logger.print_info("No closing credits configuration found (both file and prompt are None)")
 
         # Submit movie poster generation task if JSON was created successfully
         if filtered_story_json:

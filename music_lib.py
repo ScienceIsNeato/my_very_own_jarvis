@@ -63,6 +63,7 @@ class MusicGenerator:
         
         # Start generation
         kwargs['story_text'] = story_text
+        kwargs['query_dispatcher'] = kwargs.get('query_dispatcher')  # Forward query_dispatcher
         job_id = self.backend.start_generation(prompt, with_lyrics=True, **kwargs)
         if not job_id:
             Logger.print_error("Failed to start generation")
@@ -92,7 +93,7 @@ class MusicGenerator:
             if not story_text:
                 Logger.print_error("Error: Story text is required when generating audio with lyrics.")
                 return None
-            return self.generate_with_lyrics(prompt, story_text)
+            return self.generate_with_lyrics(prompt, story_text, query_dispatcher=query_dispatcher)
         else:
             return self.generate_instrumental(prompt)
 

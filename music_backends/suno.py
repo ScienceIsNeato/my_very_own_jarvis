@@ -26,11 +26,12 @@ class SunoMusicBackend(MusicBackend):
     def start_generation(self, prompt: str, with_lyrics: bool = False, **kwargs) -> str:
         """Start the generation process via API."""
         model = kwargs.get('model', 'chirp-v3-5')
+        duration = kwargs.get('duration', 30)  # Default to 30 seconds if not specified
         
         if with_lyrics and 'story_text' in kwargs:
             return self._start_lyrical_song_job(prompt, model, kwargs['story_text'], kwargs.get('query_dispatcher'))
         else:
-            return self._start_instrumental_song_job(prompt, model)
+            return self._start_instrumental_song_job(prompt, duration, model)
     
     def check_progress(self, job_id: str) -> tuple[str, float]:
         """Check the progress of a generation job via API."""
@@ -50,10 +51,16 @@ class SunoMusicBackend(MusicBackend):
                 return "Error: Song data not found", 0
             
             status = song_data.get('status', '')
+            meta_data = song_data.get('meta_data', {})
+            
+            # Determine if this is background music or closing credits based on the prompt
+            prompt = meta_data.get('prompt', '')
+            is_closing_credits = 'with lyrics' in prompt.lower() if prompt else False
+            file_type = "closing_credits.mp3" if is_closing_credits else "background_music.mp3"
+            
             if status == 'complete':
                 return "Complete", 100
             elif status == 'error':
-                meta_data = song_data.get('meta_data', {})
                 error_type = meta_data.get('error_type', 'Unknown error')
                 error_message = meta_data.get('error_message', '')
                 return f"Error: {error_type} - {error_message}", 0
@@ -61,7 +68,7 @@ class SunoMusicBackend(MusicBackend):
                 # Estimate progress based on typical generation time
                 elapsed = time.time() - self._get_start_time(job_id)
                 estimated_progress = min(95, (elapsed / 180) * 100)  # 3 minutes typical time
-                return f"Processing: {status}", estimated_progress
+                return f"{status} ({file_type})", estimated_progress
                 
         except Exception as e:
             return f"Error: {str(e)}", 0
@@ -93,17 +100,17 @@ class SunoMusicBackend(MusicBackend):
             Logger.print_error(f"Failed to get result: {str(e)}")
             return None
     
-    def _start_instrumental_song_job(self, prompt, model):
+    def _start_instrumental_song_job(self, prompt: str, duration: int, model: str) -> str:
         """Start a job for instrumental music generation."""
         endpoint = f"{self.api_base_url}/gateway/generate/gpt_desc"
 
-        # Modify prompt to specify 30-second commercial in a more natural way
-        commercial_prompt = f"Create a 30-second commercial background track with {prompt}"
+        # Modify prompt to specify duration in a more natural way
+        commercial_prompt = f"Create a {prompt} that is exactly {duration} seconds long"
 
         data = {
             "gpt_description_prompt": commercial_prompt,
             "make_instrumental": True,
-            "mv": "chirp-v3-5"  # Force latest model version
+            "mv": model,
         }
 
         logging_headers = self.headers.copy()
@@ -146,7 +153,8 @@ class SunoMusicBackend(MusicBackend):
             
             style = lyrics_data.get('style', 'pop')
             lyrics = lyrics_data.get('lyrics', '')
-            full_prompt = f"A 30-second commercial with {style} music and lyrics:\n{lyrics}"
+            # Combine the config prompt with the generated style
+            full_prompt = f"A 30-second {style} song with lyrics that match this theme: {prompt}\nLyrics:\n{lyrics}"
             
             endpoint = f"{self.api_base_url}/gateway/generate/music"
             data = {
