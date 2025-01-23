@@ -1,14 +1,22 @@
+# Core dependencies
+numpy>=1.24.0
+pytest>=7.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Logging and progress
+tqdm>=4.66.0
+
+# Audio processing
+soundfile>=0.12.1
+
 blessed==1.20.0
 gTTS==2.3.1
 openai==0.27.4
-numpy==1.23.5
 pandas==1.5.3
 protobuf==4.24.4
 PyAudio==0.2.13
 pydub==0.25.1
-pytest==7.3.1
-python-dotenv==1.0.0
-requests==2.31.0
 SpeechRecognition==3.10.0
 websockets==11.0.2
 google-cloud-storage==2.11.0

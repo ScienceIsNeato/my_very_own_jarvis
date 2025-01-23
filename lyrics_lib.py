@@ -12,45 +12,56 @@ class LyricsGenerator:
     def __init__(self):
         pass
 
-    def generate_song_lyrics(self, story_text, query_dispatcher, song_context="theme song for the closing credits of a movie - you know - the kind that sums up the movie. Good examples are the MC Hammer Addams Family song and I'll Remember from With Honors"):
-        Logger.print_info("Generating song lyrics with ChatGPT.")
-        
-        lyrical_style = self.determine_lyrical_style(story_text, query_dispatcher)
-        
-        prompt = (
-            f"Write a song with lyrics inspired by this story:\n\n{story_text}\n\n"
-            f"Craft the lyrics to capture the essence of the story while adding creative twists and variations. "
-            "Avoid directly mirroring the plot or mentioning specific nouns in the same order as in the story. "
-            "Instead, rearrange and reinterpret the events and characters to create a unique lyrical narrative. "
-            "Infuse the lyrics with emotion and imagery that resonates with the story's themes.\n\n"
-            "Feel free to incorporate your own creative flair, but ensure that the lyrics remain relevant to the story's core. "
-            "Avoid explicit references to the song's meta-information (e.g., lyrical style, song context) to maintain a seamless experience for the listener.\n\n"
-            "Please format the lyrics in the following JSON structure:\n"
-            "{\n"
-            "  \"context\": \"<insert song context here>\",\n"
-            "  \"style\": \"<insert lyrical style here>\",\n"
-            "  \"lyrics\": \"<insert lyrics here>\"\n"
-            "}"
-        )
+    def generate_song_lyrics(self, story_text, query_dispatcher):
+        """Generate song lyrics based on the story text."""
+        prompt = f"""
+        Generate concise lyrics for a 30-second jingle or song based on the following story.
+        The lyrics should be:
+        - 4 lines maximum (2-3 lines is ideal)
+        - No repetition of lines
+        - Each line should be 8-10 syllables
+        - Focus on the key theme/message
+        - Suitable for a trailer or closing credits
 
+        Story:
+        {story_text}
+
+        Return the lyrics in JSON format with the following structure:
+        {{
+            "style": "upbeat pop",  # or another appropriate style
+            "lyrics": "the generated lyrics here"
+        }}
+
+        The lyrics should capture the essence of the story while being brief and memorable.
+        """
+
+        response = query_dispatcher.sendQuery(prompt)
+        
+        # Try to parse the response as JSON
         try:
-            response = query_dispatcher.sendQuery(prompt)
-            response_json = json.loads(response)
-            context = response_json.get("context", song_context)
-            style = response_json.get("style", lyrical_style)
-            lyrics = response_json.get("lyrics", story_text)  # Fallback to story_text if "lyrics" key is not found
+            json_data = json.loads(response)
+            return json.dumps(json_data)  # Return the properly formatted JSON
+        except json.JSONDecodeError:
+            # If response is not valid JSON, try to extract style and lyrics from text
+            lines = response.strip().split('\n')
+            style = "upbeat pop"  # Default style
+            lyrics = []
             
-            Logger.print_info(f"Generated lyrics: {lyrics}")
-            return json.dumps({
+            for line in lines:
+                line = line.strip()
+                if line.startswith('"style":'):
+                    style = line.split(':')[1].strip().strip('",')
+                elif line.startswith('"lyrics":'):
+                    lyrics = [line.split(':')[1].strip().strip('",')]
+                elif not line.startswith('{') and not line.startswith('}'):
+                    lyrics.append(line.strip().strip('",'))
+            
+            # Create a properly formatted JSON response
+            formatted_response = {
                 "style": style,
-                "lyrics": lyrics
-            })
-        except Exception as e:
-            Logger.print_error(f"Error generating lyrics: {e}")
-            return json.dumps({
-                "style": lyrical_style,
-                "lyrics": story_text
-            })
+                "lyrics": "\n".join(lyrics)
+            }
+            return json.dumps(formatted_response)
 
     def determine_lyrical_style(self, story_text, query_dispatcher):
         Logger.print_info("Determining lyrical style with ChatGPT.")

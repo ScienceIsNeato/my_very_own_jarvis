@@ -7,8 +7,9 @@ from logger import Logger
 from .caption_roi import find_roi_in_frame, get_contrasting_color
 from .ffmpeg_wrapper import run_ffmpeg_command
 import subprocess
-from PIL import ImageFont, UnidentifiedImageError
+from PIL import ImageFont
 import os
+import uuid
 
 def get_default_font() -> str:
     """Get default font name."""
@@ -184,7 +185,6 @@ def create_caption_windows(
     max_font_size: int,
     safe_width: int,
     safe_height: int,
-    pause_between_windows: float = 0.5
 ) -> List[CaptionWindow]:
     """Group words into caption windows with appropriate font sizes and line breaks."""
     windows = []
@@ -240,7 +240,7 @@ def create_caption_windows(
                 window = CaptionWindow(
                     words=current_window_words,
                     start_time=current_window_words[0].start_time,
-                    end_time=current_window_words[-1].end_time + pause_between_windows,
+                    end_time=current_window_words[-1].end_time,
                     font_size=current_font_size
                 )
                 windows.append(window)
@@ -260,7 +260,7 @@ def create_caption_windows(
             window = CaptionWindow(
                 words=[word],
                 start_time=word.start_time,
-                end_time=word.end_time + pause_between_windows,
+                end_time=word.end_time,
                 font_size=min_font_size
             )
             windows.append(window)
@@ -310,12 +310,15 @@ def create_dynamic_captions(
     min_font_size: int = 32,
     max_font_size: int = 48,
     font_name: str = get_default_font(),
- # Margin from screen edges in pixels
+    # Margin from screen edges in pixels
     words_per_second: float = 2.0,
+    shadow_offset: Tuple[int, int] = (6, 6),  # Increased shadow offset
+    border_thickness: int = 4  # Increased border thickness
 ) -> Optional[str]:
     """
     Add Instagram-style dynamic captions to a video using MoviePy.
     """
+    temp_files = []  # Keep track of temp files for cleanup
     try:
         from moviepy.video.io.VideoFileClip import VideoFileClip
         from moviepy.video.VideoClip import TextClip
@@ -377,27 +380,60 @@ def create_dynamic_captions(
                     previous_word=previous_word
                 )
                 
-                # Create text clip with contrasting color
+                # Calculate extra padding needed for border and shadow
+                horizontal_padding = border_thickness * 2 + int(shadow_offset[0] * 1.5)
+                
+                # Create outer shadow clip with larger offset
+                outer_shadow_clip = TextClip(
+                    text=word.text,
+                    font=word.font_name,
+                    method='caption',
+                    color=(0, 0, 0),  # Black shadow
+                    stroke_color=(0, 0, 0),
+                    stroke_width=border_thickness,
+                    font_size=word.font_size,
+                    size=(word.width + horizontal_padding, int(word.font_size * 1.5)),  # Add padding
+                    margin=(horizontal_padding//2, 0, 0, int(word.font_size * 1.5),),  # Add left margin
+                    text_align='left',
+                    duration=window.end_time - word.start_time
+                ).with_position((int(roi_x + x_position - horizontal_padding//2 + shadow_offset[0] * 1.5), 
+                               int(roi_y + y_position + shadow_offset[1] * 1.5))).with_opacity(0.3).with_start(word.start_time)
+
+                # Create inner shadow clip with regular offset
+                inner_shadow_clip = TextClip(
+                    text=word.text,
+                    font=word.font_name,
+                    method='caption',
+                    color=(0, 0, 0),  # Black shadow
+                    stroke_color=(0, 0, 0),
+                    stroke_width=border_thickness,
+                    font_size=word.font_size,
+                    size=(word.width + horizontal_padding, int(word.font_size * 1.5)),  # Add padding
+                    margin=(horizontal_padding//2, 0, 0, int(word.font_size * 1.5),),  # Add left margin
+                    text_align='left',
+                    duration=window.end_time - word.start_time
+                ).with_position((int(roi_x + x_position - horizontal_padding//2 + shadow_offset[0]), 
+                               int(roi_y + y_position + shadow_offset[1]))).with_opacity(0.6).with_start(word.start_time)
+                
+                # Create text clip with contrasting color and enhancements
                 txt_clip = TextClip(
                     text=word.text,
                     font=word.font_name,
                     method='caption',
                     color=text_color,
                     stroke_color=stroke_color,
-                    stroke_width=1,
+                    stroke_width=border_thickness,
                     font_size=word.font_size,
-                    size=(word.width, int(word.font_size * 1.5)), # allow enough room for vertical alignment
-                    margin=(0,0,0,int(word.font_size * 1.5),), # prevents bottom of text from being cut off
+                    size=(word.width + horizontal_padding, int(word.font_size * 1.5)),  # Add padding
+                    margin=(horizontal_padding//2, 0, 0, int(word.font_size * 1.5),),  # Add left margin
                     text_align='left',
                     duration=window.end_time - word.start_time  # Word persists until end of window
-                )
-
-                # Set position and start time - ensure integer positions and adjust y for baseline
-                baseline_offset = int((word.font_size - window.font_size) * 0.2)  # Adjust baseline for larger fonts
-                txt_clip = txt_clip.with_position((int(roi_x + x_position), int(roi_y + y_position - baseline_offset)))
-                txt_clip = txt_clip.with_start(word.start_time)
+                ).with_position((int(roi_x + x_position - horizontal_padding//2), 
+                               int(roi_y + y_position))).with_start(word.start_time)
                 
-                text_clips.append(txt_clip)
+                text_clips.append(outer_shadow_clip)  # Add outer shadow first (furthest back)
+                text_clips.append(inner_shadow_clip)  # Add inner shadow next
+                text_clips.append(txt_clip)  # Add text last (on top)
                 
                 # Update cursor and previous word for next iteration
                 cursor_x = new_cursor_x
@@ -407,17 +443,52 @@ def create_dynamic_captions(
         # Combine video with text overlays
         final_video = CompositeVideoClip([video] + text_clips)
 
-        # Write output
+        # Generate unique filenames for temporary files
+        temp_audio = os.path.join(os.path.dirname(output_path), f"temp_audio_{uuid.uuid4()}.m4a")
+        temp_files.append(temp_audio)
+        
+        # Extract audio from input video
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", input_video,
+            "-vn",  # No video
+            "-acodec", "copy",  # Copy audio codec
+            temp_audio
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if not result:
+            Logger.print_error("Failed to extract audio")
+            return None
+
+        # Write video without audio first
+        temp_video = os.path.join(os.path.dirname(output_path), f"temp_video_{uuid.uuid4()}.mp4")
+        temp_files.append(temp_video)
+        
         final_video.write_videofile(
-            output_path,
+            temp_video,
             codec='libx264',
-            audio_codec='aac',
-            temp_audiofile='temp-audio.m4a',
-            remove_temp=True,
-            # Performance optimizations:
-            preset='ultrafast',  # Faster encoding, slightly larger file size
-            threads=4  # Use multiple CPU cores
+            audio=False,  # No audio in this step
+            preset='ultrafast',
+            threads=4
         )
+
+        # Combine video with original audio
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", temp_video,     # Video with captions
+            "-i", temp_audio,     # Original audio
+            "-map", "0:v:0",      # Map video from first input
+            "-map", "1:a:0",      # Map audio from second input
+            "-c:v", "copy",       # Copy video stream without re-encoding
+            "-c:a", "aac",        # Encode audio as AAC
+            "-b:a", "192k",       # Set audio bitrate
+            "-shortest",          # Match duration to shortest stream
+            output_path
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if not result:
+            Logger.print_error("Failed to combine video with audio")
+            return None
 
         # Clean up
         video.close()
@@ -425,6 +496,7 @@ def create_dynamic_captions(
         for clip in text_clips:
             clip.close()
 
+        Logger.print_info(f"Successfully added dynamic captions to video: {output_path}")
         return output_path
 
     except Exception as e:
@@ -432,6 +504,14 @@ def create_dynamic_captions(
         import traceback
         Logger.print_error(f"Traceback: {traceback.format_exc()}")
         return None
+    finally:
+        # Clean up temporary files
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except Exception as e:
+                Logger.print_error(f"Error cleaning up temporary file {temp_file}: {e}")
 
 def create_srt_captions(
     captions: List[CaptionEntry],
@@ -481,6 +561,7 @@ def create_static_captions(
         position: Vertical position of captions ('bottom' or 'center')
         margin: Margin from screen edges in pixels
     """
+    temp_files = []  # Keep track of temp files for cleanup
     try:
         # Get video dimensions
         ffprobe_cmd = [
@@ -524,26 +605,71 @@ def create_static_captions(
         # Combine all filters
         complete_filter = ",".join(drawtext_filters)
         
-        # Run FFmpeg command
+        # Generate unique filenames for temporary files
+        temp_audio = os.path.join(os.path.dirname(output_path), f"temp_audio_{uuid.uuid4()}.m4a")
+        temp_files.append(temp_audio)
+        
+        # Extract audio from input video
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", input_video,
+            "-vn",  # No video
+            "-acodec", "copy",  # Copy audio codec
+            temp_audio
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if not result:
+            Logger.print_error("Failed to extract audio")
+            return None
+
+        # Create video with captions
+        temp_video = os.path.join(os.path.dirname(output_path), f"temp_video_{uuid.uuid4()}.mp4")
+        temp_files.append(temp_video)
+        
         ffmpeg_cmd = [
             "ffmpeg", "-y",
             "-i", input_video,
             "-vf", complete_filter,
-            "-c:a", "copy",
-            output_path
+            "-an",  # No audio in this step
+            temp_video
         ]
-        
         result = run_ffmpeg_command(ffmpeg_cmd)
-        if result:
-            Logger.print_info(f"Successfully added static captions to video: {output_path}")
-            return output_path
-        else:
+        if not result:
             Logger.print_error("Failed to add static captions to video")
             return None
-            
+
+        # Combine video with original audio
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-i", temp_video,     # Video with captions
+            "-i", temp_audio,     # Original audio
+            "-map", "0:v:0",      # Map video from first input
+            "-map", "1:a:0",      # Map audio from second input
+            "-c:v", "copy",       # Copy video stream without re-encoding
+            "-c:a", "aac",        # Encode audio as AAC
+            "-b:a", "192k",       # Set audio bitrate
+            "-shortest",          # Match duration to shortest stream
+            output_path
+        ]
+        result = run_ffmpeg_command(ffmpeg_cmd)
+        if not result:
+            Logger.print_error("Failed to combine video with audio")
+            return None
+
+        Logger.print_info(f"Successfully added static captions to video: {output_path}")
+        return output_path
+
     except (ValueError, OSError, subprocess.CalledProcessError) as e:
         Logger.print_error(f"Error adding static captions: {e}")
         return None 
+    finally:
+        # Clean up temporary files
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except Exception as e:
+                Logger.print_error(f"Error cleaning up temporary file {temp_file}: {e}")
 
     # TODO: Fix bug where long static captions overflow the screen width.
     #       Need to implement text wrapping for static captions similar to dynamic captions

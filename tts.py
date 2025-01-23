@@ -127,9 +127,22 @@ class GoogleTTS(TextToSpeech):
                 voice=voice,
                 audio_config=audio_config)
 
+            # Create temp directory if it doesn't exist
+            temp_dir = get_tempdir()
+            os.makedirs(os.path.join(temp_dir, "tts"), exist_ok=True)
+
+            # Sanitize the text for use in filename
+            # Take first 3 words and replace problematic characters
+            words = text.split()[:3]
+            sanitized_words = []
+            for word in words:
+                # Replace slashes, parentheses, and other problematic characters
+                sanitized = re.sub(r'[^\w\s-]', '_', word)
+                sanitized_words.append(sanitized)
+            snippet = '_'.join(sanitized_words)
+
             # Save the audio to a file
-            snippet = '_'.join(text.split()[:3])  # Take the first 3 words of the text as a snippet
-            file_path = os.path.join(get_tempdir(), f"chatgpt_response_{snippet}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
+            file_path = os.path.join(temp_dir, "tts", f"chatgpt_response_{snippet}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
             with open(file_path, "wb") as out:
                 out.write(response.audio_content)
 

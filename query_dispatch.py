@@ -8,12 +8,14 @@ from utils import get_tempdir
 from time import time
 
 class ChatGPTQueryDispatcher:
-    def __init__(self):
+    def __init__(self, pre_prompt=None):
         load_dotenv()
         openai.api_key = os.environ.get("OPENAI_API_KEY")
         ganglia_home = os.getenv('GANGLIA_HOME', os.getcwd())
         self.config_file_path = os.path.join(ganglia_home, 'config', 'ganglia_config.json')
         self.messages = []
+        if pre_prompt:
+            self.messages.append({"role": "system", "content": pre_prompt})
 
     def add_system_context(self, context_lines):
         # Add each context line as a system message
@@ -57,3 +59,10 @@ class ChatGPTQueryDispatcher:
             removed_length = len(removed_message["content"].split())
             total_tokens -= removed_length
             Logger.print_debug(f"Conversation history getting long - dropping oldest content: {removed_message['content']} ({removed_length} tokens)")
+
+    def count_tokens(self):
+        """Count total tokens in the message history."""
+        total_tokens = 0
+        for message in self.messages:
+            total_tokens += len(message["content"].split())
+        return total_tokens

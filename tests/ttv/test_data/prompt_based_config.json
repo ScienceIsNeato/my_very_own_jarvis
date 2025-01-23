@@ -1,5 +1,6 @@
 {
     "style": "digital art",
+    "music_backend": "suno",
     "story": [
         "A small black cat sat by the window.",
         "She watched the birds flutter past with curious eyes.",
@@ -12,13 +13,8 @@
         "prompt": "Create ambient electronic music that captures the curiosity of a cat"
     },
     "closing_credits": {
-        "music": {
-            "file": null,
-            "prompt": "Create upbeat celebratory music with cat-themed lyrics"
-        },
-        "poster": {
-            "file": null,
-            "prompt": "A curious black cat watching a red butterfly, digital art style"
-        }
-    }
+        "file": null,
+        "prompt": "Create upbeat celebratory music with cat-themed lyrics"
+    },
+    "preloaded_images_dir": "tests/ttv/test_data/images"
 } 

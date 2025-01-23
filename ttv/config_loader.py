@@ -11,12 +11,6 @@ class MusicConfig:
     prompt: Optional[str] = None
 
 @dataclass
-class ClosingCreditsConfig:
-    """Configuration for closing credits section."""
-    music: MusicConfig
-    poster: MusicConfig  # Reusing MusicConfig since it has the same file/prompt structure
-
-@dataclass
 class TTVConfig:
     """Configuration for text-to-video generation."""
     style: str  # Required
@@ -24,18 +18,24 @@ class TTVConfig:
     title: str  # Required
     caption_style: Literal["static", "dynamic"] = "static"  # Optional, defaults to static
     background_music: Optional[MusicConfig] = None
-    closing_credits: Optional[ClosingCreditsConfig] = None
+    closing_credits: Optional[MusicConfig] = None
+    preloaded_images_dir: Optional[str] = None  # Optional, directory containing pre-generated images
+    music_backend: Literal["suno", "meta"] = "suno"  # Optional, defaults to suno
 
     def __iter__(self):
         """Make the config unpackable into (style, story, title)."""
         return iter([self.style, self.story, self.title])
 
+    def get(self, key, default=None):
+        """Get a config value by key, with an optional default."""
+        return getattr(self, key, default)
+
 def validate_music_config(config: MusicConfig) -> None:
     """Validate that a music config has either a file or a prompt."""
     if not config.file and not config.prompt:
         raise ValueError("Either file or prompt must be specified")
-    if config.file and config.prompt:
-        raise ValueError("Cannot specify both file and prompt")
+    if config.file is not None and config.prompt is not None:
+        raise ValueError("Cannot specify both file and prompt. Current settings: file={config.file}, prompt={config.prompt}")
 
 def validate_caption_style(caption_style: Optional[str]) -> str:
     """Validate and normalize the caption style.
@@ -74,20 +74,32 @@ def load_input(ttv_config: str) -> TTVConfig:
 
     # Create music configs if present
     background_music = None
-    if "background_music" in data:
-        background_music = MusicConfig(**data["background_music"])
-        validate_music_config(background_music)
+    if "background_music" in data and data["background_music"]:
+        background_music = MusicConfig(
+            file=data["background_music"].get("file"),
+            prompt=data["background_music"].get("prompt")
+        )
+        if background_music.file or background_music.prompt:
+            validate_music_config(background_music)
+        else:
+            background_music = None
 
     closing_credits = None
-    if "closing_credits" in data:
-        music = MusicConfig(**data["closing_credits"]["music"])
-        poster = MusicConfig(**data["closing_credits"]["poster"])
-        validate_music_config(music)
-        validate_music_config(poster)
-        closing_credits = ClosingCreditsConfig(music=music, poster=poster)
+    if "closing_credits" in data and data["closing_credits"]:
+        closing_credits = MusicConfig(
+            file=data["closing_credits"].get("file"),
+            prompt=data["closing_credits"].get("prompt")
+        )
+        if closing_credits.file or closing_credits.prompt:
+            validate_music_config(closing_credits)
+        else:
+            closing_credits = None
 
     # Validate caption style
     caption_style = validate_caption_style(data.get("caption_style"))
+
+    # Get preloaded images directory if present
+    preloaded_images_dir = data.get("preloaded_images_dir")
 
     # Create and validate full config
     config = TTVConfig(
@@ -96,7 +108,8 @@ def load_input(ttv_config: str) -> TTVConfig:
         title=data["title"],
         caption_style=caption_style,
         background_music=background_music,
-        closing_credits=closing_credits
+        closing_credits=closing_credits,
+        preloaded_images_dir=preloaded_images_dir
     )
 
     return config

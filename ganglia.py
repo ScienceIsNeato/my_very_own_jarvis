@@ -190,7 +190,7 @@ def main():
         current_datetime = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         output_path = f"/tmp/GANGLIA/ttv/final_output_{current_datetime}.mp4"
         tts_client = parse_tts_interface(args.tts_interface)
-        text_to_video(args.ttv_config, args.skip_image_generation, output_path, tts_client, query_dispatcher)
+        text_to_video(config_path=args.ttv_config, skip_generation=args.skip_image_generation, output_path=output_path, tts=tts_client, query_dispatcher=query_dispatcher)
         sys.exit(0)  # Exit after processing the video generation to avoid entering the conversational loop
 
     Logger.print_legend()
