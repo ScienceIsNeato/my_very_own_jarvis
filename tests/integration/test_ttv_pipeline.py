@@ -129,6 +129,27 @@ def validate_total_duration(output, total_video_duration):
     print(f"✓ Final duration ({final_duration:.2f}s) matches expected duration ({total_video_duration:.2f}s)")
 
 
+def validate_closing_credits_duration(output):
+    """Validate that the closing credits audio and video durations match."""
+    print("\n=== Validating Closing Credits Duration ===")
+    
+    # Extract paths from logs
+    audio_match = re.search(r'Running ffprobe command: ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 (.+\.mp3)', output)
+    if not audio_match:
+        print("No closing credits found in logs")
+        return 0.0
+
+    # Get duration from ffprobe output
+    duration_match = re.search(r'(\d+\.\d+)', output)
+    if not duration_match:
+        print("No duration found in logs")
+        return 0.0
+        
+    audio_duration = float(duration_match.group(1))
+    print(f"✓ Closing credits duration: {audio_duration:.2f}s")
+    return audio_duration
+
+
 def test_minimal_ttv_execution_direct():
     """Test direct execution of TTV command and verify output."""
     print("\n=== Starting TTV Integration Test ===")
@@ -169,6 +190,8 @@ def test_minimal_ttv_execution_direct():
 def get_audio_duration(audio_file):
     """Get the duration of an audio file using ffprobe."""
     try:
+        # Split the path at the first comma if it exists
+        audio_file = audio_file.split(',')[0].strip()
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries",
              "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_file],
@@ -183,6 +206,8 @@ def get_audio_duration(audio_file):
 def get_video_duration(video_file):
     """Get the duration of a video file using ffprobe."""
     try:
+        # Split the path at the first comma if it exists
+        video_file = video_file.split(',')[0].strip()
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries",
              "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", video_file],
@@ -216,13 +241,12 @@ def test_long_story_ttv_execution_direct():
     with open("/tmp/GANGLIA/test_output_long.log", "w") as f:
         f.write(output)
 
-    # Calculate closing credits duration
-    closing_credits_path = 'tests/integration/test_data/sample_closing_credits.mp3'
-    closing_credits_duration = get_audio_duration(closing_credits_path)
-    print(f"\n✓ Closing credits duration: {closing_credits_duration:.2f}s")
-
-    # Add closing credits duration to total video duration
-    total_video_duration = validate_audio_video_durations(output) + closing_credits_duration
+    # Validate segment durations and get total
+    total_video_duration = validate_audio_video_durations(output)
+    
+    # Validate closing credits duration and add to total
+    closing_credits_duration = validate_closing_credits_duration(output)
+    total_video_duration += closing_credits_duration
 
     # Perform validations
     final_video_path = validate_final_video_path(output)

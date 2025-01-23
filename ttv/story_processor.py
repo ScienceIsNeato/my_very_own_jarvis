@@ -12,6 +12,8 @@ from .captions import CaptionEntry, create_dynamic_captions, create_static_capti
 from .audio_alignment import create_word_level_captions
 from tts import GoogleTTS
 from utils import get_tempdir
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
 
 tts = GoogleTTS()
 
@@ -132,69 +134,101 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
             Logger.print_error(f"Error creating story JSON: {str(e)}")
             filtered_story_json = None
 
-        Logger.print_info("Submitting background music generation task...")
+        # Calculate estimated total duration based on average sentence duration
+        estimated_duration = len(story) * 5  # Estimate 5 seconds per sentence
+        Logger.print_info(f"Estimated total duration: {estimated_duration} seconds")
 
+        # Submit background music generation task early
         background_music_path = None
         background_music_future = None
         if config and config.background_music:
-            if config.background_music.file:
-                background_music_path = config.background_music.file
+            file_path = getattr(config.background_music, 'file', '')
+            prompt = getattr(config.background_music, 'prompt', '')
+            if file_path:
+                background_music_path = file_path
                 Logger.print_info(f"Using file-based background music: {background_music_path}")
-            elif config.background_music.prompt:
+            elif prompt:
                 Logger.print_info("Submitting background music generation task...")
                 background_music_future = executor.submit(
                     music_gen.generate_music,
-                    prompt=config.background_music.prompt,
+                    prompt=prompt,
                     model="chirp-v3-0",
-                    duration=20,
+                    duration=estimated_duration,  # Use estimated duration for background music
                     with_lyrics=False
                 )
 
-        # Get closing credits music configuration
+        # Submit closing credits music generation task early
         closing_credits_path = None
         closing_credits_future = None
         closing_credits_lyrics = None
         if config and config.closing_credits:
-            if config.closing_credits.music:
-                if config.closing_credits.music.file:
-                    closing_credits_path = config.closing_credits.music.file
-                    Logger.print_info(f"Using file-based closing credits music: {closing_credits_path}")
-                elif config.closing_credits.music.prompt:
-                    Logger.print_info("Submitting closing credits music generation task...")
-                    closing_credits_future = executor.submit(
-                        music_gen.generate_music,
-                        prompt=config.closing_credits.music.prompt,
-                        model="chirp-v3-0",
-                        duration=20,
-                        with_lyrics=True,
-                        story_text="\n".join(story),
-                        query_dispatcher=query_dispatcher
-                    )
+            file_path = getattr(config.closing_credits, 'file', '')
+            prompt = getattr(config.closing_credits, 'prompt', '')
+            if file_path:
+                closing_credits_path = file_path
+                Logger.print_info(f"Using file-based closing credits music: {closing_credits_path}")
+            elif prompt:
+                Logger.print_info("Submitting closing credits music generation task...")
+                closing_credits_future = executor.submit(
+                    music_gen.generate_music,
+                    prompt=prompt,
+                    model="chirp-v3-0",
+                    duration=30,  # Use 30 seconds for closing credits
+                    with_lyrics=True,
+                    story_text="\n".join(story),
+                    query_dispatcher=query_dispatcher
+                )
+            else:
+                Logger.print_info("No closing credits configuration found (missing both file and prompt)")
 
-        # Create necessary directories
-        temp_dir = get_tempdir()
-        os.makedirs(os.path.join(temp_dir, "ttv"), exist_ok=True)
-        os.makedirs(os.path.join(temp_dir, "music"), exist_ok=True)
-        os.makedirs(os.path.join(temp_dir, "tts"), exist_ok=True)
-
-        # Submit sentence processing tasks...
-        Logger.print_info("Submitting sentence processing tasks...")
-        sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher, config) for i, sentence in enumerate(story)]
-        
+        # Submit movie poster generation task if JSON was created successfully
         if filtered_story_json:
             Logger.print_info("Submitting movie poster generation task...")
             movie_poster_future = executor.submit(generate_movie_poster, filtered_story_json, style, story_title, query_dispatcher)
         else:
             Logger.print_warning("Skipping movie poster generation due to JSON creation error")
             movie_poster_future = None
+
+        # Submit sentence processing tasks...
+        Logger.print_info("Submitting sentence processing tasks...")
+        sentence_futures = [executor.submit(process_sentence, i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher, config) for i, sentence in enumerate(story)]
         
-        for future in concurrent.futures.as_completed(sentence_futures):
-            result = future.result()
-            if result:
-                video_segment_path, sentence, index = result
-                video_segments[index] = video_segment_path
-                context += f" {sentence}"
-        
+        # Wait for all futures to complete
+        video_segments = []
+        for future in sentence_futures:
+            try:
+                result = future.result()
+                if result:
+                    video_path, sentence, index = result
+                    video_segments.append((index, video_path))
+            except Exception as e:
+                Logger.print_error(f"Error processing sentence: {e}")
+
+        if not video_segments:
+            Logger.print_error("No video segments were successfully created")
+            return None, None, None, None, None
+
+        # Sort video segments by index
+        video_segments.sort(key=lambda x: x[0])
+        video_segments = [segment[1] for segment in video_segments]
+
+        # Calculate actual total duration of video segments
+        total_duration = 0
+        for segment in video_segments:
+            try:
+                result = subprocess.run(
+                    ["ffprobe", "-v", "error", "-show_entries",
+                     "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", segment],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=True)
+                duration = float(result.stdout)
+                total_duration += duration
+            except Exception as e:
+                Logger.print_error(f"Error getting duration for segment {segment}: {e}")
+
+        Logger.print_info(f"Total video duration: {total_duration} seconds")
+
         # Get the background music path from future if we generated it
         if background_music_future:
             background_music_path = background_music_future.result()

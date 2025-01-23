@@ -12,4 +12,7 @@ config/hotwords.json
 config/ttv_config.json
 config_backups/*
 venv/*
+# Test outputs
+tests/integration/ttv/test_outputs/
+tests/ttv/test_outputs/
 

@@ -7,7 +7,7 @@ from utils import get_tempdir
 import os
 import datetime
 
-def text_to_video(config_path):
+def text_to_video(config_path, skip_generation=False, output_path=None, tts=None, query_dispatcher=None):
     """Convert text to video using the provided configuration."""
     try:
         # Load configuration
@@ -16,16 +16,17 @@ def text_to_video(config_path):
             Logger.print_error("Failed to load configuration")
             return None
 
-        # Initialize TTS
-        tts = GoogleTTS()
+        # Use provided TTS or initialize a new one
+        if not tts:
+            tts = GoogleTTS()
 
         # Process story and generate video segments
         video_segments, background_music_path, closing_credits_path, movie_poster_path, closing_credits_lyrics = process_story(
             tts=tts,
             style=config.style,
             story=config.story,
-            skip_generation=False,
-            query_dispatcher=None,
+            skip_generation=skip_generation,
+            query_dispatcher=query_dispatcher,
             story_title=config.title,
             config=config
         )
@@ -37,7 +38,8 @@ def text_to_video(config_path):
             song_with_lyrics_path=closing_credits_path,
             movie_poster_path=movie_poster_path,
             config=config,
-            closing_credits_lyrics=closing_credits_lyrics
+            closing_credits_lyrics=closing_credits_lyrics,
+            output_path=output_path
         )
 
     except Exception as e:
