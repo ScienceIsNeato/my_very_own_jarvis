@@ -1,5 +1,6 @@
 {
     "style": "cinematic dark fantasy",
+    "music_backend": "suno",
     "story": [
         "In the depths of an ancient forest, twisted branches reach toward a moonless sky",
         "A weathered stone archway stands alone, covered in glowing runes of forgotten magic",
@@ -14,9 +15,7 @@
         "prompt": null
     },
     "closing_credits": {
-        "music": {
-            "file": "tests/ttv/test_data/closing_credits.mp3",
-            "prompt": null
-        }
+        "file": "tests/ttv/test_data/closing_credits.mp3",
+        "prompt": null
     }
 } 

@@ -10,8 +10,36 @@ import time
 
 from ttv.story_generation import filter_text
 
-def generate_image(sentence, context, style, image_index, total_images, query_dispatcher, retries=5, wait_time=60):
+def generate_image(sentence, context, style, image_index, total_images, query_dispatcher, preloaded_images_dir=None, retries=5, wait_time=60):
+    """Generate an image for a given sentence.
+    
+    Args:
+        sentence: The sentence to generate an image for
+        context: The context for the image generation
+        style: The style to apply to the image
+        image_index: The index of this image in the sequence
+        total_images: Total number of images being generated
+        query_dispatcher: The query dispatcher for filtering text
+        preloaded_images_dir: Optional directory containing pre-generated images
+        retries: Number of retries for rate limiting
+        wait_time: Time to wait between retries
+        
+    Returns:
+        tuple: (filename, success)
+    """
     Logger.print_debug(f"Generating image for: '{sentence}' using a style of '{style}' DALL·E 3")
+
+    # Check for preloaded image first
+    if preloaded_images_dir:
+        preloaded_path = os.path.join(preloaded_images_dir, f"image_{image_index}.png")
+        if os.path.exists(preloaded_path):
+            filename = f"/tmp/GANGLIA/ttv/image_{image_index}.png"
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            save_image_without_caption(preloaded_path, filename)
+            Logger.print_info(f"Using preloaded image from {preloaded_path}")
+            return filename, True
+        else:
+            Logger.print_warning(f"Preloaded image not found at {preloaded_path}, falling back to generation")
 
     filtered_response = filter_text(sentence, context, style, query_dispatcher, retries, wait_time)
     filtered_sentence = filtered_response["text"]
@@ -96,8 +124,16 @@ def save_image_without_caption(image_source, filename):
         return None
     return filename
 
-def generate_image_for_sentence(sentence, context, style, image_index, total_images, query_dispatcher):
-    filename, success = generate_image(sentence, context, style, image_index, total_images, query_dispatcher=query_dispatcher)
+def generate_image_for_sentence(sentence, context, style, image_index, total_images, query_dispatcher, preloaded_images_dir=None):
+    filename, success = generate_image(
+        sentence, 
+        context, 
+        style, 
+        image_index, 
+        total_images, 
+        query_dispatcher=query_dispatcher,
+        preloaded_images_dir=preloaded_images_dir
+    )
     if not success:
         Logger.print_error(f"Image generation failed for: '{sentence}'. Generating blank image.")
         return generate_blank_image(sentence, image_index)

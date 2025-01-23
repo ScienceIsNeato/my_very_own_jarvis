@@ -129,43 +129,6 @@ def validate_total_duration(output, total_video_duration):
     print(f"✓ Final duration ({final_duration:.2f}s) matches expected duration ({total_video_duration:.2f}s)")
 
 
-def test_minimal_ttv_execution_direct():
-    """Test direct execution of TTV command and verify output."""
-    print("\n=== Starting TTV Integration Test ===")
-    
-    # Run the TTV command and capture output
-    command = f"PYTHONUNBUFFERED=1 python ganglia.py --text-to-video --ttv-config {HARD_CODED_CONFIG_PATH}"
-    output = ""  # Initialize output here
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    for line in iter(process.stdout.readline, b''):
-        decoded_line = line.decode('utf-8')
-        print(decoded_line, end='')  # Print to console
-        sys.stdout.flush()  # Ensure immediate output
-        output += decoded_line
-    process.stdout.close()
-    process.wait()
-
-    # Save output to a file for debugging
-    with open("/tmp/GANGLIA/test_output.log", "w") as f:
-        f.write(output)
-
-    # Calculate closing credits duration
-    closing_credits_path = 'tests/integration/test_data/sample_closing_credits.mp3'
-    closing_credits_duration = get_audio_duration(closing_credits_path)
-    print(f"\n✓ Closing credits duration: {closing_credits_duration:.2f}s")
-
-    # Add closing credits duration to total video duration
-    total_video_duration = validate_audio_video_durations(output) + closing_credits_duration
-
-    # Perform validations
-    final_video_path = validate_final_video_path(output)
-    validate_total_duration(output, total_video_duration)
-
-    # Clean up
-    os.remove(final_video_path)
-    print("\n=== Test Complete ===\n")
-
-
 def get_audio_duration(audio_file):
     """Get the duration of an audio file using ffprobe."""
     try:

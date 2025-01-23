@@ -2,6 +2,7 @@ from logger import Logger
 from .audio_generation import get_audio_duration
 from .ffmpeg_wrapper import run_ffmpeg_command
 from utils import get_tempdir
+from ttv.log_messages import LOG_VIDEO_SEGMENT_CREATE
 import os
 import uuid
 
@@ -21,7 +22,7 @@ def create_video_segment(image_path, audio_path, output_path=None):
             temp_dir = get_tempdir()
             output_path = os.path.join(temp_dir, "ttv", f"segment_{uuid.uuid4()}.mp4")
         
-        Logger.print_info(f"Creating video segment: output_path={output_path}, audio_path={audio_path}, image_path={image_path}")
+        Logger.print_info(f"{LOG_VIDEO_SEGMENT_CREATE}{output_path}, audio_path={audio_path}, image_path={image_path}")
         ffmpeg_cmd = [
             "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
             "-c:v", "libx264", "-tune", "stillimage", 

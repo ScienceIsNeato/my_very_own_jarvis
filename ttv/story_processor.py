@@ -28,12 +28,15 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
     os.makedirs(os.path.join(temp_dir, "tts"), exist_ok=True)
     os.makedirs(os.path.join(temp_dir, "images"), exist_ok=True)
 
+    # Get preloaded images directory from config
+    preloaded_images_dir = config.get("preloaded_images_dir")
+
     # Generate image for this sentence
     filename = None
     if skip_generation:
         filename = generate_blank_image(sentence, i)
     else:
-        filename, success = generate_image(sentence, context, style, i, total_images, query_dispatcher)
+        filename, success = generate_image(sentence, context, style, i, total_images, query_dispatcher, preloaded_images_dir=preloaded_images_dir)
         if not success:
             return None, sentence, i
     if not filename:

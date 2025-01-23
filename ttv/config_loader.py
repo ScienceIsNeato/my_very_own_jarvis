@@ -19,10 +19,16 @@ class TTVConfig:
     caption_style: Literal["static", "dynamic"] = "static"  # Optional, defaults to static
     background_music: Optional[MusicConfig] = None
     closing_credits: Optional[MusicConfig] = None
+    preloaded_images_dir: Optional[str] = None  # Optional, directory containing pre-generated images
+    music_backend: Literal["suno", "meta"] = "suno"  # Optional, defaults to suno
 
     def __iter__(self):
         """Make the config unpackable into (style, story, title)."""
         return iter([self.style, self.story, self.title])
+
+    def get(self, key, default=None):
+        """Get a config value by key, with an optional default."""
+        return getattr(self, key, default)
 
 def validate_music_config(config: MusicConfig) -> None:
     """Validate that a music config has either a file or a prompt."""
@@ -92,6 +98,9 @@ def load_input(ttv_config: str) -> TTVConfig:
     # Validate caption style
     caption_style = validate_caption_style(data.get("caption_style"))
 
+    # Get preloaded images directory if present
+    preloaded_images_dir = data.get("preloaded_images_dir")
+
     # Create and validate full config
     config = TTVConfig(
         style=data["style"],
@@ -99,7 +108,8 @@ def load_input(ttv_config: str) -> TTVConfig:
         title=data["title"],
         caption_style=caption_style,
         background_music=background_music,
-        closing_credits=closing_credits
+        closing_credits=closing_credits,
+        preloaded_images_dir=preloaded_images_dir
     )
 
     return config

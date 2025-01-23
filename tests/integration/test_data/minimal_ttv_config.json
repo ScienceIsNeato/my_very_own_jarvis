@@ -1,5 +1,6 @@
 {
-    "style": "minimal",
+    "style": "minimal test style",
+    "music_backend": "suno",
     "story": [
         "This is a test story. This is the first line in the story.",
         "This is the second line in the story."
@@ -11,5 +12,6 @@
     },
     "closing_credits": {
         "file": "tests/integration/test_data/sample_closing_credits.mp3"
-    }
+    },
+    "preloaded_images_dir": "tests/ttv/test_data/epic_tale_images"
 }

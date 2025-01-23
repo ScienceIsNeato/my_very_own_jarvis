@@ -212,5 +212,34 @@ class TestConfigLoader(unittest.TestCase):
         self.assertIsNone(result.closing_credits.prompt)
         os.remove("tests/ttv/test_data/temp_config.json")
 
+    def test_preloaded_images_dir_present(self):
+        """Test loading a config with preloaded_images_dir specified."""
+        config = {
+            "style": "test style",
+            "story": ["test story"],
+            "title": "test title",
+            "preloaded_images_dir": "tests/ttv/test_data/images"
+        }
+        with open("tests/ttv/test_data/temp_config.json", "w") as f:
+            json.dump(config, f)
+        
+        result = load_input("tests/ttv/test_data/temp_config.json")
+        self.assertEqual(result.preloaded_images_dir, "tests/ttv/test_data/images")
+        os.remove("tests/ttv/test_data/temp_config.json")
+
+    def test_preloaded_images_dir_absent(self):
+        """Test loading a config without preloaded_images_dir."""
+        config = {
+            "style": "test style",
+            "story": ["test story"],
+            "title": "test title"
+        }
+        with open("tests/ttv/test_data/temp_config.json", "w") as f:
+            json.dump(config, f)
+        
+        result = load_input("tests/ttv/test_data/temp_config.json")
+        self.assertIsNone(result.preloaded_images_dir)
+        os.remove("tests/ttv/test_data/temp_config.json")
+
 if __name__ == "__main__":
     unittest.main() 

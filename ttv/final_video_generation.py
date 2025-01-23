@@ -10,6 +10,7 @@ from utils import get_tempdir
 from typing import Optional, List
 from .audio_alignment import create_word_level_captions
 from .captions import create_dynamic_captions, create_static_captions, CaptionEntry
+from .log_messages import LOG_CLOSING_CREDITS_DURATION
 import json
 
 def concatenate_video_segments(video_segments, output_path):
@@ -96,15 +97,19 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
             Logger.print_info("Skipping background music (disabled in config)")
             main_video_with_background_music_path = main_video_path
 
-        if movie_poster_path and song_with_lyrics_path:
+        if song_with_lyrics_path:
             Logger.print_info("Generating closing credits...")
-            closing_credits = generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config, closing_credits_lyrics)
-            if closing_credits:
-                # now all we have to do is stitch together the main content and the credits
-                fully_assembled_movie_path = append_video_segments([main_video_with_background_music_path, closing_credits], output_path)
-                final_output_path = fully_assembled_movie_path
+            if movie_poster_path:
+                closing_credits = generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config, closing_credits_lyrics)
+                if closing_credits:
+                    # now all we have to do is stitch together the main content and the credits
+                    fully_assembled_movie_path = append_video_segments([main_video_with_background_music_path, closing_credits], output_path)
+                    final_output_path = fully_assembled_movie_path
+                else:
+                    Logger.print_error("Failed to generate closing credits, using main video without credits")
+                    final_output_path = main_video_with_background_music_path
             else:
-                Logger.print_error("Failed to generate closing credits, using main video without credits")
+                Logger.print_warning("No movie poster available for closing credits, using main video without credits")
                 final_output_path = main_video_with_background_music_path
         else:
             Logger.print_info("Skipping closing credits (disabled in config)")
@@ -136,6 +141,7 @@ def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_pa
         Logger.print_error("Failed to get audio duration")
         return None
     duration = float(result.stdout.decode('utf-8').strip())
+    Logger.print_info(f"{LOG_CLOSING_CREDITS_DURATION}: {duration}s")
 
     # Create video from poster image with duration matching audio
     ffmpeg_cmd = [

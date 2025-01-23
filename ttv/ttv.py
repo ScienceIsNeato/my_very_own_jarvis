@@ -3,9 +3,6 @@ from .story_processor import process_story
 from .final_video_generation import assemble_final_video
 from tts import GoogleTTS
 from logger import Logger
-from utils import get_tempdir
-import os
-import datetime
 
 def text_to_video(config_path, skip_generation=False, output_path=None, tts=None, query_dispatcher=None):
     """Convert text to video using the provided configuration."""
@@ -15,6 +12,9 @@ def text_to_video(config_path, skip_generation=False, output_path=None, tts=None
         if not config:
             Logger.print_error("Failed to load configuration")
             return None
+        
+        # Log loaded config
+        Logger.print_info(f"Loaded config: {config}")
 
         # Use provided TTS or initialize a new one
         if not tts:
