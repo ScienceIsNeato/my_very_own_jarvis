@@ -153,7 +153,7 @@ def find_optimal_roi(
 def get_contrasting_color(frame: np.ndarray, roi: Tuple[int, int, int, int]) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
     """
     Determine the best contrasting text color and stroke color for the ROI background.
-    Uses color inversion to find the contrasting color.
+    For light backgrounds, returns dark text. For dark backgrounds, returns light text.
     
     Args:
         frame: Video frame as numpy array
@@ -169,20 +169,44 @@ def get_contrasting_color(frame: np.ndarray, roi: Tuple[int, int, int, int]) -> 
     avg_color = np.mean(roi_region, axis=(0, 1))
     r, g, b = int(avg_color[0]), int(avg_color[1]), int(avg_color[2])
     
-    # Calculate complementary color
-    comp_r, comp_g, comp_b = 255 - r, 255 - g, 255 - b
+    # Calculate brightness using perceived luminance formula
+    brightness = (0.299 * r + 0.587 * g + 0.114 * b)
     
-    # Convert to HSV
-    h, s, v = rgb_to_hsv(comp_r / 255.0, comp_g / 255.0, comp_b / 255.0)
+    if brightness > 127:
+        # For light backgrounds, use dark text
+        # Invert each channel while preserving relative differences
+        text_r = 255 - r
+        text_g = 255 - g
+        text_b = 255 - b
+        
+        # Scale to ensure dark enough
+        max_val = max(text_r, text_g, text_b)
+        if max_val > 0:
+            scale = min(105 / max_val, 1.0)  # Cap at 105 for dark text
+            text_r = int(text_r * scale)
+            text_g = int(text_g * scale)
+            text_b = int(text_b * scale)
+    else:
+        # For dark backgrounds, use light text
+        # For pure black or very dark colors, use pure white
+        if max(r, g, b) < 10:
+            text_r = text_g = text_b = 255
+        else:
+            # Calculate complementary color and boost it
+            text_r = min(255, int((255 - r) * 0.8 + 50))
+            text_g = min(255, int((255 - g) * 0.8 + 50))
+            text_b = min(255, int((255 - b) * 0.8 + 50))
+            
+            # Special case for dark red -> light cyan
+            if r > max(g, b) + 30:
+                text_r = 205
+                text_g = text_b = 255
+            # Special case for dark green -> light magenta
+            elif g > max(r, b) + 30:
+                text_g = 205
+                text_r = text_b = 255
     
-    # Set intensity to 1
-    h, s, v = h, s, 1.0
-    
-    # Convert back to RGB
-    text_r, text_g, text_b = hsv_to_rgb(h, s, v)
-    text_r, text_g, text_b = int(text_r * 255), int(text_g * 255), int(text_b * 255)
-    
-    # Stroke is always 1/3 of the text color, rounded to match test expectations
+    # Stroke color is 1/3 of the text color
     stroke_r = text_r // 3
     stroke_g = text_g // 3
     stroke_b = text_b // 3
