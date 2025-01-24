@@ -54,6 +54,7 @@ HARD_CODED_CONFIG_PATH = "tests/integration/test_data/minimal_ttv_config.json"
 # Path to the test config file
 SIMULATED_PIPELINE_CONFIG = "tests/integration/test_data/simulated_pipeline_config.json"
 
+@pytest.mark.integration
 def test_simulated_pipeline_execution():
     """Test the full TTV pipeline with simulated responses for music and image generation.
     
@@ -100,6 +101,8 @@ def test_simulated_pipeline_execution():
     os.remove(final_video_path)
     print("\n=== Test Complete ===\n")
 
+@pytest.mark.integration
+@pytest.mark.costly
 def test_generated_pipeline_execution():
     """Test execution of TTV pipeline with generated content (music, images).
     
@@ -144,13 +147,3 @@ def test_generated_pipeline_execution():
     # Clean up
     os.remove(final_video_path)
     print("\n=== Test Complete ===\n")
-
-if __name__ == "__main__":
-    # Directly run the test function
-    try:
-        test_simulated_pipeline_execution()
-        test_generated_pipeline_execution()
-    except AssertionError as e:
-        print(f"Test failed: {e}")
-    else:
-        print("Test passed successfully.")

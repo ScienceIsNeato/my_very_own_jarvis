@@ -5,6 +5,7 @@ import sys
 import termios
 import tty
 import json
+import select
 from music_lib import MusicGenerator
 from ttv.config_loader import load_input
 
@@ -55,17 +56,37 @@ def play_audio(audio_path):
         else:  # Linux/Others - requires vlc
             process = subprocess.Popen(['vlc', '--play-and-exit', audio_path])
         
+        # Check process status and spacebar in small intervals
         while process.poll() is None:
-            if is_space_pressed():
-                process.terminate()
-                break
+            try:
+                # Set stdin to non-blocking mode
+                fd = sys.stdin.fileno()
+                old_settings = termios.tcgetattr(fd)
+                tty.setraw(sys.stdin.fileno())
+                # Only wait for 0.1 seconds for input
+                rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+                if rlist:
+                    ch = sys.stdin.read(1)
+                    if ch == ' ':
+                        process.terminate()
+                        break
+            except Exception:
+                pass
+            finally:
+                try:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                except Exception:
+                    pass
             
     except Exception as e:
         print(f"Failed to play audio: {str(e)}")
 
+@pytest.mark.third_party
+@pytest.mark.costly
+@pytest.mark.musicgen
 def test_suno_backend():
     """Test music generation using the Suno backend."""
-    config = load_input("tests/ttv/test_data/prompt_based_config.json")
+    config = load_input("tests/integration/test_data/minimal_ttv_config.json")
     config.music_backend = "suno"  # Ensure we're using Suno backend
     generator = MusicGenerator(config=config)
     
@@ -105,9 +126,11 @@ def test_suno_backend():
     print("Press SPACE to skip audio playback...")
     play_audio(audio_path)
 
+@pytest.mark.third_party
+@pytest.mark.musicgen
 def test_meta_backend():
     """Test the Meta MusicGen backend for instrumental music generation."""
-    config = load_input("tests/ttv/test_data/prompt_based_config.json")
+    config = load_input("tests/integration/test_data/minimal_ttv_config.json")
     config.music_backend = "meta"  # Override to use Meta backend
     generator = MusicGenerator(config=config)
     

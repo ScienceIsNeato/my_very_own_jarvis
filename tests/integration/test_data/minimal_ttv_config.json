@@ -13,5 +13,5 @@
     "closing_credits": {
         "file": "tests/integration/test_data/sample_closing_credits.mp3"
     },
-    "preloaded_images_dir": "tests/ttv/test_data/epic_tale_images"
+    "preloaded_images_dir": "tests/unit/ttv/test_data/epic_tale_images"
 }

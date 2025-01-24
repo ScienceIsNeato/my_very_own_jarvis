@@ -11,6 +11,7 @@ import wave
 import numpy as np
 import whisper
 
+@pytest.mark.unit
 def test_word_alignment():
     # Create test audio using TTS
     tts = GoogleTTS()
@@ -34,6 +35,7 @@ def test_word_alignment():
         if os.path.exists(audio_path):
             os.remove(audio_path)
 
+@pytest.mark.unit
 def test_caption_generation_from_audio():
     # Create test audio using TTS
     tts = GoogleTTS()
@@ -57,11 +59,12 @@ def test_caption_generation_from_audio():
         if os.path.exists(audio_path):
             os.remove(audio_path)
 
+@pytest.mark.unit
 def test_closing_credits_with_music():
     """Test word alignment with the closing credits song."""
     try:
         print("\nTesting closing credits song transcription:")
-        music_path = "tests/ttv/test_data/closing_credits.mp3"
+        music_path = "tests/unit/ttv/test_data/closing_credits.mp3"
         
         # Use base model as it provides cleaner transcription
         model = whisper.load_model("base", device="cpu")
@@ -91,5 +94,5 @@ def test_closing_credits_with_music():
             assert word_timings[i].end <= word_timings[i + 1].start, "Word timings are not in order"
 
     except FileNotFoundError:
-        print("Test data file not found. Please ensure tests/ttv/test_data/closing_credits.mp3 exists.")
+        print("Test data file not found. Please ensure tests/unit/ttv/test_data/closing_credits.mp3 exists.")
         assert False, "Test data file not found" 

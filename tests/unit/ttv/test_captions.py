@@ -1,6 +1,8 @@
 import os
 import tempfile
 import sys
+
+import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from utils import get_tempdir
 from PIL import Image, ImageFont
@@ -60,6 +62,7 @@ def play_test_video(video_path):
     play_cmd = ["ffplay", "-autoexit", video_path]
     run_ffmpeg_command(play_cmd)
 
+@pytest.mark.unit
 def test_default_static_captions():
     """Test that static captions work with default settings."""
     # Create test video
@@ -95,6 +98,7 @@ def test_default_static_captions():
         if os.path.exists(output_path):
             os.unlink(output_path)
 
+@pytest.mark.unit
 def test_static_captions():
     """Test static caption generation"""
     # Create test video
@@ -133,6 +137,7 @@ def test_static_captions():
         if os.path.exists(output_path):
             os.unlink(output_path)
 
+@pytest.mark.unit
 def test_caption_text_completeness():
     """Test that all words from the original caption appear in the dynamic captions"""
     original_text = "This is a test caption with multiple words that should all appear in the output"
@@ -158,6 +163,7 @@ def test_caption_text_completeness():
         processed_words.extend(word.text for word in window.words)
     assert set(words) == set(processed_words), "Not all words from original caption are present in processed output"
 
+@pytest.mark.unit
 def test_font_size_scaling():
     """Test that font sizes are properly scaled based on video dimensions"""
     # Create test video with specific dimensions
@@ -201,6 +207,7 @@ def test_font_size_scaling():
         if os.path.exists(output_path):
             os.unlink(output_path)
 
+@pytest.mark.unit
 def test_caption_positioning():
     """Test that captions stay within the safe viewing area"""
     # Create test video with specific dimensions
@@ -252,6 +259,7 @@ def test_caption_positioning():
         if os.path.exists(output_path):
             os.unlink(output_path)
 
+@pytest.mark.unit
 def test_create_srt_captions():
     """Test SRT caption file generation"""
     captions = [
@@ -269,6 +277,7 @@ def test_create_srt_captions():
         assert "00:00:00,000" in content, "Start time not formatted correctly"
         assert "00:00:02,500" in content, "End time not formatted correctly"
 
+@pytest.mark.unit
 def test_audio_aligned_captions():
     """Test creation of a video with audio-aligned captions"""
     # Create test video
@@ -345,6 +354,7 @@ def test_audio_aligned_captions():
         if os.path.exists(audio_path):
             os.remove(audio_path)
 
+@pytest.mark.unit
 def test_text_wrapping_direction():
     """Test that when text wraps to a new line, it goes downward rather than upward"""
     # Set up dimensions

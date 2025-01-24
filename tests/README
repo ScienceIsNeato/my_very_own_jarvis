@@ -1,6 +1,0 @@
-A quick note about these tests:
-
-This is a collection of scripts that were used to do "quick and dirty" validation
-of a feature without needing to run the whole project. They aren't unit tests or
-integration tests - more like one-offs that were probably created and used to
-troubleshoot something and then abandoned. Use them with that in mind. 

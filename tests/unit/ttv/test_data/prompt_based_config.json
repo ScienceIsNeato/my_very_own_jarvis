@@ -7,13 +7,14 @@
         "Suddenly, a bright red butterfly caught her attention."
     ],
     "title": "The Curious Cat",
-    "caption_style": "static",
+    "caption_style": "dynamic",
     "background_music": {
-        "file": "tests/ttv/test_data/background_music.mp3",
-        "prompt": null
+        "file": null,
+        "prompt": "Create ambient electronic music that captures the curiosity of a cat"
     },
     "closing_credits": {
-        "file": "tests/ttv/test_data/closing_credits.mp3",
-        "prompt": null
-    }
+        "file": null,
+        "prompt": "Create upbeat celebratory music with cat-themed lyrics"
+    },
+    "preloaded_images_dir": "tests/unit/ttv/test_data/images"
 } 

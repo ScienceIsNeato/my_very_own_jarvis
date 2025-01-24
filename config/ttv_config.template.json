@@ -11,11 +11,11 @@
     "title": "The Gateway",
     "caption_style": "dynamic",
     "background_music": {
-        "file": "tests/ttv/test_data/background_music.mp3",
+        "file": "tests/unit/ttv/test_data/background_music.mp3",
         "prompt": null
     },
     "closing_credits": {
-        "file": "tests/ttv/test_data/closing_credits.mp3",
+        "file": "tests/unit/ttv/test_data/closing_credits.mp3",
         "prompt": null
     }
 } 
