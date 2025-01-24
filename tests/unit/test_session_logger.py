@@ -2,6 +2,12 @@ import json
 import pandas as pd
 import pytest
 from pathlib import Path
+from session_logger import CLISessionLogger, SessionEvent
+from dataclasses import dataclass
+
+@dataclass
+class MockOptions:
+    store_logs: bool = False
 
 @pytest.fixture(scope="module")
 def conversation_data(tmp_path_factory):
@@ -53,13 +59,39 @@ def conversation_data(tmp_path_factory):
 
     return file_path
 
+@pytest.mark.unit
 def test_session_logger(conversation_data):
+    # Create a session logger with mock options
+    options = MockOptions()
+    logger = CLISessionLogger(options)
+
     # Load conversation history from JSON file
     with open(conversation_data, 'r') as f:
         data = json.load(f)
 
-    # Extract metadata from the session
-    session_id = data['sessionID']
-    timestamp = data['timestamp']
+    # Log each interaction
+    for interaction in data['conversation']:
+        event = SessionEvent(
+            user_input=interaction['user_input'],
+            response_output=interaction['response_output']
+        )
+        logger.log_session_interaction(event)
 
-    # Extract conversation history from
+    # Finalize the session
+    logger.finalize_session()
+
+    # Verify the log file exists
+    assert Path(logger.file_name).exists()
+
+    # Load and verify the logged data
+    with open(logger.file_name, 'r') as f:
+        logged_data = json.load(f)
+        assert logged_data['sessionID'] == logger.session_id
+        assert logged_data['timestamp'] == logger.timestamp
+        assert len(logged_data['conversation']) == len(data['conversation'])
+        
+        # Verify each interaction was logged correctly
+        for i, (original, logged) in enumerate(zip(data['conversation'], logged_data['conversation'])):
+            assert logged['user_input'] == original['user_input']
+            assert logged['response_output'] == original['response_output']
+            assert 'time_logged' in logged  # Verify timestamp was added

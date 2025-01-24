@@ -1,3 +1,4 @@
+import pytest
 import json
 import logging
 import os
@@ -16,10 +17,10 @@ sys.path.insert(0, ganlgia_home)
 
 from logger import Logger
 from query_dispatch import ChatGPTQueryDispatcher
-from ttv.image_generation import generate_image_for_sentence, save_image_with_caption
 from ttv.story_generation import generate_movie_poster, generate_filtered_story
 
-def main():
+@pytest.mark.unit
+def test_generate_movie_poster():
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         raise EnvironmentError("Environment variable 'OPENAI_API_KEY' is not set.")
@@ -46,12 +47,6 @@ def main():
     Logger.print_info("Submitting movie poster generation task...")
     movie_poster_path = generate_movie_poster(filtered_story_json, style, story_title, query_dispatcher)
 
-    if movie_poster_path:
-        Logger.print_info(f"Movie poster generated and saved to: {movie_poster_path}")
-        Logger.print_info("Test passed.")
-    else:
-        Logger.print_error("Failed to generate movie poster.")
-        Logger.print_error("Test failed.")
+    assert movie_poster_path is not None, "Failed to generate movie poster"
+    assert os.path.exists(movie_poster_path), "Movie poster file does not exist"
 
-if __name__ == "__main__":
-    main()

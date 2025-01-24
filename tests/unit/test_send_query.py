@@ -1,10 +1,13 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from query_dispatch import ChatGPTQueryDispatcher
 
+@pytest.mark.unit
 def test_sendQuery():
     expected_in_response = "Paris"
     query_dispatcher = ChatGPTQueryDispatcher()

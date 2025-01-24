@@ -11,6 +11,10 @@ from ttv.log_messages import (
     LOG_CLOSING_CREDITS_DURATION
 )
 
+# Log message constants
+LOG_FFPROBE_COMMAND = "Running ffprobe command"
+LOG_VIDEO_SEGMENT_CREATE = "Creating video segment"
+
 def wait_for_completion(timeout=300):
     """Wait for test run to complete with timeout."""
     start_time = time.time()

@@ -13,6 +13,7 @@ config/ttv_config.json
 config_backups/*
 venv/*
 # Test outputs
+tests/unit/ttv/test_outputs/
+tests/third_party/ttv/test_outputs/
 tests/integration/ttv/test_outputs/
-tests/ttv/test_outputs/
 
