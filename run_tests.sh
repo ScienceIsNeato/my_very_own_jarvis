@@ -53,12 +53,12 @@ case $MODE in
     "local")
         echo "Executing: python -m pytest $TEST_TARGET $PYTEST_FLAGS"
         eval "python -m pytest $TEST_TARGET $PYTEST_FLAGS"
+        exit $?  # Exit with pytest's exit code
         ;;
     "docker")
         # Build the Docker image first
         docker build -t ganglia:latest . || exit 1
         
-        # Run the tests in Docker with environment variables
         # Create env file with special handling for GAC
         echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json" > temp.env
         printenv | grep -v "GOOGLE_APPLICATION_CREDENTIALS" | grep -v ' ' >> temp.env
@@ -66,10 +66,13 @@ case $MODE in
         echo "Executing: pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
         if [ ! -z "$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
             eval "docker run --rm -v \"$GOOGLE_APPLICATION_CREDENTIALS:/tmp/gcp-credentials.json\" --env-file temp.env ganglia:latest pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+            exit_code=$?
         else
             eval "docker run --rm --env-file temp.env ganglia:latest pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+            exit_code=$?
         fi
         rm temp.env
+        exit $exit_code  # Exit with the Docker command's exit code
         ;;
     *)
         echo "Invalid mode. Use 'local' or 'docker'"
