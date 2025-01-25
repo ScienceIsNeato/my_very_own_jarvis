@@ -23,8 +23,19 @@ jobs:
       run: |
         echo "Verifying GCP Credentials..."
         content="${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}"
-        echo "Length of GCP Credentials: ${#content}"
-        echo "$content" | jq 'keys'  # Print the top-level keys
+        
+        # Echo the content
+        echo "Echoing GCP Credentials:"
+        echo "$content"
+        
+        # Cat the file
+        echo "Catting GCP Credentials file:"
+        echo "$content" > /tmp/gcp-credentials.json
+        cat /tmp/gcp-credentials.json
+        
+        # Decode if base64 encoded
+        echo "Decoding GCP Credentials (if applicable):"
+        echo "$content" | base64 --decode || echo "Not base64 encoded"
       # Temporary step to verify GCP credentials. Remove before opening a PR.
     
     - name: Set up Docker Buildx
