@@ -15,6 +15,8 @@ from ttv.captions import (
     split_into_words, calculate_word_positions
 )
 from logger import Logger
+import numpy as np
+import soundfile as sf
 
 def get_default_font():
     """Get the default font path for testing."""
@@ -58,9 +60,9 @@ def create_test_video(duration=5, size=(1920, 1080), color=(0, 0, 255)):
 
 def play_test_video(video_path):
     """Play the test video using ffplay."""
-    # TODO: Disable video playback in CI environments
-    play_cmd = ["ffplay", "-autoexit", video_path]
-    run_ffmpeg_command(play_cmd)
+    if os.getenv('PLAYBACK_MEDIA_IN_TESTS', 'false').lower() == 'true':
+        play_cmd = ["ffplay", "-autoexit", video_path]
+        run_ffmpeg_command(play_cmd)
 
 @pytest.mark.unit
 def test_default_static_captions():
@@ -286,9 +288,11 @@ def test_audio_aligned_captions():
     input_video_path = create_test_video(size=video_size, duration=duration)
     assert input_video_path is not None, "Failed to create test video"
 
-    # Generate test audio with TTS
-    tts = GoogleTTS()
+    # Test text for captions
     test_text = "This is a test video with synchronized audio and captions. The captions should match the spoken words exactly."
+
+    # Generate audio using Google TTS
+    tts = GoogleTTS()
     success, audio_path = tts.convert_text_to_speech(test_text)
     assert success and audio_path is not None, "Failed to generate test audio"
 

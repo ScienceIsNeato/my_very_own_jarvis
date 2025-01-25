@@ -83,7 +83,6 @@ def play_audio(audio_path):
 
 @pytest.mark.third_party
 @pytest.mark.costly
-@pytest.mark.musicgen
 def test_suno_backend():
     """Test music generation using the Suno backend."""
     config = load_input("tests/integration/test_data/minimal_ttv_config.json")
@@ -127,7 +126,6 @@ def test_suno_backend():
     play_audio(audio_path)
 
 @pytest.mark.third_party
-@pytest.mark.musicgen
 def test_meta_backend():
     """Test the Meta MusicGen backend for instrumental music generation."""
     config = load_input("tests/integration/test_data/minimal_ttv_config.json")

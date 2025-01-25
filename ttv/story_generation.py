@@ -21,11 +21,14 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
     Logger.print_info("Generating filtered story with ChatGPT.")
     
     prompt = (
-        f"I'm about to send this text to DALLE-3 as the input for a movie poster image, but I'm worried about the input not passing the content filters in place by openai. Could you tweak this to ensure that it will pass the filters? Create a filtered story titled '{story_title}' with the style of {style} and the following context:\n\n"
+        f"You are a content filter that ensures text will pass OpenAI's content filters for DALL-E 3 image generation.\n\n"
+        f"Filter and rewrite the following text to ensure it will pass content filters. The story should be titled '{story_title}' with the style of {style}. Here is the context to filter:\n\n"
         f"{context}\n\n"
-        "Ensure that the generated story is appropriate for all audiences and does not contain any sensitive or inappropriate content.\n\n"
-        "Please also rewrite any sections containing PII so that only publicly available information is included.\n\n"
-        "Please return the filtered story in the following JSON format:\n"
+        "Requirements:\n"
+        "1. Make the story appropriate for all audiences\n"
+        "2. Remove any sensitive or inappropriate content\n"
+        "3. Rewrite sections with PII to only include publicly available information\n\n"
+        "IMPORTANT: Return ONLY a JSON object in this exact format with no other text before or after:\n"
         "{\n"
         "  \"style\": \"<insert style here>\",\n"
         "  \"title\": \"<insert title here>\",\n"
@@ -35,7 +38,6 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
 
     try:
         response = query_dispatcher.sendQuery(prompt)
-        print("Response for filtered story: " + response)
         
         # Parse the response to extract the filtered story
         response_json = json.loads(response)
@@ -74,32 +76,50 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
         return None
 
     prompt = f"Create a movie poster for the story titled '{story_title}' with the style of {style} and context: {filtered_context}."
+    safety_retries = 3
     
-    for attempt in range(retries):
-        try:
-            response = openai.Image.create(
-                model="dall-e-3",
-                prompt=prompt,
-                size="1024x1024",
-                quality="standard",
-                n=1
-            )
-            if response.data:
-                image_url = response['data'][0]['url']
-                filename = "/tmp/GANGLIA/ttv/movie_poster.png"
-                save_image_without_caption(image_url, filename)
-                return filename
-            else:
-                Logger.print_error("No image was returned for the movie poster.")
-                return None
-        except Exception as e:
-            if 'Rate limit exceeded' in str(e):
-                Logger.print_warning(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
-                time.sleep(wait_time)
-            else:
-                Logger.print_error(f"An error occurred while generating the movie poster: {e}")
-                return None
-    Logger.print_error(f"Failed to generate movie poster after {retries} attempts due to rate limiting.")
+    for safety_attempt in range(safety_retries):
+        for attempt in range(retries):
+            try:
+                response = openai.Image.create(
+                    model="dall-e-3",
+                    prompt=prompt,
+                    size="1024x1024",
+                    quality="standard",
+                    n=1
+                )
+                if response.data:
+                    image_url = response['data'][0]['url']
+                    filename = "/tmp/GANGLIA/ttv/movie_poster.png"
+                    save_image_without_caption(image_url, filename)
+                    return filename
+                else:
+                    Logger.print_error("No image was returned for the movie poster.")
+                    return None
+            except Exception as e:
+                if 'Rate limit exceeded' in str(e):
+                    Logger.print_warning(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
+                    time.sleep(wait_time)
+                elif 'safety system' in str(e).lower():
+                    # If we hit a safety rejection, try to filter the content further
+                    Logger.print_warning(f"Safety system rejection. Attempting to filter content (Attempt {safety_attempt + 1} of {safety_retries})")
+                    success, filtered_context = query_dispatcher.filter_content_for_dalle(filtered_context)
+                    if success:
+                        prompt = f"Create a movie poster for the story titled '{story_title}' with the style of {style} and context: {filtered_context}."
+                        break  # Break the inner loop to try again with filtered content
+                    else:
+                        Logger.print_error("Failed to filter content")
+                        return None
+                else:
+                    Logger.print_error(f"An error occurred while generating the movie poster: {e}")
+                    return None
+        else:
+            # Inner loop completed without safety issues but hit rate limit
+            continue
+        # If we get here, we had a safety issue and filtered the content, so try again
+        continue
+    
+    Logger.print_error(f"Failed to generate movie poster after {safety_retries} safety filtering attempts.")
     return None
 
 def filter_text(sentence, context, style, query_dispatcher, retries=5, wait_time=60):

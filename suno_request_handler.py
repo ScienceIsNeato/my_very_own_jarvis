@@ -6,11 +6,8 @@ from logger import Logger
 class SunoRequestHandler:
     def __init__(self):
         self.api_key = os.getenv('SUNO_API_KEY')
-        self.base_url = os.getenv('SUNO_BASE_URL')
         if not self.api_key:
             raise EnvironmentError("Environment variable 'SUNO_API_KEY' is not set.")
-        if not self.base_url:
-            raise EnvironmentError("Environment variable 'SUNO_BASE_URL' is not set.")
 
         self.base_url = "https://api.sunoaiapi.com/api/v1"
         self.headers = {

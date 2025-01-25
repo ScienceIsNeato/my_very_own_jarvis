@@ -1,8 +1,19 @@
+# Python packaging
+*.egg-info/
+*.egg
+
+# Python cache
 **/__pycache__/
 **/__pycache__/*
+
+# System files
 .DS_Store
+
+# Audio/Video files
 recorded_audio.*
-.env
+
+# Environment and config
+.envrc
 /output
 concat_list.txt
 coqui_config.json
@@ -12,6 +23,7 @@ config/hotwords.json
 config/ttv_config.json
 config_backups/*
 venv/*
+
 # Test outputs
 tests/unit/ttv/test_outputs/
 tests/third_party/ttv/test_outputs/

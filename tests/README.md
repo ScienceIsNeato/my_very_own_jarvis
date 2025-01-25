@@ -5,10 +5,21 @@ This directory contains the test suite for the GANGLIA project. The tests are or
 ## Test Categories
 
 ### Unit Tests (`tests/unit/`)
-Fast tests that verify individual components in isolation. These tests:
-- Have no external dependencies
-- Run quickly (milliseconds)
-- Test a single unit of functionality
+Fast tests that verify individual components. Note that despite the name, many of these tests do interact with external services. This is due to:
+1. The inherently interconnected nature of GANGLIA's components
+2. The desire to test real-world interactions rather than mocked behavior
+3. Historical development patterns prioritizing end-to-end verification
+
+TODO: Consider mocking external services where the real service doesn't materially impact the test's purpose. This would:
+- Speed up test execution
+- Reduce costs
+- Make tests more reliable
+- Allow offline testing
+
+For now, these tests:
+- Run relatively quickly (seconds rather than minutes)
+- Test focused functionality
+- May require external API access
 - Are suitable for running during development
 
 ### Third-Party Tests (`tests/third_party/`)
@@ -37,31 +48,73 @@ Tests are marked with pytest markers to control execution:
 - `@pytest.mark.integration`: Tests of multiple components
 - `@pytest.mark.costly`: Time or resource-intensive tests
 
+## Test Environment
+
+### Required Environment Variables
+All tests require certain environment variables to be set. These are managed through `direnv` and should be configured in your `.envrc` file. See the project root's `.envrc.template` for a complete list of required variables and their purposes.
+
+### Media Playback in Tests
+Tests that generate audio or video content can optionally play the media for verification. This is controlled by the `PLAYBACK_MEDIA_IN_TESTS` environment variable:
+
+```bash
+# Enable media playback (useful for local development)
+export PLAYBACK_MEDIA_IN_TESTS="true"
+
+# Disable media playback (default in CI and headless environments)
+export PLAYBACK_MEDIA_IN_TESTS="false"
+```
+
 ## Running Tests
 
-### Development
+The project includes a `run_tests.sh` script that handles both local and Docker test execution. The script ensures consistent test execution between development and CI environments.
+
+### Usage
 ```bash
-# Run unit tests (fast, no external dependencies)
-pytest -m unit
+./run_tests.sh <mode> <test_target>
 
-# Run specific test directory
-pytest tests/unit/ttv/
-
-# Run all tests except costly ones
-pytest -m "not costly"
+# Arguments:
+# mode: 'local' or 'docker'
+# test_target: pytest target (e.g., 'tests/' or 'tests/unit/test_specific.py::test_function')
 ```
+
+### Common Test Commands
+
+```bash
+# Run a specific test file in local mode
+./run_tests.sh local "tests/third_party/ttv/test_captions.py"
+
+# Run unit tests in Docker
+./run_tests.sh docker "tests/ -m unit"
+
+# Run integration tests (excluding costly ones) in Docker
+./run_tests.sh docker "tests/ -m 'integration and not costly'"
+
+
+# Run tests with a specific marker in local mode
+./run_tests.sh local "tests/ -m unit"
+```
+
+The script automatically:
+- Handles environment variables correctly
+- Builds the Docker image when needed
+- Ensures consistent test execution
+- Includes verbose output (-v flag)
+- Shows print statements during test execution (-s flag)
+- Generates coverage reports when appropriate
 
 ### CI Pipeline
-```bash
-# On commit (unit tests only)
-pytest -m unit
+The CI pipeline uses the same `run_tests.sh` script with different test subsets depending on the context:
 
-# On PR (unit tests + cheap integration tests)
-pytest -m "unit or (integration and not costly)"
+- On push to main:
+  - Runs unit tests and non-costly integration tests
+  - `./run_tests.sh docker "tests/ -m 'unit or (integration and not costly)'"`
 
-# Full test suite
-pytest
-```
+- On pull request:
+  - Runs all unit and integration tests (including costly ones)
+  - `./run_tests.sh docker "tests/ -m 'unit or integration'"`
+
+Note: Third-party tests are never run in CI and must be run manually during development.
+      These are for things such as: checking why your mic is not working, or why the SUNO API is not working.
 
 ## Directory Structure
 ```
@@ -83,4 +136,4 @@ tests/
 2. Add relevant pytest markers
 3. Follow naming convention: `test_*.py`
 4. Include docstring explaining test purpose
-5. Mark costly tests appropriately 
+5. Mark costly tests appropriately

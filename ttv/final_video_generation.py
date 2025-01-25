@@ -115,7 +115,7 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
             Logger.print_info("Skipping closing credits (disabled in config)")
             final_output_path = main_video_with_background_music_path
 
-        subprocess.run(["ffplay", "-autoexit", final_output_path], check=True)
+        play_video(final_output_path)
         return final_output_path
 
     except (OSError, subprocess.SubprocessError) as e:
@@ -201,19 +201,13 @@ def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_pa
         Logger.print_error("Failed to add captions to closing credits video")
         return initial_credits_video_path
 
-def play_video_if_error(video_segments, main_video_path=None, main_video_with_background_music_path=None, final_output_path=None):
-    try:
-        if final_output_path:
-            Logger.print_info(f"Playing final video with closing credits: {final_output_path}")
-            subprocess.run(["ffplay", "-autoexit", final_output_path], check=True)
-        elif main_video_with_background_music_path:
-            Logger.print_info(f"Playing final video with background music: {main_video_with_background_music_path}")
-            subprocess.run(["ffplay", "-autoexit", main_video_with_background_music_path], check=True)
-        elif main_video_path:
-            Logger.print_info(f"Playing final video: {main_video_path}")
-            subprocess.run(["ffplay", "-autoexit", main_video_path], check=True)
-    except (OSError, subprocess.SubprocessError) as e:
-        Logger.print_error(f"Error playing video: {e}")
+def play_video(video_path):
+    """Play a video file if playback is enabled."""
+    if os.getenv('PLAYBACK_MEDIA_IN_TESTS', 'false').lower() == 'true':
+        try:
+            subprocess.run(["ffplay", "-autoexit", video_path], check=True)
+        except subprocess.CalledProcessError as e:
+            Logger.print_error(f"Error playing video: {e}")
 
 def add_background_music_to_video(final_video_path, music_path):
     if final_video_path is None:

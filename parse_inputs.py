@@ -16,8 +16,7 @@ def check_environment_variables():
         'GCP_BUCKET_NAME',
         'GCP_PROJECT_NAME',
         'SUNO_API_KEY',
-        'SUNO_BASE_URL',
-        'GANGLIA_HOME'
+        'GOOGLE_APPLICATION_CREDENTIALS'
     ]
 
     missing_vars = [var for var in required_vars if not os.getenv(var)]

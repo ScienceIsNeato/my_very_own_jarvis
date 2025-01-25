@@ -1,22 +1,11 @@
 import json
 import os
-import sys
 import pytest
-from dotenv import load_dotenv
-
-ganlgia_home = os.getenv('GANGLIA_HOME')
-if not ganlgia_home:
-    raise EnvironmentError("Environment variable 'GANGLIA_HOME' is not set.")
-
-# Add GANGLIA_HOME to sys.path to resolve imports
-sys.path.insert(0, ganlgia_home)
 
 from lyrics_lib import LyricsGenerator
 from query_dispatch import ChatGPTQueryDispatcher
 from logger import Logger
-
-# Load environment variables from .env file
-load_dotenv()
+from utils import get_config_path
 
 def count_syllables(word):
     """Count the number of syllables in a word."""
@@ -60,7 +49,7 @@ def test_generate_lyrics():
         "lost city of Atlantis."
     )
 
-    query_dispatcher = ChatGPTQueryDispatcher()
+    query_dispatcher = ChatGPTQueryDispatcher(config_file_path=get_config_path())
     lyrics_generator = LyricsGenerator()
 
     result = lyrics_generator.generate_song_lyrics(story_text, query_dispatcher)

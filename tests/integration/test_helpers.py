@@ -151,7 +151,7 @@ def validate_audio_video_durations(output, config_path):
 
 def extract_final_video_path(output):
     """Extract the final video path from the logs."""
-    match = re.search(f'{LOG_FINAL_VIDEO_CREATED}=(.+\.mp4)', output)
+    match = re.search(f'{LOG_FINAL_VIDEO_CREATED}=(.+\\.mp4)', output)
     if match:
         return match.group(1)
     else:
@@ -184,7 +184,7 @@ def validate_closing_credits_duration(output, config_path):
     print("\n=== Validating Closing Credits Duration ===")
     
     # First try to find generated credits duration in logs
-    duration_match = re.search(f'{LOG_CLOSING_CREDITS_DURATION}: (\d+\.\d+)s', output)
+    duration_match = re.search(f'{LOG_CLOSING_CREDITS_DURATION}: (\\d+\\.\\d+)s', output)
     if duration_match:
         audio_duration = float(duration_match.group(1))
         print(f"✓ Generated closing credits duration: {audio_duration:.2f}s")

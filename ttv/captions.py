@@ -10,19 +10,27 @@ import subprocess
 from PIL import ImageFont
 import os
 import uuid
+import pkg_resources
 
 def get_default_font() -> str:
     """Get default font name."""
-    # Try common font paths
+    # Common paths for DejaVu Sans font
     font_paths = [
-        "/System/Library/Fonts/Supplemental/Arial.ttf",  # macOS
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",  # Linux
-        "C:\\Windows\\Fonts\\arial.ttf"  # Windows
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux/Docker
+        "/Library/Fonts/DejaVuSans.ttf",  # macOS
     ]
+    
     for path in font_paths:
         if os.path.exists(path):
             return path
-    return font_paths[0]  # Default to first path if none found
+    
+    raise RuntimeError(
+        "DejaVu Sans font not found. You have two options:\n"
+        "1. Run tests in Docker (recommended)\n"
+        "2. Install DejaVu Sans font on your system:\n"
+        "   - macOS: curl -L https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2 | tar xj && sudo cp dejavu-fonts-ttf-2.37/ttf/DejaVuSans.ttf /Library/Fonts/ && rm -rf dejavu-fonts-ttf-2.37\n"
+        "   - Linux: sudo apt-get install fonts-dejavu-core\n"
+    )
 
 @dataclass
 class Word:

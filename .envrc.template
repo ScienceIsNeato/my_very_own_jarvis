@@ -1,0 +1,16 @@
+# AI Service API Keys
+export OPENAI_API_KEY="your-key-here"          # OpenAI API key for GPT model interactions
+
+# Google Cloud Configuration
+export GCP_PROJECT_NAME="your-project-here"    # Google Cloud project ID
+export GCP_BUCKET_NAME="your-bucket-here"      # GCS bucket for storing generated assets
+export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcloud/application_default_credentials.json"  # Path to Google Cloud service account key file
+                                              # This is the default location after running 'gcloud auth application-default login'
+
+# Audio Generation Services
+export SUNO_API_KEY="your-key-here"           # MusicGen/AudioGen API key for music/sound generation
+
+# Test Configuration
+export PLAYBACK_MEDIA_IN_TESTS="true"         # Controls whether audio/video is played during tests
+                                             # Set to "true" to enable media playback
+                                             # Set to "false" for CI or headless environments 

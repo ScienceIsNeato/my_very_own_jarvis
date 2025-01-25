@@ -2,9 +2,7 @@ import json
 import os
 from pathlib import Path
 import threading
-from dotenv import load_dotenv
 from utils import get_tempdir
-load_dotenv()
 import time
 from abc import ABC, abstractmethod
 from uuid import uuid4
