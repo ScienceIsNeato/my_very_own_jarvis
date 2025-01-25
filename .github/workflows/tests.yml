@@ -36,13 +36,19 @@ jobs:
     
     - name: Run tests based on event
       run: |
+        set -e  # Exit immediately if a command exits with a non-zero status
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
           # Run all unit and integration tests on PR
           ./run_tests.sh docker "tests/" -m "unit or integration"
+          exit_code=$?
         else
           # Run only non-costly tests on push
           ./run_tests.sh docker "tests/" -m "(unit or integration) and not costly"
+          exit_code=$?
         fi
+        
+        # Exit with the test's exit code
+        exit $exit_code
     
     - name: Clean up
       if: always()
