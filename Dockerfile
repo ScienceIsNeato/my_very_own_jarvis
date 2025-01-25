@@ -37,10 +37,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Set environment variables
+# Set non-sensitive environment variables
 ENV PYTHONUNBUFFERED=1
 ENV GANGLIA_FONT_PATH=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
 ENV GANGLIA_EMOJI_FONT_PATH=/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf
+ENV PLAYBACK_MEDIA_IN_TESTS=false
 
-# Command to run tests
-CMD ["pytest", "-v", "-s"]
+# Default command (interactive shell)
+CMD ["/bin/bash"] 

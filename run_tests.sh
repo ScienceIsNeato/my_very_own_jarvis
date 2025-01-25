@@ -20,7 +20,7 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -m)
             shift  # Remove -m
-            PYTEST_FLAGS="$PYTEST_FLAGS -m '$1'"  # Add single quotes around the marker expression
+            PYTEST_FLAGS="$PYTEST_FLAGS -m \"$1\""  # Add double quotes around the marker expression
             shift
             ;;
         *)
@@ -30,24 +30,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Function to build Docker run command with optional credentials
-build_docker_cmd() {
-    local cmd="docker run --rm"
-    
-    # Add Google credentials mount if available
-    if [ ! -z "$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
-        cmd="$cmd -v \"$GOOGLE_APPLICATION_CREDENTIALS:/tmp/gcp-credentials.json\""
-        cmd="$cmd --env GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json"
-    fi
-    
-    # Add environment variables from stdin
-    cmd="$cmd --env-file /dev/stdin"
-    
-    # Add image and test command
-    cmd="$cmd ganglia:latest /bin/sh -c \"pytest $TEST_TARGET $PYTEST_FLAGS\""
-    
-    echo "$cmd"
-}
+# Setup Google credentials
+if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+    # Local case: GOOGLE_APPLICATION_CREDENTIALS is a file path
+    cp "$GOOGLE_APPLICATION_CREDENTIALS" /tmp/gcp-credentials.json
+else
+    # CI case: GOOGLE_APPLICATION_CREDENTIALS contains the JSON
+    echo "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
+fi
 
 case $MODE in
     "local")
@@ -56,23 +46,23 @@ case $MODE in
         exit $?  # Exit with pytest's exit code
         ;;
     "docker")
-        # Build the Docker image first
+        # Build the Docker image
         docker build -t ganglia:latest . || exit 1
         
-        # Create env file with special handling for GAC
-        echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json" > temp.env
-        printenv | grep -v "GOOGLE_APPLICATION_CREDENTIALS" | grep -v ' ' >> temp.env
-        
         echo "Executing: pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
-        if [ ! -z "$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
-            eval "docker run --rm -v \"$GOOGLE_APPLICATION_CREDENTIALS:/tmp/gcp-credentials.json\" --env-file temp.env ganglia:latest pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
-            exit_code=$?
-        else
-            eval "docker run --rm --env-file temp.env ganglia:latest pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
-            exit_code=$?
-        fi
-        rm temp.env
-        exit $exit_code  # Exit with the Docker command's exit code
+        # Run Docker with credentials mount and environment variables
+        docker run --rm \
+            -v /tmp/gcp-credentials.json:/tmp/gcp-credentials.json \
+            -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+            -e GCP_BUCKET_NAME="$GCP_BUCKET_NAME" \
+            -e GCP_PROJECT_NAME="$GCP_PROJECT_NAME" \
+            -e SUNO_API_KEY="$SUNO_API_KEY" \
+            -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json \
+            ganglia:latest \
+            /bin/sh -c "pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+        exit_code=$?
+        rm -f /tmp/gcp-credentials.json
+        exit $exit_code
         ;;
     *)
         echo "Invalid mode. Use 'local' or 'docker'"
