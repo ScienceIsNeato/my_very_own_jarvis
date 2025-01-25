@@ -13,12 +13,19 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
+    - name: Install jq
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
+      # Temporary step to verify GCP credentials. Remove before opening a PR.
+
     - name: Verifying GAC
       run: |
         echo "Verifying GCP Credentials..."
-        masked_content=$(echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}" | sed 's/./*/g' | sed 's/^.\{4\}/&****/' | sed 's/.\{4\}$/****&/')
-        echo "::add-mask::$masked_content"
-        echo "Masked GCP Credentials: $masked_content"
+        content="${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}"
+        echo "Length of GCP Credentials: ${#content}"
+        echo "$content" | jq 'keys'  # Print the top-level keys
+      # Temporary step to verify GCP credentials. Remove before opening a PR.
     
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
