@@ -18,7 +18,7 @@ jobs:
     
     - name: Create GCP credentials file
       run: |
-        echo "${{ secrets.GCP_CREDENTIALS }}" > /tmp/gcp-credentials.json
+        echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}" > /tmp/gcp-credentials.json
     
     - name: Make run_tests.sh executable
       run: chmod +x run_tests.sh
