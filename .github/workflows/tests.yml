@@ -23,18 +23,13 @@ jobs:
     - name: Make run_tests.sh executable
       run: chmod +x run_tests.sh
     
-    - name: Create env file
-      run: |
-        cat << EOF > temp.env
-        OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-        GCP_BUCKET_NAME=${{ secrets.GCP_BUCKET_NAME }}
-        GCP_PROJECT_NAME=${{ secrets.GCP_PROJECT_NAME }}
-        SUNO_API_KEY=${{ secrets.SUNO_API_KEY }}
-        PLAYBACK_MEDIA_IN_TESTS=false
-        GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json
-        EOF
-    
     - name: Run tests based on event
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+        GCP_PROJECT_NAME: ${{ secrets.GCP_PROJECT_NAME }}
+        SUNO_API_KEY: ${{ secrets.SUNO_API_KEY }}
+        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
       run: |
         set -e  # Exit immediately if a command exits with a non-zero status
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -53,6 +48,5 @@ jobs:
     - name: Clean up
       if: always()
       run: |
-        rm -f temp.env
         rm -f /tmp/gcp-credentials.json
 
