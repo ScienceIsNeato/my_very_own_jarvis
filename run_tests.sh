@@ -11,10 +11,24 @@ fi
 MODE=$1
 TEST_TARGET=$2
 shift 2  # Remove the first two arguments
-EXTRA_ARGS="$@"  # Capture any remaining arguments
 
 # Always use -v and -s flags
-PYTEST_FLAGS="-v -s $EXTRA_ARGS"
+PYTEST_FLAGS="-v -s"
+
+# Process remaining arguments to handle -m flag specially
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -m)
+            shift  # Remove -m
+            PYTEST_FLAGS="$PYTEST_FLAGS -m '$1'"  # Add single quotes around the marker expression
+            shift
+            ;;
+        *)
+            PYTEST_FLAGS="$PYTEST_FLAGS $1"
+            shift
+            ;;
+    esac
+done
 
 # Function to build Docker run command with optional credentials
 build_docker_cmd() {
@@ -37,15 +51,24 @@ build_docker_cmd() {
 
 case $MODE in
     "local")
-        python -m pytest $TEST_TARGET $PYTEST_FLAGS
+        echo "Executing: python -m pytest $TEST_TARGET $PYTEST_FLAGS"
+        eval "python -m pytest $TEST_TARGET $PYTEST_FLAGS"
         ;;
     "docker")
         # Build the Docker image first
         docker build -t ganglia:latest . || exit 1
         
         # Run the tests in Docker with environment variables
-        printenv | grep -v ' ' > temp.env
-        docker run --rm --env-file temp.env ganglia:latest pytest $TEST_TARGET $PYTEST_FLAGS
+        # Create env file with special handling for GAC
+        echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json" > temp.env
+        printenv | grep -v "GOOGLE_APPLICATION_CREDENTIALS" | grep -v ' ' >> temp.env
+        
+        echo "Executing: pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+        if [ ! -z "$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+            eval "docker run --rm -v \"$GOOGLE_APPLICATION_CREDENTIALS:/tmp/gcp-credentials.json\" --env-file temp.env ganglia:latest pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+        else
+            eval "docker run --rm --env-file temp.env ganglia:latest pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+        fi
         rm temp.env
         ;;
     *)
@@ -53,3 +76,4 @@ case $MODE in
         exit 1
         ;;
 esac 
+

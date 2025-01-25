@@ -38,10 +38,10 @@ jobs:
       run: |
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
           # Run all unit and integration tests on PR
-          ./run_tests.sh docker "tests/ -m 'unit or integration'" -v -s -n auto --cov=. --cov-report=term-missing
+          ./run_tests.sh docker "tests/" -m "unit or integration"
         else
           # Run only non-costly tests on push
-          ./run_tests.sh docker "tests/ -m 'unit or (integration and not costly)'" -v -s -n auto --cov=. --cov-report=term-missing
+          ./run_tests.sh docker "tests/" -m "(unit or integration) and not costly"
         fi
     
     - name: Clean up
