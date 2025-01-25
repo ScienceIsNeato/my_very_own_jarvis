@@ -32,10 +32,10 @@ done
 
 # Setup Google credentials
 if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
-    # Local case: GOOGLE_APPLICATION_CREDENTIALS is a file path
-    cp "$GOOGLE_APPLICATION_CREDENTIALS" /tmp/gcp-credentials.json
+    # It's a file path, copy the contents
+    cat "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
 else
-    # CI case: GOOGLE_APPLICATION_CREDENTIALS contains the JSON
+    # Not a file, assume it's the JSON content
     echo "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
 fi
 
@@ -50,13 +50,13 @@ case $MODE in
         docker build -t ganglia:latest . || exit 1
         
         echo "Executing: pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
-        # Run Docker with credentials mount and environment variables
+        # Run Docker with credentials mount and pass through environment variables
         docker run --rm \
             -v /tmp/gcp-credentials.json:/tmp/gcp-credentials.json \
-            -e OPENAI_API_KEY="$OPENAI_API_KEY" \
-            -e GCP_BUCKET_NAME="$GCP_BUCKET_NAME" \
-            -e GCP_PROJECT_NAME="$GCP_PROJECT_NAME" \
-            -e SUNO_API_KEY="$SUNO_API_KEY" \
+            -e OPENAI_API_KEY \
+            -e GCP_BUCKET_NAME \
+            -e GCP_PROJECT_NAME \
+            -e SUNO_API_KEY \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json \
             ganglia:latest \
             /bin/sh -c "pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
