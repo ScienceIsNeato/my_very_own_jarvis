@@ -1,5 +1,20 @@
 #!/bin/bash
 
+# Add debug function at the top of the script
+debug_gac() {
+  echo "=== DEBUG GAC at $(date) ==="
+  echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
+  echo "File exists?"
+  test -f /tmp/gcp-credentials.json && echo "Yes" || echo "No"
+  echo "File has content?"
+  test -s /tmp/gcp-credentials.json && echo "Yes" || echo "No"
+  echo "File contents:"
+  cat /tmp/gcp-credentials.json || echo "Failed to cat file"
+  echo "Directory listing:"
+  ls -lrt /tmp/
+  echo "=== END DEBUG ==="
+}
+
 # Check if we have the required arguments
 if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <mode> <test_target>"
@@ -30,22 +45,24 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Before credentials setup
+echo "Before credentials setup:"
+debug_gac
+
 # Setup Google credentials
 if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
     # It's a file path, copy the contents
     echo "[DEBUG] GAC is a file at $GOOGLE_APPLICATION_CREDENTIALS"
-    echo "[DEBUG] Original file contents:"
-    cat "$GOOGLE_APPLICATION_CREDENTIALS"
     cat "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
-    echo "[DEBUG] Copied to /tmp/gcp-credentials.json. New file contents:"
-    cat /tmp/gcp-credentials.json
 else
     # Not a file, assume it's the JSON content
     echo "[DEBUG] GAC is not a file, treating as JSON content"
     echo "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
-    echo "[DEBUG] Written to /tmp/gcp-credentials.json. File contents:"
-    cat /tmp/gcp-credentials.json
 fi
+
+# After credentials setup
+echo "After credentials setup:"
+debug_gac
 
 case $MODE in
     "local")
@@ -58,14 +75,9 @@ case $MODE in
         echo "[DEBUG] Building Docker image..."
         docker build -t ganglia:latest . || exit 1
         
-        echo "[DEBUG] Before Docker run:"
-        echo "GAC location: $GOOGLE_APPLICATION_CREDENTIALS"
-        echo "GAC contents:"
-        cat $GOOGLE_APPLICATION_CREDENTIALS
-        echo "/tmp contents:"
-        cat /tmp/gcp-credentials.json
+        echo "Before Docker run:"
+        debug_gac
         
-        echo "[DEBUG] Running Docker container..."
         # Run Docker with credentials mount and pass through environment variables
         docker run --rm \
             -v /tmp/gcp-credentials.json:/tmp/gcp-credentials.json \
@@ -75,12 +87,7 @@ case $MODE in
             -e SUNO_API_KEY \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json \
             ganglia:latest \
-            /bin/sh -c "echo '[DEBUG] Inside Docker container:' && \
-                       echo 'GAC location:' && \
-                       echo \$GOOGLE_APPLICATION_CREDENTIALS && \
-                       echo 'GAC contents:' && \
-                       cat \$GOOGLE_APPLICATION_CREDENTIALS && \
-                       pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+            /bin/sh -c "echo 'Inside Docker container:' && debug_gac && pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
         exit_code=$?
         rm -f /tmp/gcp-credentials.json
         exit $exit_code
