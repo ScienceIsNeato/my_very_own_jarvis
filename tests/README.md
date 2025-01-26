@@ -70,28 +70,24 @@ The project includes a `run_tests.sh` script that handles both local and Docker 
 
 ### Usage
 ```bash
-./run_tests.sh <mode> <test_target>
+./run_tests.sh <mode> <test_type>
 
 # Arguments:
 # mode: 'local' or 'docker'
-# test_target: pytest target (e.g., 'tests/' or 'tests/unit/test_specific.py::test_function')
+# test_type: 'unit' or 'integration'
+#
+# unit: Runs tests marked as (unit or integration) and not costly
+# integration: Runs all tests marked as unit or integration
 ```
 
 ### Common Test Commands
 
 ```bash
-# Run a specific test file in local mode
-./run_tests.sh local "tests/third_party/ttv/test_captions.py"
+# Run unit tests (non-costly) in local mode
+./run_tests.sh local unit
 
-# Run unit tests in Docker
-./run_tests.sh docker "tests/ -m unit"
-
-# Run integration tests (excluding costly ones) in Docker
-./run_tests.sh docker "tests/ -m 'integration and not costly'"
-
-
-# Run tests with a specific marker in local mode
-./run_tests.sh local "tests/ -m unit"
+# Run all integration tests in Docker
+./run_tests.sh docker integration
 ```
 
 The script automatically:
@@ -100,18 +96,17 @@ The script automatically:
 - Ensures consistent test execution
 - Includes verbose output (-v flag)
 - Shows print statements during test execution (-s flag)
-- Generates coverage reports when appropriate
 
 ### CI Pipeline
-The CI pipeline uses the same `run_tests.sh` script with different test subsets depending on the context:
+The CI pipeline uses the same `run_tests.sh` script with different test types depending on the context:
 
 - On push to main:
-  - Runs unit tests and non-costly integration tests
-  - `./run_tests.sh docker "tests/ -m 'unit or (integration and not costly)'"`
+  - Runs unit tests (non-costly)
+  - `./run_tests.sh docker unit`
 
 - On pull request:
-  - Runs all unit and integration tests (including costly ones)
-  - `./run_tests.sh docker "tests/ -m 'unit or integration'"`
+  - Runs all integration tests
+  - `./run_tests.sh docker integration`
 
 Note: Third-party tests are never run in CI and must be run manually during development.
       These are for things such as: checking why your mic is not working, or why the SUNO API is not working.

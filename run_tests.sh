@@ -1,34 +1,31 @@
 #!/bin/bash
 
-# Check if we have the required arguments
-if [ "$#" -lt 2 ]; then
-    echo "Usage: $0 <mode> <test_target>"
+# Check if we have exactly two arguments
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <mode> <test_type>"
     echo "  mode: 'local' or 'docker'"
-    echo "  test_target: pytest target (e.g., 'tests/' or 'tests/unit/test_specific.py::test_function')"
+    echo "  test_type: 'unit' or 'integration'"
     exit 1
 fi
 
 MODE=$1
-TEST_TARGET=$2
-shift 2  # Remove the first two arguments
+TEST_TYPE=$2
 
-# Always use -v and -s flags
-PYTEST_FLAGS="-v -s"
+# Validate mode argument
+if [[ "$MODE" != "local" && "$MODE" != "docker" ]]; then
+    echo "Error: First argument must be either 'local' or 'docker'"
+    exit 1
+fi
 
-# Process remaining arguments to handle -m flag specially
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        -m)
-            shift  # Remove -m
-            PYTEST_FLAGS="$PYTEST_FLAGS -m '$1'"  # Use single quotes
-            shift
-            ;;
-        *)
-            PYTEST_FLAGS="$PYTEST_FLAGS $1"
-            shift
-            ;;
-    esac
-done
+# Validate test type argument and set the appropriate pytest marker
+if [[ "$TEST_TYPE" == "unit" ]]; then
+    PYTEST_MARKER="'(unit or integration) and not costly'"
+elif [[ "$TEST_TYPE" == "integration" ]]; then
+    PYTEST_MARKER="'unit or integration'"
+else
+    echo "Error: Second argument must be either 'unit' or 'integration'"
+    exit 1
+fi
 
 # Setup Google credentials
 if [ -f "/tmp/gcp-credentials.json" ]; then
@@ -47,17 +44,16 @@ fi
 
 case $MODE in
     "local")
-        echo "Executing: python -m pytest $TEST_TARGET $PYTEST_FLAGS"
-        eval "python -m pytest $TEST_TARGET $PYTEST_FLAGS"
-        exit $?  # Exit with pytest's exit code
+        echo "Executing: python -m pytest tests/ -v -s -m $PYTEST_MARKER"
+        eval "python -m pytest tests/ -v -s -m $PYTEST_MARKER"
+        exit $?
         ;;
     "docker")
         # Build the Docker image
         docker build -t ganglia:latest . || exit 1
         
         # Show the command that will be run
-        final_command="pytest \"$TEST_TARGET\" -v -s $(echo $PYTEST_FLAGS | sed 's/-m '\''\([^'\'']*\)'\''/--m "\1"/g')"
-        echo "Command to be run inside Docker: $final_command"
+        echo "Command to be run inside Docker: pytest tests/ -v -s -m $PYTEST_MARKER"
         
         # Run Docker with credentials mount and pass through environment variables
         docker run --rm \
@@ -68,14 +64,10 @@ case $MODE in
             -e SUNO_API_KEY \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json \
             ganglia:latest \
-            /bin/sh -c "$final_command"
+            /bin/sh -c "pytest tests/ -v -s -m $PYTEST_MARKER"
         exit_code=$?
         rm -f /tmp/gcp-credentials.json
         exit $exit_code
-        ;;
-    *)
-        echo "Invalid mode. Use 'local' or 'docker'"
-        exit 1
         ;;
 esac 
 

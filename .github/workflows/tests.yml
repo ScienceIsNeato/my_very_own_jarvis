@@ -13,18 +13,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Install jq
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y jq
-
-    - name: Install Google Cloud SDK
-      run: |
-        echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-        sudo apt-get install apt-transport-https ca-certificates -y
-        curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
-        sudo apt-get update && sudo apt-get install google-cloud-sdk -y
-
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
     
@@ -59,17 +47,12 @@ jobs:
       run: |
         set -e  # Exit immediately if a command exits with a non-zero status
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          # Run all unit and integration tests on PR
-          ./run_tests.sh docker "tests/" -m "unit or integration"
-          exit_code=$?
+          # Run integration tests on PR
+          ./run_tests.sh docker integration
         else
-          # Run only non-costly tests on push
-          ./run_tests.sh docker "tests/" -m "(unit or integration) and not costly"
-          exit_code=$?
+          # Run unit tests on push
+          ./run_tests.sh docker unit
         fi
-        
-        # Exit with the test's exit code
-        exit $exit_code
     
     - name: Clean up
       if: always()
