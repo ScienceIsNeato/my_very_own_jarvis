@@ -17,7 +17,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y jq
-      # Temporary step to verify GCP credentials. Remove before opening a PR.
 
     - name: Install Google Cloud SDK
       run: |
@@ -31,24 +30,6 @@ jobs:
     
     - name: Set up Google Application Credentials
       run: |
-        debug_gac() {
-          echo "=== DEBUG GAC at $(date) ==="
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
-          echo "File exists?"
-          test -f /tmp/gcp-credentials.json && echo "Yes" || echo "No"
-          echo "File has content?"
-          test -s /tmp/gcp-credentials.json && echo "Yes" || echo "No"
-          echo "File contents:"
-          cat /tmp/gcp-credentials.json || echo "Failed to cat file"
-          echo "Directory listing:"
-          ls -lrt /tmp/
-          echo "=== END DEBUG ==="
-        }
-
-        echo "Before creating credentials file:"
-        debug_gac
-
-        echo "Creating GCP credentials file..."
         jq -n --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
               --arg client_secret "${{ secrets.GAC_CLIENT_SECRET }}" \
               --arg quota_project_id "${{ secrets.GAC_QUOTA_PROJECT_ID }}" \
@@ -62,42 +43,6 @@ jobs:
                 type: $type
               }' > /tmp/gcp-credentials.json
         chmod 644 /tmp/gcp-credentials.json
-        sudo chown root:root /tmp/gcp-credentials.json
-
-        echo "After creating credentials file:"
-        debug_gac
-      env:
-        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
-
-    - name: Verifying GAC (Temporary)
-      run: |
-        debug_gac() {
-          echo "=== DEBUG GAC at $(date) ==="
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
-          echo "File exists?"
-          test -f /tmp/gcp-credentials.json && echo "Yes" || echo "No"
-          echo "File has content?"
-          test -s /tmp/gcp-credentials.json && echo "Yes" || echo "No"
-          echo "File contents:"
-          cat /tmp/gcp-credentials.json || echo "Failed to cat file"
-          echo "Directory listing:"
-          ls -lrt /tmp/
-          echo "=== END DEBUG ==="
-        }
-
-        echo "Before verification:"
-        debug_gac
-
-        echo "Verifying GCP Credentials..."
-        if echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}" | jq '.quota_project_id'; then
-          echo "Parsed quota_project_id successfully."
-        else
-          echo "Failed to parse JSON. Catting full contents:"
-          cat /tmp/gcp-credentials.json
-        fi
-
-        echo "After verification:"
-        debug_gac
       env:
         GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
 
@@ -112,22 +57,6 @@ jobs:
         SUNO_API_KEY: ${{ secrets.SUNO_API_KEY }}
         GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
       run: |
-        debug_gac() {
-          echo "=== DEBUG GAC at $(date) ==="
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
-          echo "File exists?"
-          test -f /tmp/gcp-credentials.json && echo "Yes" || echo "No"
-          echo "File has content?"
-          test -s /tmp/gcp-credentials.json && echo "Yes" || echo "No"
-          echo "File contents:"
-          cat /tmp/gcp-credentials.json || echo "Failed to cat file"
-          echo "Directory listing:"
-          ls -lrt /tmp/
-          echo "=== END DEBUG ==="
-        }
-
-        echo "Before running tests:"
-        debug_gac
         set -e  # Exit immediately if a command exits with a non-zero status
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
           # Run all unit and integration tests on PR

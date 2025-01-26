@@ -1,20 +1,5 @@
 #!/bin/bash
 
-# Add debug function at the top of the script
-debug_gac() {
-  echo "=== DEBUG GAC at $(date) ==="
-  echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
-  echo "File exists?"
-  test -f /tmp/gcp-credentials.json && echo "Yes" || echo "No"
-  echo "File has content?"
-  test -s /tmp/gcp-credentials.json && echo "Yes" || echo "No"
-  echo "File contents:"
-  cat /tmp/gcp-credentials.json || echo "Failed to cat file"
-  echo "Directory listing:"
-  ls -lrt /tmp/
-  echo "=== END DEBUG ==="
-}
-
 # Check if we have the required arguments
 if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <mode> <test_target>"
@@ -35,7 +20,7 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -m)
             shift  # Remove -m
-            PYTEST_FLAGS="$PYTEST_FLAGS -m \"$1\""  # Add double quotes around the marker expression
+            PYTEST_FLAGS="$PYTEST_FLAGS -m '$1'"  # Use single quotes
             shift
             ;;
         *)
@@ -44,10 +29,6 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-# Before credentials setup
-echo "Before credentials setup:"
-debug_gac
 
 # Setup Google credentials
 if [ -f "/tmp/gcp-credentials.json" ]; then
@@ -64,10 +45,6 @@ else
     fi
 fi
 
-# After credentials setup
-echo "After credentials setup:"
-debug_gac
-
 case $MODE in
     "local")
         echo "Executing: python -m pytest $TEST_TARGET $PYTEST_FLAGS"
@@ -76,11 +53,11 @@ case $MODE in
         ;;
     "docker")
         # Build the Docker image
-        echo "[DEBUG] Building Docker image..."
         docker build -t ganglia:latest . || exit 1
         
-        echo "Before Docker run:"
-        debug_gac
+        # Show the command that will be run
+        final_command="pytest \"$TEST_TARGET\" -v -s $(echo $PYTEST_FLAGS | sed 's/-m '\''\([^'\'']*\)'\''/--m "\1"/g')"
+        echo "Command to be run inside Docker: $final_command"
         
         # Run Docker with credentials mount and pass through environment variables
         docker run --rm \
@@ -91,20 +68,7 @@ case $MODE in
             -e SUNO_API_KEY \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json \
             ganglia:latest \
-            /bin/sh -c '
-                echo "=== DEBUG GAC at $(date) ===";
-                echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS";
-                echo "File exists?";
-                test -f /tmp/gcp-credentials.json && echo "Yes" || echo "No";
-                echo "File has content?";
-                test -s /tmp/gcp-credentials.json && echo "Yes" || echo "No";
-                echo "File contents:";
-                cat /tmp/gcp-credentials.json || echo "Failed to cat file";
-                echo "Directory listing:";
-                ls -lrt /tmp/;
-                echo "=== END DEBUG ===";
-                pytest "$TEST_TARGET" $PYTEST_FLAGS
-            '
+            /bin/sh -c "$final_command"
         exit_code=$?
         sudo rm -f /tmp/gcp-credentials.json
         exit $exit_code
