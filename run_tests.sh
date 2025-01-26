@@ -50,14 +50,18 @@ echo "Before credentials setup:"
 debug_gac
 
 # Setup Google credentials
-if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
-    # It's a file path, copy the contents
-    echo "[DEBUG] GAC is a file at $GOOGLE_APPLICATION_CREDENTIALS"
-    cat "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
+if [ -f "/tmp/gcp-credentials.json" ]; then
+    echo "[DEBUG] GAC file already exists at /tmp/gcp-credentials.json"
 else
-    # Not a file, assume it's the JSON content
-    echo "[DEBUG] GAC is not a file, treating as JSON content"
-    echo "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
+    if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+        # It's a file path, copy the contents
+        echo "[DEBUG] GAC is a file at $GOOGLE_APPLICATION_CREDENTIALS"
+        cat "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
+    else
+        # Not a file, assume it's the JSON content
+        echo "[DEBUG] GAC is not a file, treating as JSON content"
+        echo "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
+    fi
 fi
 
 # After credentials setup
@@ -87,9 +91,22 @@ case $MODE in
             -e SUNO_API_KEY \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json \
             ganglia:latest \
-            /bin/sh -c "echo 'Inside Docker container:' && debug_gac && pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+            /bin/sh -c '
+                echo "=== DEBUG GAC at $(date) ===";
+                echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS";
+                echo "File exists?";
+                test -f /tmp/gcp-credentials.json && echo "Yes" || echo "No";
+                echo "File has content?";
+                test -s /tmp/gcp-credentials.json && echo "Yes" || echo "No";
+                echo "File contents:";
+                cat /tmp/gcp-credentials.json || echo "Failed to cat file";
+                echo "Directory listing:";
+                ls -lrt /tmp/;
+                echo "=== END DEBUG ===";
+                pytest "$TEST_TARGET" $PYTEST_FLAGS
+            '
         exit_code=$?
-        rm -f /tmp/gcp-credentials.json
+        sudo rm -f /tmp/gcp-credentials.json
         exit $exit_code
         ;;
     *)
