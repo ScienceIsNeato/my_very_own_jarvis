@@ -19,31 +19,25 @@ jobs:
         sudo apt-get install -y jq
       # Temporary step to verify GCP credentials. Remove before opening a PR.
 
-    - name: Verifying GAC
-      run: |
-        echo "Verifying GCP Credentials..."
-        content="${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}"
-        
-        # Echo the content
-        echo "Echoing GCP Credentials:"
-        echo "$content"
-        
-        # Cat the file
-        echo "Catting GCP Credentials file:"
-        echo "$content" > /tmp/gcp-credentials.json
-        cat /tmp/gcp-credentials.json
-        
-        # Decode if base64 encoded
-        echo "Decoding GCP Credentials (if applicable):"
-        echo "$content" | base64 --decode || echo "Not base64 encoded"
-      # Temporary step to verify GCP credentials. Remove before opening a PR.
-    
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
     
-    - name: Create GCP credentials file
+    - name: Set up Google Application Credentials
       run: |
-        echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}" > /tmp/gcp-credentials.json
+        echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}" > $HOME/gcp-credentials.json
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
+
+    - name: Verifying GAC
+      run: |
+        echo "Verifying GCP Credentials..."
+        if echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}" | jq '.quota_project_id'; then
+          echo "Parsed quota_project_id successfully."
+        else
+          echo "Failed to parse JSON. Catting full contents:"
+          cat $HOME/gcp-credentials.json
+        fi
+      # Temporary step to verify GCP credentials. Remove before opening a PR.
     
     - name: Make run_tests.sh executable
       run: chmod +x run_tests.sh
@@ -54,7 +48,7 @@ jobs:
         GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
         GCP_PROJECT_NAME: ${{ secrets.GCP_PROJECT_NAME }}
         SUNO_API_KEY: ${{ secrets.SUNO_API_KEY }}
-        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
+        GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
       run: |
         set -e  # Exit immediately if a command exits with a non-zero status
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -73,5 +67,5 @@ jobs:
     - name: Clean up
       if: always()
       run: |
-        rm -f /tmp/gcp-credentials.json
+        rm -f $HOME/gcp-credentials.json
 
