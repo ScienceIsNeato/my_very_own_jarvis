@@ -23,12 +23,23 @@ def create_video_segment(image_path, audio_path, output_path=None):
             output_path = os.path.join(temp_dir, "ttv", f"segment_{uuid.uuid4()}.mp4")
         
         Logger.print_info(f"{LOG_VIDEO_SEGMENT_CREATE}{output_path}, audio_path={audio_path}, image_path={image_path}")
+        # Get exact audio duration including padding
+        duration = get_audio_duration(audio_path)
+        
         ffmpeg_cmd = [
-            "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
-            "-c:v", "libx264", "-tune", "stillimage", 
-            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-            "-pix_fmt", "yuv420p", "-shortest", 
-            "-t", str(get_audio_duration(audio_path) + 1), 
+            "ffmpeg", "-y",
+            "-loop", "1", "-i", image_path,  # Input 1: looped image
+            "-i", audio_path,                # Input 2: audio with padding
+            "-map", "0:v:0",                 # Map video from first input
+            "-map", "1:a:0",                 # Map audio from second input
+            "-c:v", "libx264",
+            "-tune", "stillimage", 
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-ar", "48000",
+            "-ac", "2",
+            "-pix_fmt", "yuv420p",
+            "-t", str(duration),             # Exact duration including padding
             output_path
         ]
         result = run_ffmpeg_command(ffmpeg_cmd)
