@@ -31,7 +31,7 @@ jobs:
     
     - name: Set up Google Application Credentials
       run: |
-        echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}" > $HOME/gcp-credentials.json
+        echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE_64 }}" | base64 --decode > $HOME/gcp-credentials.json
       env:
         GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
 
