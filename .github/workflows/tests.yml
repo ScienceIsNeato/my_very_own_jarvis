@@ -31,7 +31,18 @@ jobs:
     
     - name: Set up Google Application Credentials
       run: |
-        echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE_64 }}" | base64 --decode > $HOME/gcp-credentials.json
+        jq -n --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
+              --arg client_secret "${{ secrets.GAC_CLIENT_SECRET }}" \
+              --arg quota_project_id "${{ secrets.GAC_QUOTA_PROJECT_ID }}" \
+              --arg refresh_token "${{ secrets.GAC_REFRESH_TOKEN }}" \
+              --arg type "${{ secrets.GAC_TYPE }}" \
+              '{
+                client_id: $client_id,
+                client_secret: $client_secret,
+                quota_project_id: $quota_project_id,
+                refresh_token: $refresh_token,
+                type: $type
+              }' > $HOME/gcp-credentials.json
       env:
         GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
 
@@ -46,15 +57,9 @@ jobs:
         fi
       # Temporary step to verify GCP credentials. Remove before opening a PR.
 
-    - name: Verifying GAC (Real)
+    - name: Verify GCP Credentials
       run: |
-        echo "Verifying GCP Credentials with gcloud..."
-        if gcloud auth activate-service-account --key-file=$HOME/gcp-credentials.json; then
-          echo "GCP Credentials verified successfully."
-        else
-          echo "Failed to verify GCP Credentials."
-          exit 1
-        fi
+        gcloud auth activate-service-account --key-file=$HOME/gcp-credentials.json
       env:
         GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
 
