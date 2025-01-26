@@ -42,9 +42,9 @@ jobs:
                 quota_project_id: $quota_project_id,
                 refresh_token: $refresh_token,
                 type: $type
-              }' > $HOME/gcp-credentials.json
+              }' > /tmp/gcp-credentials.json
       env:
-        GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
+        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
 
     - name: Verifying GAC (Temporary)
       run: |
@@ -53,7 +53,7 @@ jobs:
           echo "Parsed quota_project_id successfully."
         else
           echo "Failed to parse JSON. Catting full contents:"
-          cat $HOME/gcp-credentials.json
+          cat /tmp/gcp-credentials.json
         fi
       # Temporary step to verify GCP credentials. Remove before opening a PR.
 
@@ -67,7 +67,7 @@ jobs:
         GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
         GCP_PROJECT_NAME: ${{ secrets.GCP_PROJECT_NAME }}
         SUNO_API_KEY: ${{ secrets.SUNO_API_KEY }}
-        GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
+        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
       run: |
         set -e  # Exit immediately if a command exits with a non-zero status
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -86,5 +86,5 @@ jobs:
     - name: Clean up
       if: always()
       run: |
-        rm -f $HOME/gcp-credentials.json
+        rm -f /tmp/gcp-credentials.json
 
