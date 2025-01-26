@@ -34,9 +34,11 @@ done
 if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
     # It's a file path, copy the contents
     cat "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
+    echo "Loading GAC: File path detected - copying credentials from $GOOGLE_APPLICATION_CREDENTIALS to /tmp/gcp-credentials.json"
 else
     # Not a file, assume it's the JSON content
     echo "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
+    echo "Loading GAC: JSON content detected - writing to /tmp/gcp-credentials.json"
 fi
 
 case $MODE in
@@ -49,6 +51,8 @@ case $MODE in
         # Build the Docker image
         docker build -t ganglia:latest . || exit 1
         
+        echo "About to run tests with current GAC location of $GOOGLE_APPLICATION_CREDENTIALS and content of "
+        cat $GOOGLE_APPLICATION_CREDENTIALS
         echo "Executing: pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
         # Run Docker with credentials mount and pass through environment variables
         docker run --rm \
