@@ -31,6 +31,7 @@ jobs:
     
     - name: Set up Google Application Credentials
       run: |
+        echo "Creating GCP credentials file..."
         jq -n --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
               --arg client_secret "${{ secrets.GAC_CLIENT_SECRET }}" \
               --arg quota_project_id "${{ secrets.GAC_QUOTA_PROJECT_ID }}" \
@@ -43,6 +44,10 @@ jobs:
                 refresh_token: $refresh_token,
                 type: $type
               }' > /tmp/gcp-credentials.json
+        echo "Credentials file created. Content:"
+        cat /tmp/gcp-credentials.json
+        echo "File permissions:"
+        ls -l /tmp/gcp-credentials.json
       env:
         GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
 
@@ -69,6 +74,12 @@ jobs:
         SUNO_API_KEY: ${{ secrets.SUNO_API_KEY }}
         GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
       run: |
+        echo "Before running tests, checking credentials file:"
+        echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
+        echo "File exists:"
+        ls -l $GOOGLE_APPLICATION_CREDENTIALS
+        echo "File contents:"
+        cat $GOOGLE_APPLICATION_CREDENTIALS
         set -e  # Exit immediately if a command exits with a non-zero status
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
           # Run all unit and integration tests on PR

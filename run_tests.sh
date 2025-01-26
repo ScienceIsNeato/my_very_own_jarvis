@@ -33,12 +33,18 @@ done
 # Setup Google credentials
 if [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
     # It's a file path, copy the contents
+    echo "[DEBUG] GAC is a file at $GOOGLE_APPLICATION_CREDENTIALS"
+    echo "[DEBUG] Original file contents:"
+    cat "$GOOGLE_APPLICATION_CREDENTIALS"
     cat "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
-    echo "Loading GAC: File path detected - copying credentials from $GOOGLE_APPLICATION_CREDENTIALS to /tmp/gcp-credentials.json"
+    echo "[DEBUG] Copied to /tmp/gcp-credentials.json. New file contents:"
+    cat /tmp/gcp-credentials.json
 else
     # Not a file, assume it's the JSON content
+    echo "[DEBUG] GAC is not a file, treating as JSON content"
     echo "$GOOGLE_APPLICATION_CREDENTIALS" > /tmp/gcp-credentials.json
-    echo "Loading GAC: JSON content detected - writing to /tmp/gcp-credentials.json"
+    echo "[DEBUG] Written to /tmp/gcp-credentials.json. File contents:"
+    cat /tmp/gcp-credentials.json
 fi
 
 case $MODE in
@@ -49,11 +55,17 @@ case $MODE in
         ;;
     "docker")
         # Build the Docker image
+        echo "[DEBUG] Building Docker image..."
         docker build -t ganglia:latest . || exit 1
         
-        echo "About to run tests with current GAC location of $GOOGLE_APPLICATION_CREDENTIALS and content of "
+        echo "[DEBUG] Before Docker run:"
+        echo "GAC location: $GOOGLE_APPLICATION_CREDENTIALS"
+        echo "GAC contents:"
         cat $GOOGLE_APPLICATION_CREDENTIALS
-        echo "Executing: pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+        echo "/tmp contents:"
+        cat /tmp/gcp-credentials.json
+        
+        echo "[DEBUG] Running Docker container..."
         # Run Docker with credentials mount and pass through environment variables
         docker run --rm \
             -v /tmp/gcp-credentials.json:/tmp/gcp-credentials.json \
@@ -63,7 +75,12 @@ case $MODE in
             -e SUNO_API_KEY \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json \
             ganglia:latest \
-            /bin/sh -c "pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
+            /bin/sh -c "echo '[DEBUG] Inside Docker container:' && \
+                       echo 'GAC location:' && \
+                       echo \$GOOGLE_APPLICATION_CREDENTIALS && \
+                       echo 'GAC contents:' && \
+                       cat \$GOOGLE_APPLICATION_CREDENTIALS && \
+                       pytest \"$TEST_TARGET\" $PYTEST_FLAGS"
         exit_code=$?
         rm -f /tmp/gcp-credentials.json
         exit $exit_code
