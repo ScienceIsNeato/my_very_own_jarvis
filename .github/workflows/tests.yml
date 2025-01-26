@@ -57,11 +57,6 @@ jobs:
         fi
       # Temporary step to verify GCP credentials. Remove before opening a PR.
 
-    - name: Verify GCP Credentials
-      run: |
-        gcloud auth activate-service-account --key-file=$HOME/gcp-credentials.json
-      env:
-        GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
 
     - name: Make run_tests.sh executable
       run: chmod +x run_tests.sh
