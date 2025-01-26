@@ -70,7 +70,7 @@ case $MODE in
             ganglia:latest \
             /bin/sh -c "$final_command"
         exit_code=$?
-        sudo rm -f /tmp/gcp-credentials.json
+        rm -f /tmp/gcp-credentials.json
         exit $exit_code
         ;;
     *)

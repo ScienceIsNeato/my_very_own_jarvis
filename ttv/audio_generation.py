@@ -18,7 +18,10 @@ def generate_audio(tts, sentence, silence_padding=0.5):
         if success:
             if silence_padding > 0:
                 # Create temp path for padded audio
-                padded_path = os.path.join(get_tempdir(), f"padded_{os.path.basename(file_path)}")
+                temp_dir = get_tempdir()
+                tts_dir = os.path.join(temp_dir, "tts")
+                os.makedirs(tts_dir, exist_ok=True)
+                padded_path = os.path.join(tts_dir, f"padded_{os.path.basename(file_path)}")
                 
                 # Add silence padding using ffmpeg
                 cmd = [
