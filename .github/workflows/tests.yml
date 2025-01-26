@@ -19,6 +19,13 @@ jobs:
         sudo apt-get install -y jq
       # Temporary step to verify GCP credentials. Remove before opening a PR.
 
+    - name: Install Google Cloud SDK
+      run: |
+        echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+        sudo apt-get install apt-transport-https ca-certificates -y
+        curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+        sudo apt-get update && sudo apt-get install google-cloud-sdk -y
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
     
@@ -28,7 +35,7 @@ jobs:
       env:
         GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
 
-    - name: Verifying GAC
+    - name: Verifying GAC (Temporary)
       run: |
         echo "Verifying GCP Credentials..."
         if echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}" | jq '.quota_project_id'; then
@@ -38,7 +45,19 @@ jobs:
           cat $HOME/gcp-credentials.json
         fi
       # Temporary step to verify GCP credentials. Remove before opening a PR.
-    
+
+    - name: Verifying GAC (Real)
+      run: |
+        echo "Verifying GCP Credentials with gcloud..."
+        if gcloud auth activate-service-account --key-file=$HOME/gcp-credentials.json; then
+          echo "GCP Credentials verified successfully."
+        else
+          echo "Failed to verify GCP Credentials."
+          exit 1
+        fi
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp-credentials.json
+
     - name: Make run_tests.sh executable
       run: chmod +x run_tests.sh
     
