@@ -1,26 +1,31 @@
 # GANGLIA Test Suite
 
-This directory contains the test suite for the GANGLIA project. The tests are organized into three main categories:
+This directory contains the test suite for the GANGLIA project. The tests are organized into four main categories:
 
 ## Test Categories
 
 ### Unit Tests (`tests/unit/`)
-Fast tests that verify individual components. Note that despite the name, many of these tests do interact with external services. This is due to:
-1. The inherently interconnected nature of GANGLIA's components
-2. The desire to test real-world interactions rather than mocked behavior
-3. Historical development patterns prioritizing end-to-end verification
-
-TODO: Consider mocking external services where the real service doesn't materially impact the test's purpose. This would:
-- Speed up test execution
-- Reduce costs
-- Make tests more reliable
-- Allow offline testing
-
-For now, these tests:
-- Run relatively quickly (seconds rather than minutes)
+Fast tests that verify individual components. These tests:
+- Run quickly (seconds)
 - Test focused functionality
-- May require external API access
+- Have minimal external dependencies
 - Are suitable for running during development
+
+### Smoke Tests (`tests/integration/`)
+Tests that verify key end-to-end functionality using mocks. These tests:
+- Use simulated/mocked responses for external services
+- Run relatively quickly
+- Verify core functionality
+- Provide quick feedback on basic system health
+- Are suitable for running during development
+- Are included in CI pipelines
+
+### Integration Tests (`tests/integration/`)
+Tests that verify multiple components working together. These tests:
+- May be costly (time/compute)
+- Test end-to-end functionality
+- Validate system behavior with real external services
+- Used by CI (Github) to validate pull requests
 
 ### Third-Party Tests (`tests/third_party/`)
 Tests that validate integration with external services. These tests:
@@ -30,23 +35,15 @@ Tests that validate integration with external services. These tests:
 - Validate third-party service integration
 - Good for debugging during development
 
-### Integration Tests (`tests/integration/`)
-Tests that verify multiple components working together. These tests:
-- May be costly (time/compute)
-- Test end-to-end functionality
-- Validate system behavior
-- Used by CI (Github) to validate:
-    - Commits via `[@pytest.mark.unit, @pytest.mark.integration and not @pytest.mark.costly]`
-    - Pull Requests via `[@pytest.mark.unit, @pytest.mark.integration]`
-
 ## Test Markers
 
 Tests are marked with pytest markers to control execution:
 
-- `@pytest.mark.unit`: Fast tests with no external dependencies
+- `@pytest.mark.unit`: Fast tests with minimal dependencies
+- `@pytest.mark.smoke`: Key functionality tests using mocks
+- `@pytest.mark.integration`: Full end-to-end tests with real services
 - `@pytest.mark.third_party`: Tests requiring external services
-- `@pytest.mark.integration`: Tests of multiple components
-- `@pytest.mark.costly`: Time or resource-intensive tests
+- `@pytest.mark.costly`: Time or resource-intensive tests (should only be used with integration or third-party tests)
 
 ## Test Environment
 
@@ -74,19 +71,23 @@ The project includes a `run_tests.sh` script that handles both local and Docker 
 
 # Arguments:
 # mode: 'local' or 'docker'
-# test_type: 'unit' or 'integration'
+# test_type: 'unit', 'smoke', or 'integration'
 #
-# unit: Runs tests marked as (unit or integration) and not costly
-# integration: Runs all tests marked as unit or integration
+# unit: Runs only unit tests
+# smoke: Runs only smoke tests
+# integration: Runs only integration tests
 ```
 
 ### Common Test Commands
 
 ```bash
-# Run unit tests (non-costly) in local mode
+# Run unit tests in local mode
 ./run_tests.sh local unit
 
-# Run all integration tests in Docker
+# Run smoke tests in Docker
+./run_tests.sh docker smoke
+
+# Run integration tests in Docker
 ./run_tests.sh docker integration
 ```
 
@@ -96,17 +97,18 @@ The script automatically:
 - Ensures consistent test execution
 - Includes verbose output (-v flag)
 - Shows print statements during test execution (-s flag)
+- Saves test output to timestamped log files
 
 ### CI Pipeline
 The CI pipeline uses the same `run_tests.sh` script with different test types depending on the context:
 
 - On push to main:
-  - Runs unit tests (non-costly)
-  - `./run_tests.sh docker unit`
+  - Runs unit and smoke tests
+  - `./run_tests.sh docker unit && ./run_tests.sh docker smoke`
 
 - On pull request:
-  - Runs all integration tests
-  - `./run_tests.sh docker integration`
+  - Runs all test types
+  - `./run_tests.sh docker unit && ./run_tests.sh docker smoke && ./run_tests.sh docker integration`
 
 Note: Third-party tests are never run in CI and must be run manually during development.
       These are for things such as: checking why your mic is not working, or why the SUNO API is not working.
@@ -131,4 +133,4 @@ tests/
 2. Add relevant pytest markers
 3. Follow naming convention: `test_*.py`
 4. Include docstring explaining test purpose
-5. Mark costly tests appropriately
+5. Mark costly tests appropriately (integration or third-party only)

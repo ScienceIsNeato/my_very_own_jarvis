@@ -122,7 +122,13 @@ def append_video_segments(video_segments, output_path):
         Logger.print_info(f"Appending video segments: {reencoded_segments}")
 
         ffmpeg_cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path, "-c", "copy", output_path
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
+            "-c:v", "libx264",  # Re-encode video to ensure consistent duration
+            "-c:a", "aac",      # Re-encode audio to ensure consistent duration
+            "-b:a", "192k",     # Consistent audio bitrate
+            "-ar", "48000",     # Consistent audio sample rate
+            "-ac", "2",         # Consistent audio channels
+            output_path
         ]
         result = run_ffmpeg_command(ffmpeg_cmd)
         if result:

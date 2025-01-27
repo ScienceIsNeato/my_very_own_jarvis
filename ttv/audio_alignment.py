@@ -10,6 +10,7 @@ import sys
 import os
 import subprocess
 import time
+import threading
 
 # Add parent directory to Python path to import logger
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,6 +18,8 @@ from logger import Logger
 
 # Monkey patch torch.load to always use weights_only=True
 torch.load = partial(torch.load, weights_only=True)
+
+whisper_lock = threading.Lock()
 
 @dataclass
 class WordTiming:
@@ -40,67 +43,70 @@ def align_words_with_audio(audio_path: str, text: str, model_size: str = "tiny",
     Returns:
         List of WordTiming objects containing word-level alignments
     """
-    for attempt in range(max_retries):
-        try:
-            # Load Whisper model with safe settings
-            model = whisper.load_model(
-                model_size,
-                device="cpu",  # Force CPU usage
-                download_root=None,  # Use default download location
-                in_memory=True  # Keep model in memory
-            )
-            
-            # Get word-level timestamps from audio
-            result = model.transcribe(
-                audio_path,
-                language="en",
-                word_timestamps=True,
-                initial_prompt=text,  # Help guide the transcription
-                fp16=False  # Force FP32
-            )
-            
-            if not result or "segments" not in result:
-                Logger.print_error(f"Failed to transcribe audio on attempt {attempt + 1}")
-                if attempt < max_retries - 1:
-                    Logger.print_info(f"Retrying whisper alignment (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(0.5)  # Add a small delay between retries
-                    continue
-                return create_evenly_distributed_timings(audio_path, text)
-            
-            # Extract word timings from result
-            word_timings = []
-            for segment in result["segments"]:
-                if "words" in segment:
-                    for word in segment["words"]:
-                        # Check if word has the required fields
-                        if isinstance(word, dict) and "word" in word and "start" in word and "end" in word:
-                            word_timings.append(WordTiming(
-                                text=word["word"].strip(),
-                                start=word["start"],
-                                end=word["end"]
-                            ))
-            
-            if not word_timings:
-                Logger.print_error(f"No word timings found on attempt {attempt + 1}")
-                if attempt < max_retries - 1:
-                    Logger.print_info(f"Retrying whisper alignment (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(0.5)  # Add a small delay between retries
-                    continue
-                return create_evenly_distributed_timings(audio_path, text)
-            
-            # If we get here, the attempt was successful
-            if attempt > 0:
-                Logger.print_info(f"✓ Whisper alignment succeeded on attempt {attempt + 1}")
-            return word_timings
 
-        except Exception as e:
-            # Just log the error message without the stack trace
-            Logger.print_error(f"Whisper alignment failed on attempt {attempt + 1}: {str(e)}")
-            if attempt < max_retries - 1:
-                Logger.print_info(f"Retrying whisper alignment (attempt {attempt + 1}/{max_retries})")
-                time.sleep(0.5)  # Add a small delay between retries
-                continue
-            return create_evenly_distributed_timings(audio_path, text)
+    # Use a lock to ensure only one thread can load the Whisper model at a time
+    with whisper_lock:
+        for attempt in range(max_retries):
+            try:
+                # Load Whisper model with safe settings
+                model = whisper.load_model(
+                    model_size,
+                    device="cpu",  # Force CPU usage
+                    download_root=None,  # Use default download location
+                    in_memory=True  # Keep model in memory
+                )
+                
+                # Get word-level timestamps from audio
+                result = model.transcribe(
+                    audio_path,
+                    language="en",
+                    word_timestamps=True,
+                    initial_prompt=text,  # Help guide the transcription
+                    fp16=False  # Force FP32
+                )
+                
+                if not result or "segments" not in result:
+                    Logger.print_error(f"Failed to transcribe audio on attempt {attempt + 1}")
+                    if attempt < max_retries - 1:
+                        Logger.print_info(f"Retrying whisper alignment (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(0.5)  # Add a small delay between retries
+                        continue
+                    return create_evenly_distributed_timings(audio_path, text)
+                
+                # Extract word timings from result
+                word_timings = []
+                for segment in result["segments"]:
+                    if "words" in segment:
+                        for word in segment["words"]:
+                            # Check if word has the required fields
+                            if isinstance(word, dict) and "word" in word and "start" in word and "end" in word:
+                                word_timings.append(WordTiming(
+                                    text=word["word"].strip(),
+                                    start=word["start"],
+                                    end=word["end"]
+                                ))
+                
+                if not word_timings:
+                    Logger.print_error(f"No word timings found on attempt {attempt + 1}")
+                    if attempt < max_retries - 1:
+                        Logger.print_info(f"Retrying whisper alignment (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(0.5)  # Add a small delay between retries
+                        continue
+                    return create_evenly_distributed_timings(audio_path, text)
+                
+                # If we get here, the attempt was successful
+                if attempt > 0:
+                    Logger.print_info(f"✓ Whisper alignment succeeded on attempt {attempt + 1}")
+                return word_timings
+
+            except Exception as e:
+                # Just log the error message without the stack trace
+                Logger.print_error(f"Whisper alignment failed on attempt {attempt + 1}: {str(e)}")
+                if attempt < max_retries - 1:
+                    Logger.print_info(f"Retrying whisper alignment (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(0.5)  # Add a small delay between retries
+                    continue
+                return create_evenly_distributed_timings(audio_path, text)
     
     # If we get here, all retries failed
     Logger.print_error(f"All {max_retries} whisper alignment attempts failed, falling back to even distribution")

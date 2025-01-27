@@ -54,7 +54,7 @@ HARD_CODED_CONFIG_PATH = "tests/integration/test_data/minimal_ttv_config.json"
 # Path to the test config file
 SIMULATED_PIPELINE_CONFIG = "tests/integration/test_data/simulated_pipeline_config.json"
 
-@pytest.mark.integration
+@pytest.mark.smoke
 def test_simulated_pipeline_execution():
     """Test the full TTV pipeline with simulated responses for music and image generation.
     
@@ -98,7 +98,7 @@ def test_simulated_pipeline_execution():
     validate_total_duration(output, total_video_duration)
 
     # Clean up
-    os.remove(final_video_path)
+    # os.remove(final_video_path)  # Commented out to preserve files for debugging
     print("\n=== Test Complete ===\n")
 
 @pytest.mark.integration
@@ -145,5 +145,5 @@ def test_generated_pipeline_execution():
     validate_total_duration(output, total_video_duration)
 
     # Clean up
-    os.remove(final_video_path)
+    # os.remove(final_video_path)  # Commented out to preserve files for debugging
     print("\n=== Test Complete ===\n")

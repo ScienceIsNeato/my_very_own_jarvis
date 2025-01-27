@@ -29,3 +29,6 @@ tests/unit/ttv/test_outputs/
 tests/third_party/ttv/test_outputs/
 tests/integration/ttv/test_outputs/
 
+# Logs
+/logs
+
