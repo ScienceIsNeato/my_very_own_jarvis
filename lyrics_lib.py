@@ -12,16 +12,28 @@ class LyricsGenerator:
     def __init__(self):
         pass
 
-    def generate_song_lyrics(self, story_text, query_dispatcher):
-        """Generate song lyrics based on the story text."""
+    def generate_song_lyrics(self, story_text, query_dispatcher, target_duration=30):
+        """Generate song lyrics based on the story text.
+        
+        Args:
+            story_text: The story to base the lyrics on
+            query_dispatcher: The query dispatcher to use for generation
+            target_duration: Target duration in seconds (default: 30)
+        """
         prompt = f"""
-        Generate concise lyrics for a 30-second jingle or song based on the following story.
+        Generate lyrics for a {target_duration}-second song based on the following story.
         The lyrics should be:
-        - 4 lines maximum (2-3 lines is ideal)
+        - Each line takes 8-12 seconds to sing naturally with proper phrasing
+        - Each line should be 8-10 syllables for natural pacing
         - No repetition of lines
-        - Each line should be 8-10 syllables
-        - Focus on the key theme/message
+        - Focus on the key themes, emotions, and narrative elements
         - Suitable for a trailer or closing credits
+        - Must clearly reflect the story's themes and content
+
+        For reference:
+        - A 20-second song should have 2-3 lines
+        - A 30-second song should have 3-4 lines
+        - A 45-second song should have 4-5 lines
 
         Story:
         {story_text}
@@ -32,7 +44,7 @@ class LyricsGenerator:
             "lyrics": "the generated lyrics here"
         }}
 
-        The lyrics should capture the essence of the story while being brief and memorable.
+        The lyrics should capture the essence and themes of the story while being memorable and fitting the time constraint.
         """
 
         response = query_dispatcher.sendQuery(prompt)
@@ -61,6 +73,8 @@ class LyricsGenerator:
                 "style": style,
                 "lyrics": "\n".join(lyrics)
             }
+
+            Logger.print_info(f"Generated lyrics: {formatted_response}")
             return json.dumps(formatted_response)
 
     def determine_lyrical_style(self, story_text, query_dispatcher):
