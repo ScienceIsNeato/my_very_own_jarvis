@@ -18,7 +18,37 @@ from concurrent.futures import ThreadPoolExecutor
 tts = GoogleTTS()
 
 def process_sentence(i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher, config):
-    """Process a single sentence into a video segment."""
+    """Process a single sentence into a video segment with audio and captions.
+
+    This function handles the complete pipeline for converting a single sentence into a video segment:
+    1. Generates or loads an image based on the sentence
+    2. Generates audio narration for the sentence
+    3. Creates a video segment combining the image and audio
+    4. Adds captions to the video segment (either static or dynamic based on config)
+
+    Args:
+        i (int): Index of the sentence in the story sequence
+        sentence (str): The sentence text to process
+        context (str): Additional context to help with image generation
+        style (str): The visual style to use for image generation
+        total_images (int): Total number of images/sentences in the story
+        tts (GoogleTTS): Text-to-speech interface for audio generation
+        skip_generation (bool): If True, generates blank images instead of using DALL-E
+        query_dispatcher (QueryDispatcher): Interface for making API calls
+        config (Config): Configuration object containing settings for image/caption generation
+
+    Returns:
+        tuple: A tuple containing (video_path, index) where:
+            - video_path (str or None): Path to the generated video segment, or None if generation failed
+            - index (int): The original sentence index
+            
+    Note:
+        The function may return (None, index) at various points if any step fails:
+        - Image generation/loading fails
+        - Audio generation fails
+        - Video segment creation fails
+        - Caption addition fails (falls back to uncaptioned video)
+    """
     thread_id = f"[Thread {i+1}/{total_images}]"
     Logger.print_info(f"{thread_id} Processing sentence: {sentence}")
 
@@ -38,16 +68,16 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
     else:
         filename, success = generate_image(sentence, context, style, i, total_images, query_dispatcher, preloaded_images_dir=preloaded_images_dir)
         if not success:
-            return None, sentence, i
+            return None, i
     if not filename:
-        return None, sentence, i
+        return None, i
 
     # Generate audio for this sentence
     Logger.print_info(f"{thread_id} Generating audio for sentence.")
     success, audio_path = tts.convert_text_to_speech(sentence)
     if not success:
         Logger.print_error(f"{thread_id} Failed to generate audio")
-        return None, sentence, i
+        return None, i
 
     # Create initial video segment
     Logger.print_info(f"{thread_id} Creating initial video segment.")
@@ -55,7 +85,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
     initial_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}_initial.mp4")
     if not create_video_segment(filename, audio_path, initial_segment_path):
         Logger.print_error(f"{thread_id} Failed to create video segment")
-        return None, sentence, i
+        return None, i
 
     # Get caption style from config
     caption_style = getattr(config, 'caption_style', 'static')
@@ -67,10 +97,10 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
             captions = create_word_level_captions(audio_path, sentence)
             if not captions:
                 Logger.print_error(f"{thread_id} Failed to create word-level captions")
-                return None, sentence, i
+                return None, i
         except Exception as e:
             Logger.print_error(f"{thread_id} Error creating word-level captions: {e}")
-            return None, sentence, i
+            return None, i
 
         final_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}.mp4")
         captioned_path = create_dynamic_captions(
@@ -82,10 +112,10 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         )
 
         if captioned_path:
-            return captioned_path, sentence, i
+            return captioned_path, i
         else:
             Logger.print_error(f"{thread_id} Failed to add captions, using uncaptioned video")
-            return initial_segment_path, sentence, i
+            return initial_segment_path, i
     else:
         # Add static captions
         Logger.print_info(f"{thread_id} Adding static captions to video segment.")
@@ -99,10 +129,10 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         )
 
         if captioned_path:
-            return captioned_path, sentence, i
+            return captioned_path, i
         else:
             Logger.print_error(f"{thread_id} Failed to add captions, using uncaptioned video")
-            return initial_segment_path, sentence, i
+            return initial_segment_path, i
 
 def process_story(tts, style, story, skip_generation, query_dispatcher, story_title, config=None):
     """
@@ -201,9 +231,11 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
         for future in sentence_futures:
             try:
                 result = future.result()
-                if result:
-                    video_path, sentence, index = result
+                if result and result[0]:  # Check both result and video_path
+                    video_path, index = result
                     video_segments.append((index, video_path))
+                else:
+                    Logger.print_error(f"Skipping segment due to None result or video path")
             except Exception as e:
                 Logger.print_error(f"Error processing sentence: {e}")
 

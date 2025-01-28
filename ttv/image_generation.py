@@ -64,14 +64,18 @@ def generate_image(sentence, context, style, image_index, total_images, query_di
                 Logger.print_error(f"No image was returned for the sentence: '{sentence}'")
                 return None, False
         except Exception as e:
-            if 'Rate limit exceeded' in str(e):
-                Logger.print_warning(f"Rate limit exceeded. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
-                time.sleep(wait_time)
-            else:
-                Logger.print_error(f"An error occurred while generating the image: {e}")
-                return None, False
+            error_str = str(e).lower()
+            # Check for various types of transient errors
+            if any(err in error_str for err in ['rate limit exceeded', 'gateway', 'timeout', '504', '502', '503']):
+                if attempt < retries - 1:
+                    retry_wait = wait_time * (2 ** attempt)  # Exponential backoff
+                    Logger.print_warning(f"Transient error encountered: {e}. Retrying in {retry_wait} seconds... (Attempt {attempt + 1} of {retries})")
+                    time.sleep(retry_wait)
+                    continue
+            Logger.print_error(f"An error occurred while generating the image: {e}")
+            return None, False
 
-    Logger.print_error(f"Failed to generate image after {retries} attempts due to rate limiting.")
+    Logger.print_error(f"Failed to generate image after {retries} attempts.")
     return None, False
 
 def save_image_with_caption(image_url, filename, caption, current_step, total_steps):
