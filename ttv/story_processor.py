@@ -64,9 +64,18 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
     # Generate image for this sentence
     filename = None
     if skip_generation:
-        filename = generate_blank_image(sentence, i)
+        filename = generate_blank_image(sentence, i, thread_id=thread_id)
     else:
-        filename, success = generate_image(sentence, context, style, i, total_images, query_dispatcher, preloaded_images_dir=preloaded_images_dir)
+        filename, success = generate_image(
+            sentence, 
+            context, 
+            style, 
+            i, 
+            total_images, 
+            query_dispatcher, 
+            preloaded_images_dir=preloaded_images_dir,
+            thread_id=thread_id
+        )
         if not success:
             return None, i
     if not filename:
@@ -112,6 +121,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         )
 
         if captioned_path:
+            Logger.print_info(f"{thread_id} Successfully added dynamic captions")
             return captioned_path, i
         else:
             Logger.print_error(f"{thread_id} Failed to add captions, using uncaptioned video")
@@ -129,6 +139,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         )
 
         if captioned_path:
+            Logger.print_info(f"{thread_id} Successfully added static captions")
             return captioned_path, i
         else:
             Logger.print_error(f"{thread_id} Failed to add captions, using uncaptioned video")

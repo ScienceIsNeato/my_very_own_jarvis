@@ -10,7 +10,8 @@ def get_tempdir():
     Get the temporary directory in a platform-agnostic way.
     Creates and returns /tmp/GANGLIA for POSIX systems or %TEMP%/GANGLIA for Windows.
     """
-    temp_dir = os.path.join(tempfile.gettempdir(), 'GANGLIA')
+    temp_dir = os.getenv('GANGLIA_TEMP_DIR', tempfile.gettempdir())
+    temp_dir = os.path.join(temp_dir, 'GANGLIA')
     os.makedirs(temp_dir, exist_ok=True)
     return temp_dir
 

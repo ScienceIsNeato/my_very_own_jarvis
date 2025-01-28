@@ -247,9 +247,10 @@ GANGLIA uses `direnv` to manage environment variables. This ensures that environ
    ```
 
 4. Edit `.envrc` with your actual values:
-   - OpenAI API key for GPT interactions
+   - OpenAI API key for GPT interactions and DALL-E image generation
    - Google Cloud configuration for speech and storage
    - MusicGen/AudioGen credentials
+   - Optional: Custom temporary directory path via `GANGLIA_TEMP_DIR`
    - Other service-specific settings
 
 5. Allow direnv to load the environment:
@@ -257,7 +258,24 @@ GANGLIA uses `direnv` to manage environment variables. This ensures that environ
    direnv allow
    ```
 
-The `.envrc` file contains all required environment variables, categorized by service with explanatory comments. When you enter the project directory, these variables will be automatically loaded, and when you leave, they'll be unloaded.
+### Environment Variables
+
+The `.envrc` file contains all required environment variables, including:
+
+#### Required Variables
+- `OPENAI_API_KEY`: Your OpenAI API key for GPT and DALL-E
+- `GOOGLE_APPLICATION_CREDENTIALS`: Path to Google Cloud credentials
+- `GCP_BUCKET_NAME`: Google Cloud Storage bucket name
+- `GCP_PROJECT_NAME`: Google Cloud project name
+- `SUNO_API_KEY`: API key for MusicGen/AudioGen
+
+#### Optional Variables
+- `GANGLIA_TEMP_DIR`: Override the default temporary directory location
+  - If not set, uses system temp directory (`/tmp` on Unix, `%TEMP%` on Windows)
+  - GANGLIA will create a subdirectory named 'GANGLIA' within this location
+- `PLAYBACK_MEDIA_IN_TESTS`: Enable/disable media playback during tests
+
+When you enter the project directory, these variables will be automatically loaded, and when you leave, they'll be unloaded.
 
 ## Google Cloud Credentials
 

@@ -14,3 +14,7 @@ export SUNO_API_KEY="your-key-here"           # MusicGen/AudioGen API key for mu
 export PLAYBACK_MEDIA_IN_TESTS="true"         # Controls whether audio/video is played during tests
                                              # Set to "true" to enable media playback
                                              # Set to "false" for CI or headless environments 
+
+# Optional: Override the default temporary directory
+# If not set, will use system temp directory (e.g., /tmp on Unix, %TEMP% on Windows)
+export GANGLIA_TEMP_DIR="/path/to/your/preferred/temp/directory"
