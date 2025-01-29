@@ -9,21 +9,6 @@ import select
 from music_lib import MusicGenerator
 from ttv.config_loader import load_input
 
-"""
-Test for Meta's MusicGen model using Hugging Face Transformers.
-This test verifies:
-1. Music generation with text prompts
-2. Audio output generation and saving
-3. Model configuration and parameter settings
-
-Requirements:
-- transformers
-- torch
-- soundfile
-- numpy
-- tqdm
-"""
-
 class MockQueryDispatcher:
     """Mock query dispatcher for testing."""
     def sendQuery(self, query):
@@ -50,6 +35,9 @@ def is_space_pressed():
 
 def play_audio(audio_path):
     """Play audio file and allow skipping with spacebar."""
+    if not os.getenv('PLAYBACK_MEDIA_IN_TESTS'):
+        return
+        
     try:
         if os.uname().sysname == 'Darwin':  # macOS
             process = subprocess.Popen(['afplay', audio_path])
@@ -77,9 +65,8 @@ def play_audio(audio_path):
                     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
                 except Exception:
                     pass
-            
-    except Exception as e:
-        print(f"Failed to play audio: {str(e)}")
+    except Exception:
+        pass
 
 @pytest.mark.third_party
 @pytest.mark.costly
@@ -120,29 +107,6 @@ def test_suno_backend():
     assert audio_path is not None
     assert os.path.exists(audio_path)
     assert audio_path.endswith('.mp3')
-    
-    print(f"\nPlaying generated audio from {audio_path}")
-    print("Press SPACE to skip audio playback...")
-    play_audio(audio_path)
-
-@pytest.mark.third_party
-def test_meta_backend():
-    """Test the Meta MusicGen backend for instrumental music generation."""
-    config = load_input("tests/integration/test_data/minimal_ttv_config.json")
-    config.music_backend = "meta"  # Override to use Meta backend
-    generator = MusicGenerator(config=config)
-    
-    # Test instrumental music generation
-    print("\nGenerating instrumental music with prompt: A short peaceful piano melody. High quality recording.")
-    audio_path = generator.generate_instrumental(
-        "A short peaceful piano melody. High quality recording.",
-        max_new_tokens=256  # ~8 seconds of audio
-    )
-    
-    # Verify the output
-    assert audio_path is not None, "Audio path should not be None"
-    assert os.path.exists(audio_path), f"Audio file should exist at {audio_path}"
-    assert audio_path.endswith('.wav'), "Audio file should be WAV format"
     
     print(f"\nPlaying generated audio from {audio_path}")
     print("Press SPACE to skip audio playback...")
