@@ -189,14 +189,18 @@ class MetaMusicBackend(MusicBackend):
                 
                 # Create a complex filter for looping with crossfade
                 filter_complex = []
-                for i in range(num_loops):
-                    # Input label for this clip
-                    filter_complex.append(f'[{i}:0]')
                 
                 # Build the crossfade chain
+                # First crossfade: [0:a][1:a]acrossfade=d=3[f1]
+                # Second crossfade: [f1][2:a]acrossfade=d=3[f2]
+                # And so on...
                 for i in range(num_loops - 1):
-                    # For each pair of clips, crossfade them
-                    filter_complex.append(f'[{i}][{i+1}]acrossfade=d={crossfade_duration}:c1=tri:c2=tri[f{i+1}];')
+                    if i == 0:
+                        # First crossfade uses input audio streams
+                        filter_complex.append(f'[0:a][1:a]acrossfade=d={crossfade_duration}:c1=tri:c2=tri[f1];')
+                    else:
+                        # Subsequent crossfades use previous output and next input
+                        filter_complex.append(f'[f{i}][{i+1}:a]acrossfade=d={crossfade_duration}:c1=tri:c2=tri[f{i+1}];')
                 
                 # Final filter string
                 filter_str = ''.join(filter_complex)
@@ -207,6 +211,7 @@ class MetaMusicBackend(MusicBackend):
                     cmd.extend(['-i', temp_clip_path])
                 cmd.extend([
                     '-filter_complex',
+                    # Use the last crossfade output [fN] and trim to exact duration
                     filter_str + f'[f{num_loops-1}]atrim=0:{duration_seconds}[out]',
                     '-map', '[out]',
                     final_path

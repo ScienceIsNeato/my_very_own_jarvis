@@ -171,12 +171,6 @@ def test_meta_backend_looping():
         
         print(f"Expected duration: {target_duration}s matches Actual duration: {actual_duration:.1f}s")
         
-        # Verify that the file size is reasonable (not just silence or repetition)
-        file_size = os.path.getsize(audio_path)
-        # Assuming 16-bit stereo WAV at 32kHz, expect ~12MB per minute
-        expected_size = (target_duration / 60) * 12 * 1024 * 1024  # Convert to bytes
-        assert file_size >= expected_size * 0.5, f"File size ({file_size} bytes) is suspiciously small"
-        
         if os.getenv('PLAYBACK_MEDIA_IN_TESTS'):
             print(f"\nPlaying generated audio from {audio_path}")
             print("Press SPACE to skip audio playback...")

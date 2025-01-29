@@ -12,7 +12,17 @@ from ttv.config_loader import TTVConfig
 def _exponential_backoff(attempt, base_delay=1, max_delay=5):
     """Calculate delay with exponential backoff and jitter."""
     delay = min(base_delay * (2 ** attempt), max_delay)
-    # Add some randomness (jitter) to prevent thundering herd
+    
+    # If we're at max delay, return it without jitter
+    if delay >= max_delay:
+        return max_delay
+        
+    # If we're close to max delay, only allow positive jitter up to max
+    if delay > max_delay * 0.9:  # Within 10% of max
+        max_jitter = min(delay * 0.1, max_delay - delay)  # Cap jitter to not exceed max
+        return delay + (max_jitter * (os.urandom(1)[0] / 255.0))  # Only positive jitter
+    
+    # Normal case: add bidirectional jitter
     jitter = delay * 0.1  # 10% jitter
     return delay + (jitter * (2 * (os.urandom(1)[0] / 255.0) - 1))
 
