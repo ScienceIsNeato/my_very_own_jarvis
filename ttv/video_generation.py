@@ -22,7 +22,7 @@ def create_video_segment(image_path, audio_path, output_path=None):
             temp_dir = get_tempdir()
             output_path = os.path.join(temp_dir, "ttv", f"segment_{uuid.uuid4()}.mp4")
         
-        Logger.print_info(f"{LOG_VIDEO_SEGMENT_CREATE}{output_path}, audio_path={audio_path}, image_path={image_path}")
+        Logger.print_info(f"{LOG_VIDEO_SEGMENT_CREATE}={output_path}, audio_path={audio_path}, image_path={image_path}")
         # Get exact audio duration including padding
         duration = get_audio_duration(audio_path)
         

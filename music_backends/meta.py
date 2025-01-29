@@ -228,16 +228,7 @@ class MetaMusicBackend(MusicBackend):
                 os.rename(temp_clip_path, final_path)
             
             self._update_progress(job_id, "Complete", 100, final_path)
-            
-            # Auto-play the generated audio
-            try:
-                if os.uname().sysname == 'Darwin':  # macOS
-                    subprocess.Popen(['afplay', final_path])
-                else:  # Linux/Others - requires vlc
-                    subprocess.Popen(['vlc', '--play-and-exit', final_path])
-            except Exception as e:
-                Logger.print_error(f"Failed to auto-play audio: {str(e)}")
-            
+
         except Exception as e:
             Logger.print_error(f"Generation failed: {str(e)}")
             self._update_progress(job_id, "Failed", 0, error=str(e))
