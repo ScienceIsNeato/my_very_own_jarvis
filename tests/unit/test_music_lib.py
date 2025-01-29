@@ -172,13 +172,25 @@ def test_instrumental_generation_no_fallback_configured():
 def test_exponential_backoff():
     """Test that exponential backoff generates reasonable delays."""
     # Test a few attempts
-    delays = [_exponential_backoff(i) for i in range(5)]
+    max_delay = 5  # Updated to match the actual max delay
+    delays = [_exponential_backoff(i, max_delay=max_delay) for i in range(5)]
     
-    # Verify delays increase exponentially
+    # Verify delays increase exponentially until max delay
     for i in range(1, len(delays)):
-        assert delays[i] > delays[i-1], "Delays should increase exponentially"
+        if delays[i-1] < max_delay:  # Only check increase if previous delay was below max
+            assert delays[i] > delays[i-1], "Delays should increase exponentially until max"
+        else:
+            # Once we hit max delay, subsequent delays should be at max (with jitter)
+            assert abs(delays[i] - max_delay) <= max_delay * 0.1, \
+                f"Delay {i} should be close to max_delay (got {delays[i]})"
     
     # Verify max delay is respected
-    max_delay = 30
     large_attempt_delay = _exponential_backoff(10, max_delay=max_delay)
-    assert large_attempt_delay <= max_delay * 1.1  # Allow for 10% jitter 
+    assert large_attempt_delay <= max_delay * 1.1  # Allow for 10% jitter
+    
+    # Verify actual delay sequence is reasonable
+    expected_base_delays = [1, 2, 4, 5, 5]  # Last two are capped at max_delay
+    for i, delay in enumerate(delays):
+        # Allow for 10% jitter in either direction
+        assert abs(delay - expected_base_delays[i]) <= expected_base_delays[i] * 0.1, \
+            f"Delay {i} should be close to {expected_base_delays[i]} (got {delay})" 
