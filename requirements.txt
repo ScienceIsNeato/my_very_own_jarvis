@@ -35,3 +35,6 @@ google-cloud-speech
 openai-whisper
 accelerate
 safetensors
+
+# Additional dependencies
+psutil>=5.9.0
