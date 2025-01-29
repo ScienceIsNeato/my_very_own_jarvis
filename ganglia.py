@@ -20,6 +20,10 @@ from ttv.story_processor import process_story
 from ttv.final_video_generation import assemble_final_video, concatenate_video_segments
 from utils import get_tempdir, setup_tmp_dir
 
+def get_config_path():
+    """Get the path to the config directory relative to the project root."""
+    return os.path.join(os.path.dirname(__file__), 'config', 'ganglia_config.json')
+
 def initialize_conversation(args):
     USER_TURN_INDICATOR = None
     AI_TURN_INDICATOR = None
@@ -52,7 +56,8 @@ def initialize_conversation(args):
 
     # QueryDispatcher setup
     try:
-        query_dispatcher = ChatGPTQueryDispatcher()
+        config_path = get_config_path()
+        query_dispatcher = ChatGPTQueryDispatcher(config_file_path=config_path)
         Logger.print_debug("Query Dispatcher initialized successfully.")
     except Exception as e:
         Logger.print_error(f"Failed to initialize Query Dispatcher: {e}")
@@ -61,7 +66,7 @@ def initialize_conversation(args):
     # HotwordManager setup
     hotword_manager = None
     try:
-        hotword_manager = HotwordManager('config/ganglia_config.json')  # Updated config path
+        hotword_manager = HotwordManager(config_path)
         Logger.print_debug("HotwordManager initialized successfully.")
     except Exception as e:
         Logger.print_error(f"Failed to initialize HotwordManager: {e}")
@@ -69,7 +74,7 @@ def initialize_conversation(args):
     # ContextManager setup
     context_manager = None
     try:
-        context_manager = ContextManager('config/ganglia_config.json')  # Load conversation context
+        context_manager = ContextManager(config_path)
         Logger.print_debug("ContextManager initialized successfully.")
 
         # Feed the context into the query dispatcher

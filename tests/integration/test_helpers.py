@@ -151,24 +151,45 @@ def validate_audio_video_durations(output, config_path):
 
 def extract_final_video_path(output):
     """Extract the final video path from the logs."""
-    match = re.search(f'{LOG_FINAL_VIDEO_CREATED}=(.+\.mp4)', output)
-    if match:
-        return match.group(1)
-    else:
-        raise AssertionError("Final video path not found in logs.")
+    # Try both formats:
+    # 1. "Final video (?:with|without) closing credits created: output_path=/path/to/file.mp4"
+    # 2. "Final video created at: output_path=/path/to/file.mp4"
+    patterns = [
+        r'Final video (?:with|without) closing credits created: output_path=(.+\.mp4)',
+        r'Final video created at: output_path=(.+\.mp4)'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, output)
+        if match:
+            return match.group(1)
+    
+    raise AssertionError("Final video path not found in logs.")
 
-def validate_final_video_path(output):
+def validate_final_video_path(output, config_path=None):
     """Validate that the final video path is found in the logs."""
     print("\n=== Validating Final Video Path ===")
     final_video_path = extract_final_video_path(output)
     assert os.path.exists(final_video_path), f"Expected output video not found at {final_video_path}"
     print(f"✓ Final video found at: {os.path.basename(final_video_path)}")
+    
+    # Check if closing credits were expected but not found
+    if config_path:
+        try:
+            with open(config_path, 'r') as f:
+                config = json.loads(f.read())
+                if config.get('closing_credits'):
+                    if 'without closing credits' in output:
+                        print("\n⚠️  Warning: Closing credits were configured but not found in final video")
+                        print("   This might be due to Suno API being unavailable or other generation issues")
+        except Exception as e:
+            print(f"\n⚠️  Warning: Could not check closing credits configuration: {e}")
+    
     return final_video_path
 
-def validate_total_duration(output, total_video_duration):
+def validate_total_duration(final_video_path, total_video_duration):
     """Validate that the total video duration matches the expected duration."""
     print("\n=== Validating Total Video Duration ===")
-    final_video_path = extract_final_video_path(output)
     
     # Get actual duration of final video
     final_duration = get_video_duration(final_video_path)
@@ -184,7 +205,7 @@ def validate_closing_credits_duration(output, config_path):
     print("\n=== Validating Closing Credits Duration ===")
     
     # First try to find generated credits duration in logs
-    duration_match = re.search(f'{LOG_CLOSING_CREDITS_DURATION}: (\d+\.\d+)s', output)
+    duration_match = re.search(f'{LOG_CLOSING_CREDITS_DURATION}: (\\d+\\.\\d+)s', output)
     if duration_match:
         audio_duration = float(duration_match.group(1))
         print(f"✓ Generated closing credits duration: {audio_duration:.2f}s")

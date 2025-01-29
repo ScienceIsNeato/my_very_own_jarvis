@@ -18,3 +18,7 @@ def pytest_configure(config):
         "markers",
         "costly: mark test as computationally expensive or time-consuming"
     )
+    config.addinivalue_line(
+        "markers",
+        "smoke: mark test as a smoke test (key functionality with mocks)"
+    )

@@ -10,7 +10,7 @@ class TestStoryProcessor(unittest.TestCase):
         """Test that the closing credits prompt from config is used when generating music."""
         # Mock dependencies
         mock_tts = Mock()
-        mock_tts.convert_text_to_speech.return_value = (True, "/tmp/test_audio.mp3")
+        mock_tts.convert_text_to_speech.return_value = (True, "/tmp/GANGLIA/tts/test_audio.mp3")
         mock_query_dispatcher = Mock(spec=ChatGPTQueryDispatcher)
         mock_music_gen = Mock()
         

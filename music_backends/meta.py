@@ -132,52 +132,103 @@ class MetaMusicBackend(MusicBackend):
                 inputs = {k: v.to("cuda") for k, v in inputs.items()}
             
             self._update_progress(job_id, "Starting generation", 20)
-            max_new_tokens = kwargs.get('max_new_tokens', 256)
-            self.model.generation_config.max_new_tokens = max_new_tokens
+            
+            duration_seconds = kwargs.get('duration_seconds', 30)  # Default to 30 seconds
+            Logger.print_info(f"Generating {duration_seconds:.1f} seconds of audio")
+            
+            # Cap generation at 25 seconds, we'll loop if needed
+            generation_duration = min(25, duration_seconds)
+            max_new_tokens = int(generation_duration * 50)
             
             # Start progress update thread
             generation_complete = threading.Event()
             progress_thread = threading.Thread(
                 target=self._progress_updater,
-                args=(job_id, generation_complete)
+                args=(job_id, generation_complete, generation_duration)
             )
             progress_thread.start()
             
-            # Generate audio
+            # Generate audio with explicit duration
             audio_values = self.model.generate(
                 **inputs,
-                do_sample=True
+                do_sample=True,
+                guidance_scale=3,
+                max_new_tokens=max_new_tokens
             )
             
             # Signal completion and wait for progress thread
             generation_complete.set()
             progress_thread.join()
             
-            self._update_progress(job_id, "Processing audio", 90)
+            self._update_progress(job_id, "Processing audio", 98)
             audio_data = audio_values.cpu().numpy().squeeze()
             if len(audio_data.shape) == 1:
                 audio_data = audio_data.reshape(1, -1)
             
-            self._update_progress(job_id, "Saving audio", 95)
+            self._update_progress(job_id, "Saving audio", 99)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             sanitized_prompt = ''.join(c if c.isalnum() else '_' for c in prompt)[:50]
-            audio_path = os.path.join(
+            
+            # Save the initial clip
+            temp_clip_path = os.path.join(
+                self.audio_directory,
+                f"musicgen_temp_{sanitized_prompt}_{timestamp}.wav"
+            )
+            sf.write(temp_clip_path, audio_data.T, self.sample_rate)
+            
+            # If we need to loop, use ffmpeg to create the final audio
+            final_path = os.path.join(
                 self.audio_directory,
                 f"musicgen_{sanitized_prompt}_{timestamp}.wav"
             )
             
-            sf.write(audio_path, audio_data.T, self.sample_rate)
-            self._update_progress(job_id, "Complete", 100, audio_path)
+            if duration_seconds > generation_duration:
+                # Calculate how many times we need to loop
+                num_loops = int(duration_seconds / generation_duration) + 1
+                crossfade_duration = min(3, generation_duration / 4)  # Use up to 3 second crossfade
+                
+                # Create a complex filter for looping with crossfade
+                filter_complex = []
+                
+                # Build the crossfade chain
+                # First crossfade: [0:a][1:a]acrossfade=d=3[f1]
+                # Second crossfade: [f1][2:a]acrossfade=d=3[f2]
+                # And so on...
+                for i in range(num_loops - 1):
+                    if i == 0:
+                        # First crossfade uses input audio streams
+                        filter_complex.append(f'[0:a][1:a]acrossfade=d={crossfade_duration}:c1=tri:c2=tri[f1];')
+                    else:
+                        # Subsequent crossfades use previous output and next input
+                        filter_complex.append(f'[f{i}][{i+1}:a]acrossfade=d={crossfade_duration}:c1=tri:c2=tri[f{i+1}];')
+                
+                # Final filter string
+                filter_str = ''.join(filter_complex)
+                
+                # Build the final command
+                cmd = ['ffmpeg', '-y']
+                for _ in range(num_loops):
+                    cmd.extend(['-i', temp_clip_path])
+                cmd.extend([
+                    '-filter_complex',
+                    # Use the last crossfade output [fN] and trim to exact duration
+                    filter_str + f'[f{num_loops-1}]atrim=0:{duration_seconds}[out]',
+                    '-map', '[out]',
+                    final_path
+                ])
+                
+                try:
+                    subprocess.run(cmd, check=True, capture_output=True)
+                    os.remove(temp_clip_path)  # Clean up temp file
+                except subprocess.CalledProcessError as e:
+                    Logger.print_error(f"Failed to create looped audio: {e.stderr.decode()}")
+                    final_path = temp_clip_path  # Fall back to the original clip
+            else:
+                # Just rename the temp file to final
+                os.rename(temp_clip_path, final_path)
             
-            # Auto-play the generated audio
-            try:
-                if os.uname().sysname == 'Darwin':  # macOS
-                    subprocess.Popen(['afplay', audio_path])
-                else:  # Linux/Others - requires vlc
-                    subprocess.Popen(['vlc', '--play-and-exit', audio_path])
-            except Exception as e:
-                Logger.print_error(f"Failed to auto-play audio: {str(e)}")
-            
+            self._update_progress(job_id, "Complete", 100, final_path)
+
         except Exception as e:
             Logger.print_error(f"Generation failed: {str(e)}")
             self._update_progress(job_id, "Failed", 0, error=str(e))
@@ -186,15 +237,24 @@ class MetaMusicBackend(MusicBackend):
             if job_id in self.active_jobs:
                 del self.active_jobs[job_id]
     
-    def _progress_updater(self, job_id: str, complete_event: threading.Event):
+    def _progress_updater(self, job_id: str, complete_event: threading.Event, target_duration: float):
         """Update progress periodically while generation is running."""
         start_time = time.time()
-        estimated_duration = 30  # Estimated duration in seconds
+        
+        # Calculate token generation rate (tokens/second) based on model size
+        # Based on measured completion time: 350 tokens in 42.9s ≈ 8.2 tokens/second
+        tokens_per_second = 8
+        
+        # Total tokens we expect to generate
+        total_tokens = int(target_duration * 50)  # 50 tokens per second of audio
         
         while not complete_event.is_set():
             elapsed = time.time() - start_time
-            progress = min(20 + (elapsed / estimated_duration * 70), 89)  # Progress from 20% to 89%
-            self._update_progress(job_id, f"Generating audio ({elapsed:.1f}s)", progress)
+            # Estimate progress based on tokens generated
+            estimated_tokens_generated = min(elapsed * tokens_per_second, total_tokens)
+            # Scale progress from 20% to 99% based on token generation
+            progress = 20 + (estimated_tokens_generated / total_tokens * 79)
+            self._update_progress(job_id, f"Generating audio ({elapsed:.1f}s, ~{estimated_tokens_generated:.0f}/{total_tokens} tokens)", progress)
             time.sleep(0.5)  # Update every half second
     
     def generate_instrumental(self, prompt: str, **kwargs) -> str:

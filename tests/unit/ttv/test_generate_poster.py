@@ -1,23 +1,9 @@
-import pytest
-import json
-import logging
 import os
-import sys
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-ganlgia_home = os.getenv('GANGLIA_HOME')
-if not ganlgia_home:
-    raise EnvironmentError("Environment variable 'GANGLIA_HOME' is not set.")
-
-# Add GANGLIA_HOME to sys.path to resolve imports
-sys.path.insert(0, ganlgia_home)
-
+import pytest
 from logger import Logger
 from query_dispatch import ChatGPTQueryDispatcher
 from ttv.story_generation import generate_movie_poster, generate_filtered_story
+from utils import get_config_path
 
 @pytest.mark.unit
 def test_generate_movie_poster():
@@ -40,7 +26,7 @@ def test_generate_movie_poster():
     )
     style = "Whimsical adventure"
 
-    query_dispatcher = ChatGPTQueryDispatcher()
+    query_dispatcher = ChatGPTQueryDispatcher(config_file_path=get_config_path())
 
     filtered_story_json = generate_filtered_story(context, style, story_title, query_dispatcher)
 

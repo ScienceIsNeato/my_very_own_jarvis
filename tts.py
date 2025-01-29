@@ -43,25 +43,27 @@ class TextToSpeech(ABC):
         if file_path.endswith('.txt'):
             file_path = self.concatenate_audio_from_text(file_path)
 
-        # Prepare the play command and determine the audio duration
-        play_command, audio_duration = self.prepare_playback(file_path)
+        # Only play audio if explicitly enabled
+        if os.getenv('PLAYBACK_MEDIA_IN_TESTS', 'false').lower() == 'true':
+            # Prepare the play command and determine the audio duration
+            play_command, audio_duration = self.prepare_playback(file_path)
 
-        Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)")
-        Logger.print_demon_output(raw_response)
+            Logger.print_demon_output(f"\nGANGLIA says... (Audio Duration: {audio_duration:.1f} seconds)")
+            Logger.print_demon_output(raw_response)
 
-        # Start playback in a non-blocking manner
-        playback_process = subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+            # Start playback in a non-blocking manner
+            playback_process = subprocess.Popen(play_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
 
-        # Start the Enter key listener in a separate thread
-        stop_thread = threading.Thread(target=self.monitor_enter_keypress, args=(playback_process,))
-        stop_thread.daemon = True  # Ensure the thread exits when the main program exits
-        stop_thread.start()
+            # Start the Enter key listener in a separate thread
+            stop_thread = threading.Thread(target=self.monitor_enter_keypress, args=(playback_process,))
+            stop_thread.daemon = True  # Ensure the thread exits when the main program exits
+            stop_thread.start()
 
-        # Wait for playback process to finish
-        playback_process.wait()  # This will wait for natural completion
+            # Wait for playback process to finish
+            playback_process.wait()  # This will wait for natural completion
 
-        # Ensure Enter key thread finishes
-        stop_thread.join(timeout=1)  # Attempt to join, but timeout if it hangs
+            # Ensure Enter key thread finishes
+            stop_thread.join(timeout=1)  # Attempt to join, but timeout if it hangs
 
     def monitor_enter_keypress(self, playback_process):
         """Non-blocking Enter key listener."""

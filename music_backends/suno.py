@@ -114,7 +114,9 @@ class SunoMusicBackend(MusicBackend):
         }
 
         logging_headers = self.headers.copy()
-        logging_headers['api-key'] = '***masked***'
+        api_key = self.headers['api-key']
+        masked_key = f"{api_key[:2]}{'*' * (len(api_key)-4)}{api_key[-2:]}"
+        logging_headers['api-key'] = masked_key
         Logger.print_info(f"Sending request to {endpoint} with data: {data} and headers: {logging_headers}")
         response = requests.post(endpoint, headers=self.headers, json=data)
         Logger.print_info(f"Request completed with status code {response.status_code}")
@@ -163,7 +165,13 @@ class SunoMusicBackend(MusicBackend):
                 "prompt": full_prompt,
                 "mv": model
             }
-            
+
+            logging_headers = self.headers.copy()
+            api_key = self.headers['api-key']
+            masked_key = f"{api_key[:2]}{'*' * (len(api_key)-4)}{api_key[-2:]}"
+            logging_headers['api-key'] = masked_key
+            Logger.print_info(f"Sending request to {endpoint} with data: {data} and headers: {logging_headers}")
+                
             response = requests.post(endpoint, headers=self.headers, json=data)
             if response.status_code != 200:
                 return None

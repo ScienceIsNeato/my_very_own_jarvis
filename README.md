@@ -216,3 +216,82 @@ See `config/ttv_config.template.json` for a complete example configuration. Here
 - All paths in the configuration file should be relative to the project root
 - When using file-based resources (music/images), ensure the files exist before running
 - When using prompt-based generation, ensure you have the necessary API access configured
+
+## Environment Setup
+
+GANGLIA uses `direnv` to manage environment variables. This ensures that environment variables are automatically loaded when you enter the project directory and unloaded when you leave.
+
+### Setting up direnv
+
+1. Install direnv:
+   ```bash
+   # On macOS
+   brew install direnv
+
+   # On Linux
+   # Follow instructions at https://direnv.net/docs/installation.html
+   ```
+
+2. Add direnv hook to your shell:
+   ```bash
+   # For zsh (add to ~/.zshrc)
+   eval "$(direnv hook zsh)"
+
+   # For bash (add to ~/.bashrc)
+   eval "$(direnv hook bash)"
+   ```
+
+3. Create your local environment file:
+   ```bash
+   cp .envrc.template .envrc
+   ```
+
+4. Edit `.envrc` with your actual values:
+   - OpenAI API key for GPT interactions and DALL-E image generation
+   - Google Cloud configuration for speech and storage
+   - MusicGen/AudioGen credentials
+   - Optional: Custom temporary directory path via `GANGLIA_TEMP_DIR`
+   - Other service-specific settings
+
+5. Allow direnv to load the environment:
+   ```bash
+   direnv allow
+   ```
+
+### Environment Variables
+
+The `.envrc` file contains all required environment variables, including:
+
+#### Required Variables
+- `OPENAI_API_KEY`: Your OpenAI API key for GPT and DALL-E
+- `GOOGLE_APPLICATION_CREDENTIALS`: Path to Google Cloud credentials
+- `GCP_BUCKET_NAME`: Google Cloud Storage bucket name
+- `GCP_PROJECT_NAME`: Google Cloud project name
+- `SUNO_API_KEY`: API key for MusicGen/AudioGen
+
+#### Optional Variables
+- `GANGLIA_TEMP_DIR`: Override the default temporary directory location
+  - If not set, uses system temp directory (`/tmp` on Unix, `%TEMP%` on Windows)
+  - GANGLIA will create a subdirectory named 'GANGLIA' within this location
+- `PLAYBACK_MEDIA_IN_TESTS`: Enable/disable media playback during tests
+
+When you enter the project directory, these variables will be automatically loaded, and when you leave, they'll be unloaded.
+
+## Google Cloud Credentials
+
+GANGLIA uses Google Cloud services for speech-to-text and text-to-speech. The credentials are handled differently depending on the environment:
+
+### Local Development
+For local development, set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to your credentials file:
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/credentials.json"
+```
+
+### Docker Local Development
+When building the Docker container locally, you can provide your credentials during build:
+```bash
+docker build --build-arg GOOGLE_CREDENTIALS_PATH=/path/to/your/credentials.json -t ganglia:latest .
+```
+
+### CI Environment
+In CI, credentials are handled automatically through GitHub Secrets. No additional setup is required.

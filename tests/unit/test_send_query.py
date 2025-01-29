@@ -1,16 +1,19 @@
 import sys
 from pathlib import Path
-
 import pytest
+from query_dispatch import ChatGPTQueryDispatcher
+from utils import get_config_path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from query_dispatch import ChatGPTQueryDispatcher
+@pytest.fixture
+def query_dispatcher():
+    return ChatGPTQueryDispatcher(config_file_path=get_config_path())
 
 @pytest.mark.unit
 def test_sendQuery():
     expected_in_response = "Paris"
-    query_dispatcher = ChatGPTQueryDispatcher()
+    query_dispatcher = ChatGPTQueryDispatcher(config_file_path=get_config_path())
 
     test_prompt = "What is the capital of France?"
 

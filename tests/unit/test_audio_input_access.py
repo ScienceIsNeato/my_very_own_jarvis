@@ -4,6 +4,7 @@ import wave
 import pyaudio
 import subprocess
 import pytest
+import os
 
 @pytest.fixture
 def device_index():
@@ -68,10 +69,15 @@ def test_audio_input(device_index):
         subprocess.run(['ffmpeg', '-y', '-i', 'recorded_audio.wav', 'recorded_audio.mp3'], check=True)
         
         print("Playing recorded audio...")
-        subprocess.call(['ffplay', '-nodisp', '-autoexit', 'recorded_audio.mp3'])
+        test_play_audio()
         
     finally:
         audio.terminate()
+
+def test_play_audio():
+    # Only play audio if explicitly enabled
+    if os.getenv('PLAYBACK_MEDIA_IN_TESTS', 'false').lower() == 'true':
+        subprocess.call(['ffplay', '-nodisp', '-autoexit', 'recorded_audio.mp3'])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
