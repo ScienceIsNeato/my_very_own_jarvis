@@ -63,9 +63,11 @@ def generate_image(sentence, context, style, image_index, total_images, query_di
                 filename = os.path.join(get_tempdir(), "ttv", f"image_{image_index}.png")
                 save_image_with_caption(image_url, filename, sentence, image_index, total_images, thread_id=thread_id)
                 return filename, True
-            else:
-                Logger.print_error(f"{thread_prefix}No image was returned for the sentence: '{sentence}'")
-                return None, False
+            
+            Logger.print_error(f"{thread_prefix}No image was returned for the sentence: '{sentence}'. Retrying attempt {attempt + 1} of {retries}")
+            # Continue to next retry instead of returning
+            continue
+            
         except Exception as e:
             error_str = str(e).lower()
             # Check for various types of transient errors
@@ -75,9 +77,11 @@ def generate_image(sentence, context, style, image_index, total_images, query_di
                     Logger.print_warning(f"{thread_prefix}Transient error encountered: {e}. Retrying in {retry_wait} seconds... (Attempt {attempt + 1} of {retries})")
                     time.sleep(retry_wait)
                     continue
-            Logger.print_error(f"{thread_prefix}An error occurred while generating the image: {e}")
-            return None, False
+            Logger.print_error(f"{thread_prefix}An error occurred while generating the image. Retrying attempt {attempt + 1} of {retries}")
+            # Continue to next retry instead of returning
+            continue
 
+    # Only return None, False after all retries are exhausted
     Logger.print_error(f"{thread_prefix}Failed to generate image after {retries} attempts.")
     return None, False
 

@@ -94,8 +94,8 @@ def test_simulated_pipeline_execution():
     total_video_duration += closing_credits_duration
 
     # Validate final video
-    final_video_path = validate_final_video_path(output)
-    validate_total_duration(output, total_video_duration)
+    final_video_path = validate_final_video_path(output, SIMULATED_PIPELINE_CONFIG)
+    validate_total_duration(final_video_path, total_video_duration)
 
     # Clean up
     # os.remove(final_video_path)  # Commented out to preserve files for debugging
@@ -141,8 +141,8 @@ def test_generated_pipeline_execution():
     total_video_duration += closing_credits_duration
 
     # Validate final video
-    final_video_path = validate_final_video_path(output)
-    validate_total_duration(output, total_video_duration)
+    final_video_path = validate_final_video_path(output, config_path)
+    validate_total_duration(final_video_path, total_video_duration)
 
     # Clean up
     # os.remove(final_video_path)  # Commented out to preserve files for debugging

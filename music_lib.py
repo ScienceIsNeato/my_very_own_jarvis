@@ -9,8 +9,17 @@ from logger import Logger
 from music_backends import MetaMusicBackend, SunoMusicBackend
 from ttv.config_loader import TTVConfig
 
+def _exponential_backoff(attempt, base_delay=1, max_delay=5):
+    """Calculate delay with exponential backoff and jitter."""
+    delay = min(base_delay * (2 ** attempt), max_delay)
+    # Add some randomness (jitter) to prevent thundering herd
+    jitter = delay * 0.1  # 10% jitter
+    return delay + (jitter * (2 * (os.urandom(1)[0] / 255.0) - 1))
+
 class MusicGenerator:
     """Music generation service that uses different backends."""
+    
+    MAX_RETRIES = 5  # Maximum number of retries before falling back
     
     def __init__(self, backend=None, config=None):
         """Initialize the music generator with a specific backend.
@@ -21,6 +30,7 @@ class MusicGenerator:
         """
         if backend:
             self.backend = backend
+            self.fallback_backend = None
         else:
             if not config:
                 config = TTVConfig(style="default", story=[], title="untitled")
@@ -29,33 +39,84 @@ class MusicGenerator:
             backend_name = config.get("music_backend", "suno").lower()
             if backend_name == "meta":
                 self.backend = MetaMusicBackend()
-            else:  # Default to Suno
+                self.fallback_backend = None
+            else:  # Default to Suno with Meta as fallback
                 self.backend = SunoMusicBackend()
+                self.fallback_backend = MetaMusicBackend()
             
-            Logger.print_info(f"Using {backend_name} backend for music generation")
+            Logger.print_info(f"Using {backend_name} backend for music generation with Meta as fallback")
     
     def generate_instrumental(self, prompt: str, **kwargs) -> str:
         """Generate instrumental music from a text prompt."""
         Logger.print_info(f"Generating instrumental music with prompt: {prompt}")
         
-        # Start generation
-        job_id = self.backend.start_generation(prompt, with_lyrics=False, **kwargs)
-        if not job_id:
-            Logger.print_error("Failed to start generation")
-            return None
+        # Try primary backend first with retries
+        result = self._try_generate_with_retries(self.backend, prompt, **kwargs)
+        if result:
+            return result
             
-        # Poll for completion
-        while True:
-            status, progress = self.backend.check_progress(job_id)
-            Logger.print_info(f"Generation progress: {status} ({progress:.1f}%)")
+        # If primary failed and we have a fallback, try that
+        if self.fallback_backend:
+            Logger.print_info("Primary backend failed after retries, attempting fallback to Meta backend...")
+            return self._try_generate_with_backend(self.fallback_backend, prompt, **kwargs)
             
-            if progress >= 100:
-                break
+        return None
+    
+    def _try_generate_with_retries(self, backend, prompt: str, **kwargs) -> str:
+        """Attempt to generate music with retries and exponential backoff."""
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                if attempt > 0:
+                    delay = _exponential_backoff(attempt)
+                    Logger.print_info(f"Retry attempt {attempt + 1}/{self.MAX_RETRIES} after {delay:.1f}s delay...")
+                    time.sleep(delay)
                 
-            time.sleep(5)  # Wait before checking again
+                result = self._try_generate_with_backend(backend, prompt, **kwargs)
+                if result:
+                    if attempt > 0:
+                        Logger.print_info(f"Successfully generated after {attempt + 1} attempts")
+                    return result
+                
+                Logger.print_warning(f"Attempt {attempt + 1}/{self.MAX_RETRIES} failed, will retry...")
+                
+            except Exception as e:
+                Logger.print_error(f"Error on attempt {attempt + 1}: {str(e)}")
+                if attempt == self.MAX_RETRIES - 1:
+                    Logger.print_error("All retry attempts exhausted")
+                    return None
         
-        # Get result
-        return self.backend.get_result(job_id)
+        return None
+        
+    def _try_generate_with_backend(self, backend, prompt: str, **kwargs) -> str:
+        """Attempt to generate music with the specified backend."""
+        try:
+            # Start generation
+            job_id = backend.start_generation(prompt, with_lyrics=False, **kwargs)
+            if not job_id:
+                Logger.print_error(f"Failed to start generation with {backend.__class__.__name__}")
+                return None
+                
+            # Poll for completion
+            while True:
+                status, progress = backend.check_progress(job_id)
+                Logger.print_info(f"Generation progress: {status} ({progress:.1f}%)")
+                
+                if progress >= 100:
+                    break
+                    
+                time.sleep(5)  # Wait before checking again
+            
+            # Get result
+            result = backend.get_result(job_id)
+            if not result:
+                Logger.print_error(f"Failed to get result from {backend.__class__.__name__}")
+                return None
+                
+            return result
+            
+        except Exception as e:
+            Logger.print_error(f"Error with {backend.__class__.__name__}: {str(e)}")
+            return None
     
     def generate_with_lyrics(self, prompt: str, story_text: str, **kwargs) -> str:
         """Generate music with lyrics from a text prompt and story."""

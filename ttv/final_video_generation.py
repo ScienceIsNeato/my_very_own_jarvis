@@ -12,6 +12,12 @@ from .audio_alignment import create_word_level_captions
 from .captions import create_dynamic_captions, create_static_captions, CaptionEntry
 from .log_messages import LOG_CLOSING_CREDITS_DURATION
 import json
+from datetime import datetime
+
+def _get_timestamped_filename(base_name: str) -> str:
+    """Generate a timestamped filename."""
+    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    return f"{base_name}_{timestamp}.mp4"
 
 def concatenate_video_segments(video_segments, output_path):
     try:
@@ -35,11 +41,11 @@ def concatenate_video_segments(video_segments, output_path):
                 return None
 
         # Create concat list with re-encoded segments
-        concat_list_path = "/tmp/concat_list.txt"
+        concat_list_path = os.path.join(get_tempdir(), "ttv", "concat_list.txt")
         with open(concat_list_path, "w") as f:
             for segment in reencoded_segments:
                 f.write(f"file '{segment}'\n")
-        
+
         Logger.print_info(f"Concatenating video segments: {reencoded_segments}")
         ffmpeg_cmd = [
             "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
@@ -49,7 +55,7 @@ def concatenate_video_segments(video_segments, output_path):
         ]
         result = run_ffmpeg_command(ffmpeg_cmd)
         if result:
-            Logger.print_info(f"Main video created at {output_path}")
+            Logger.print_info(f"Main video created: output_path={output_path}")
             return output_path
         else:
             Logger.print_error("Failed to concatenate video segments")
@@ -67,24 +73,23 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
         music_path (str, optional): Path to the background music file. If None, no background music is added.
         song_with_lyrics_path (str, optional): Path to the song with lyrics file for closing credits. If None, no closing credits are added.
         movie_poster_path (str, optional): Path to the movie poster image for closing credits. Required if song_with_lyrics_path is provided.
-        output_path (str, optional): Path to save the final output video. Defaults to "/tmp/final_output.mp4".
+        output_path (str, optional): Path to save the final output video.
         config (TTVConfig, optional): Configuration object containing caption style and other settings.
         closing_credits_lyrics (str, optional): The lyrics to use for word alignment in closing credits.
 
     Returns:
         str: Path to the most recent successfully generated video.
     """
-    if not output_path:
-        temp_dir = get_tempdir()
-        output_path = os.path.join(temp_dir, "ttv", "final_output.mp4")
-    
     main_video_path = None
     main_video_with_background_music_path = None
     final_output_path = None
 
     try:
         temp_dir = get_tempdir()
-        main_video_path = os.path.join(temp_dir, "ttv", "final_video.mp4")
+        if not output_path:
+            output_path = os.path.join(temp_dir, "ttv", _get_timestamped_filename("final_output"))
+
+        main_video_path = os.path.join(temp_dir, "ttv", _get_timestamped_filename("main_video"))
         Logger.print_info("Concatenating video segments...")
         main_video_path = concatenate_video_segments(video_segments, main_video_path)
         final_output_path = main_video_path  # Update the final output path after this step
@@ -105,22 +110,35 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
                     # now all we have to do is stitch together the main content and the credits
                     fully_assembled_movie_path = append_video_segments([main_video_with_background_music_path, closing_credits], output_path)
                     final_output_path = fully_assembled_movie_path
+                    Logger.print_info(f"Final video with closing credits created: output_path={final_output_path}")
                 else:
-                    Logger.print_error("Failed to generate closing credits, using main video without credits")
+                    Logger.print_warning("Failed to generate closing credits, using main video without credits")
                     final_output_path = main_video_with_background_music_path
+                    Logger.print_info(f"Final video without closing credits created: output_path={final_output_path}")
             else:
                 Logger.print_warning("No movie poster available for closing credits, using main video without credits")
                 final_output_path = main_video_with_background_music_path
+                Logger.print_info(f"Final video without closing credits created: output_path={final_output_path}")
         else:
             Logger.print_info("Skipping closing credits (disabled in config)")
             final_output_path = main_video_with_background_music_path
+            Logger.print_info(f"Final video without closing credits created: output_path={final_output_path}")
 
         play_video(final_output_path)
         return final_output_path
 
     except (OSError, subprocess.SubprocessError) as e:
         Logger.print_error(f"Error creating final video with music: {e}")
-        return final_output_path if final_output_path else main_video_path if main_video_path else "/tmp/final_video.mp4"
+        if final_output_path:
+            Logger.print_info(f"Final video created at: output_path={final_output_path}")
+            return final_output_path
+        elif main_video_path:
+            Logger.print_info(f"Final video created at: output_path={main_video_path}")
+            return main_video_path
+        else:
+            fallback_path = os.path.join(get_tempdir(), "ttv", _get_timestamped_filename("fallback_video"))
+            Logger.print_info(f"Final video created at: output_path={fallback_path}")
+            return fallback_path
 
 def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config=None, lyrics=None):
     """Generate closing credits video with dynamic captions for song lyrics."""

@@ -153,12 +153,12 @@ class MetaMusicBackend(MusicBackend):
             generation_complete.set()
             progress_thread.join()
             
-            self._update_progress(job_id, "Processing audio", 90)
+            self._update_progress(job_id, "Processing audio", 98)
             audio_data = audio_values.cpu().numpy().squeeze()
             if len(audio_data.shape) == 1:
                 audio_data = audio_data.reshape(1, -1)
             
-            self._update_progress(job_id, "Saving audio", 95)
+            self._update_progress(job_id, "Saving audio", 99)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             sanitized_prompt = ''.join(c if c.isalnum() else '_' for c in prompt)[:50]
             audio_path = os.path.join(
@@ -193,7 +193,7 @@ class MetaMusicBackend(MusicBackend):
         
         while not complete_event.is_set():
             elapsed = time.time() - start_time
-            progress = min(20 + (elapsed / estimated_duration * 70), 89)  # Progress from 20% to 89%
+            progress = min(20 + (elapsed / estimated_duration * 70), 97)  # Progress from 20% to 97%
             self._update_progress(job_id, f"Generating audio ({elapsed:.1f}s)", progress)
             time.sleep(0.5)  # Update every half second
     
