@@ -22,6 +22,15 @@ GANGLIA is a highly modularized, generic personal assistant. Built partially by 
 
 **Note**: This list is non-exhaustive and can be expanded as needed.
 
+## Prerequisites
+
+- Python 3.9 or higher
+- FFmpeg installed and available in PATH
+- DejaVu fonts installed (required for video captions)
+  - On Ubuntu/Debian: `sudo apt-get install fonts-dejavu`
+  - On macOS: `brew install font-dejavu`
+  - On Windows: Download and install from [DejaVu Fonts](https://dejavu-fonts.github.io/)
+
 ## Getting Started
 
 ### Installation
@@ -288,7 +297,11 @@ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/credentials.json"
 ```
 
 ### Docker Local Development
-When building the Docker container locally, you can provide your credentials during build:
+
+For running tests in Docker, you'll need to have Docker installed and running on your system. The Docker environment is automatically handled by `run_tests.sh` - see the [test README](tests/README.md) for more details.
+
+If you need to run Docker commands manually:
+
 ```bash
 docker build --build-arg GOOGLE_CREDENTIALS_PATH=/path/to/your/credentials.json -t ganglia:latest .
 ```

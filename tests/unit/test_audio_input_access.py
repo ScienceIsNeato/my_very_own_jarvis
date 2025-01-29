@@ -10,7 +10,7 @@ import os
 def device_index():
     return 1  # USB Advanced Audio Device with 2 input channels
 
-@pytest.mark.unit
+
 @pytest.mark.skip # This test only needs to be run if you are experiencing microphone issues
 def test_audio_input(device_index):
     print("Testing audio input access...")

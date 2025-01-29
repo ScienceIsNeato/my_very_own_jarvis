@@ -11,7 +11,7 @@ import wave
 import numpy as np
 import whisper
 
-@pytest.mark.unit
+
 def test_word_alignment():
     # Create test audio using TTS
     tts = GoogleTTS()
@@ -35,7 +35,7 @@ def test_word_alignment():
         if os.path.exists(audio_path):
             os.remove(audio_path)
 
-@pytest.mark.unit
+
 def test_caption_generation_from_audio():
     # Create test audio using TTS
     tts = GoogleTTS()
@@ -59,7 +59,7 @@ def test_caption_generation_from_audio():
         if os.path.exists(audio_path):
             os.remove(audio_path)
 
-@pytest.mark.unit
+
 def test_closing_credits_with_music():
     """Test word alignment with the closing credits song."""
     try:

@@ -3,6 +3,11 @@
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# Load direnv if available
+if command -v direnv >/dev/null 2>&1; then
+    eval "$(direnv export bash)"
+fi
+
 # Check if we have exactly two arguments
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <mode> <test_type>"
@@ -27,13 +32,13 @@ if [[ "$MODE" != "local" && "$MODE" != "docker" ]]; then
     exit 1
 fi
 
-# Validate test type argument and set the appropriate pytest marker
+# Validate test type argument and set the appropriate test directory
 if [[ "$TEST_TYPE" == "unit" ]]; then
-    PYTEST_MARKER="'unit'"
+    TEST_DIR="tests/unit/"
 elif [[ "$TEST_TYPE" == "smoke" ]]; then
-    PYTEST_MARKER="'smoke'"
+    TEST_DIR="tests/smoke/"
 elif [[ "$TEST_TYPE" == "integration" ]]; then
-    PYTEST_MARKER="'integration'"
+    TEST_DIR="tests/integration/"
 else
     echo "Error: Second argument must be either 'unit', 'smoke', or 'integration'" | tee -a "$LOG_FILE"
     exit 1
@@ -56,8 +61,8 @@ fi
 
 case $MODE in
     "local")
-        echo "Executing: python -m pytest tests/ -v -s -m $PYTEST_MARKER" | tee -a "$LOG_FILE"
-        eval "python -m pytest tests/ -v -s -m $PYTEST_MARKER" 2>&1 | tee -a "$LOG_FILE"
+        echo "Executing: python -m pytest ${TEST_DIR} -v -s" | tee -a "$LOG_FILE"
+        eval "python -m pytest ${TEST_DIR} -v -s" 2>&1 | tee -a "$LOG_FILE"
         exit ${PIPESTATUS[0]}
         ;;
     "docker")
@@ -65,7 +70,7 @@ case $MODE in
         docker build -t ganglia:latest . 2>&1 | tee -a "$LOG_FILE" || exit 1
         
         # Show the command that will be run
-        echo "Command to be run inside Docker: pytest tests/ -v -s -m $PYTEST_MARKER" | tee -a "$LOG_FILE"
+        echo "Command to be run inside Docker: pytest ${TEST_DIR} -v -s" | tee -a "$LOG_FILE"
         
         # Run Docker with credentials mount and pass through environment variables
         docker run --rm \
@@ -76,7 +81,7 @@ case $MODE in
             -e SUNO_API_KEY \
             -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json \
             ganglia:latest \
-            /bin/sh -c "pytest tests/ -v -s -m $PYTEST_MARKER" 2>&1 | tee -a "$LOG_FILE"
+            /bin/sh -c "pytest ${TEST_DIR} -v -s" 2>&1 | tee -a "$LOG_FILE"
         exit_code=${PIPESTATUS[0]}
         rm -f /tmp/gcp-credentials.json
         exit $exit_code

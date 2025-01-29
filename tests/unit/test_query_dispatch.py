@@ -3,7 +3,7 @@ import os
 from query_dispatch import ChatGPTQueryDispatcher
 from utils import get_config_path
 
-@pytest.mark.unit
+
 def test_load_git_repo_into_history():
     dispatcher = ChatGPTQueryDispatcher(pre_prompt="Test pre-prompt")
     token_count = dispatcher.count_tokens()

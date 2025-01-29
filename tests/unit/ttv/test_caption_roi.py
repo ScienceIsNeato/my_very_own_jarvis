@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from ttv.caption_roi import find_roi_in_frame, get_contrasting_color
 
-@pytest.mark.unit
+
 def test_roi_dimensions():
     """Test that ROI dimensions are correctly calculated and proportioned."""
     # Create a test frame with known dimensions
@@ -32,7 +32,7 @@ def test_roi_dimensions():
     ratio = roi_area / frame_area
     assert 0.1 <= ratio <= 0.2, f"ROI area ratio {ratio} outside expected range"
 
-@pytest.mark.unit
+
 def test_contrasting_color_dark_background():
     """Test color selection for dark backgrounds."""
     # Test different dark backgrounds
@@ -51,7 +51,7 @@ def test_contrasting_color_dark_background():
         for actual, expected in zip(stroke_color, expected_stroke):
             assert abs(actual - expected) <= 2, f"Stroke value {actual} too far from expected {expected}"
 
-@pytest.mark.unit
+
 def test_contrasting_color_light_background():
     """Test color selection for light backgrounds."""
     # Test different light backgrounds
@@ -70,7 +70,7 @@ def test_contrasting_color_light_background():
         for actual, expected in zip(stroke_color, expected_stroke):
             assert abs(actual - expected) <= 2, f"Stroke value {actual} too far from expected {expected}"
 
-@pytest.mark.unit
+
 def test_contrasting_color_gradient():
     """Test color selection across a color gradient."""
     # Create a gradient frame from black to colored
@@ -98,7 +98,7 @@ def test_contrasting_color_gradient():
     for actual, expected in zip(stroke_color, (68, 85, 85)):
         assert abs(actual - expected) <= 5, f"Stroke value {actual} too far from expected {expected}"
 
-@pytest.mark.unit
+
 def test_roi_activity_detection():
     """Test that ROI prefers low-activity regions."""
     # Create a frame with a high-activity region (random noise)

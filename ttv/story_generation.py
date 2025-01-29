@@ -1,10 +1,12 @@
 import json
 import os
-import openai
+from openai import OpenAI
 import time
 import requests
 from logger import Logger
 from utils import get_tempdir
+
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 def generate_filtered_story(context, style, story_title, query_dispatcher):
     """
@@ -38,7 +40,27 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
     )
 
     try:
-        response = query_dispatcher.sendQuery(prompt)
+        # First filter the content using the base DALL-E filter
+        success, filtered_content = query_dispatcher.filter_content_for_dalle(context)
+        if not success:
+            Logger.print_error("Failed to filter story content")
+            return json.dumps({
+                "style": style,
+                "title": story_title,
+                "story": "No story generated"
+            })
+
+        # Then format it into the required JSON structure
+        response = query_dispatcher.sendQuery(
+            f"Format this filtered story into a JSON object with the style '{style}' and title '{story_title}':\n\n"
+            f"{filtered_content}\n\n"
+            "IMPORTANT: Return ONLY a JSON object in this exact format with no other text before or after:\n"
+            "{\n"
+            "  \"style\": \"<insert style here>\",\n"
+            "  \"title\": \"<insert title here>\",\n"
+            "  \"story\": \"<insert filtered story here>\"\n"
+            "}"
+        )
         
         # Parse the response to extract the filtered story
         response_json = json.loads(response)
@@ -83,7 +105,7 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
     for safety_attempt in range(safety_retries):
         for attempt in range(retries):
             try:
-                response = openai.Image.create(
+                response = client.images.generate(
                     model="dall-e-3",
                     prompt=prompt,
                     size="1024x1024",
@@ -91,7 +113,7 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
                     n=1
                 )
                 if response.data:
-                    image_url = response['data'][0]['url']
+                    image_url = response.data[0].url
                     filename = os.path.join(get_tempdir(), "ttv", "movie_poster.png")
                     save_image_without_caption(image_url, filename, thread_id=thread_id)
                     return filename

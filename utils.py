@@ -5,9 +5,11 @@ import tempfile
 import multiprocessing
 import platform
 import psutil
-from typing import Optional
+from typing import Optional, Callable, Any
 from functools import lru_cache
 import threading
+import time
+import random
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -55,22 +57,37 @@ def get_ffmpeg_thread_count(is_ci: Optional[bool] = None) -> int:
     Returns:
         int: Number of threads to use for FFmpeg operations
     """
-    # Get physical CPU cores, excluding hyperthreading
-    cpu_count = psutil.cpu_count(logical=False)
-    if cpu_count is None:
-        cpu_count = os.cpu_count() or 1
+    # Get system info from cached function
+    system_info = get_system_info()
+    cpu_count = system_info['cpu_count']
     
     # Check if running in CI environment
-    # Uses standard CI=true environment variable that GitHub Actions and most CI platforms set automatically
     if is_ci is None:
         is_ci = os.environ.get('CI', '').lower() == 'true'
     
     if is_ci:
-        # Use reduced threads in CI to avoid resource contention
-        return max(2, min(6, cpu_count // 2))
+        # In CI: Use cpu_count/2 with min 2, max 4 threads
+        # Also consider memory constraints - reduce threads if < 4GB RAM
+        memory_gb = system_info['total_memory'] / (1024**3)
+        if memory_gb < 4:
+            return 2
+        
+        # For 1-2 cores, always use 2 threads
+        if cpu_count <= 2:
+            return 2
+        
+        # For 4 cores, use 4 threads
+        if cpu_count == 4:
+            return 4
+        
+        # For >4 cores, use cpu_count/2 but cap at 4
+        return min(4, cpu_count // 2)
     
-    # In non-CI environments, use all available cores
-    return cpu_count
+    # In production: Use 1.5x CPU count, capped at 16 threads
+    # For single core systems, use just 1 thread
+    if cpu_count == 1:
+        return 1
+    return min(16, int(cpu_count * 1.5))
 
 class FFmpegThreadManager:
     """
@@ -130,9 +147,8 @@ class FFmpegThreadManager:
                 return max(2, base_thread_count // (self._active_operations * 2))
             
             # For operations up to max_concurrent, distribute threads geometrically
-            # This ensures a more balanced distribution while maintaining higher
-            # thread counts for earlier operations
-            divisor = 2 ** (self._active_operations - 1)
+            # This ensures each subsequent operation gets significantly fewer threads
+            divisor = 2 ** (self._active_operations)
             return max(2, base_thread_count // divisor)
     
     def __enter__(self):
@@ -148,3 +164,33 @@ class FFmpegThreadManager:
 
 # Global thread manager instance
 ffmpeg_thread_manager = FFmpegThreadManager()
+
+def exponential_backoff(func: Callable[..., Any], max_retries: int = 5, initial_delay: float = 1.0) -> Any:
+    """
+    Execute a function with exponential backoff retry logic.
+    
+    Args:
+        func: The function to execute
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay in seconds before first retry
+        
+    Returns:
+        The result of the function if successful
+        
+    Raises:
+        The last exception encountered if all retries fail
+    """
+    last_exception = None
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            last_exception = e
+            if attempt == max_retries - 1:
+                raise
+            
+            delay = initial_delay * (2 ** attempt) + random.uniform(0, 0.1)
+            time.sleep(delay)
+    
+    if last_exception:
+        raise last_exception

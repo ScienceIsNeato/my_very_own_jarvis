@@ -1,16 +1,25 @@
 import unittest
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
+import pytest
 from ttv.story_processor import process_story
 from ttv.config_loader import TTVConfig, MusicConfig
 from query_dispatch import ChatGPTQueryDispatcher
+import os
+from utils import get_tempdir
+
+@pytest.fixture
+def mock_tts():
+    mock = MagicMock()
+    mock.convert_text_to_speech.return_value = (True, os.path.join(get_tempdir(), "tts/test_audio.mp3"))
+    return mock
 
 class TestStoryProcessor(unittest.TestCase):
     def test_closing_credits_prompt_used(self):
         """Test that the closing credits prompt from config is used when generating music."""
         # Mock dependencies
         mock_tts = Mock()
-        mock_tts.convert_text_to_speech.return_value = (True, "/tmp/GANGLIA/tts/test_audio.mp3")
+        mock_tts.convert_text_to_speech.return_value = (True, os.path.join(get_tempdir(), "tts/test_audio.mp3"))
         mock_query_dispatcher = Mock(spec=ChatGPTQueryDispatcher)
         mock_music_gen = Mock()
         

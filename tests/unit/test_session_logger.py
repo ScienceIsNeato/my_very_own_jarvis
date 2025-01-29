@@ -59,7 +59,7 @@ def conversation_data(tmp_path_factory):
 
     return file_path
 
-@pytest.mark.unit
+
 def test_session_logger(conversation_data):
     # Create a session logger with mock options
     options = MockOptions()

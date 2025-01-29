@@ -28,7 +28,7 @@ def getDictatedInput(device_index):
         print(f"Error using device index {device_index}: {e}")
         return False, None
 
-@pytest.mark.unit
+
 @pytest.mark.skip # This is a helper test to see which microphones are available
 def test_microphones():
     recognizer = sr.Recognizer()

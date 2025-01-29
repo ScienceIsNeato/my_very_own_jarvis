@@ -1,13 +1,13 @@
 import os
-import openai
 from datetime import datetime
+from openai import OpenAI
 from logger import Logger
 from utils import get_tempdir
 from time import time
 
 class ChatGPTQueryDispatcher:
     def __init__(self, pre_prompt=None, config_file_path=None):
-        openai.api_key = os.environ.get("OPENAI_API_KEY")
+        self.client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         self.config_file_path = config_file_path or os.path.join(os.path.dirname(__file__), 'config', 'ganglia_config.json')
         self.messages = []
         if pre_prompt:
@@ -26,7 +26,7 @@ class ChatGPTQueryDispatcher:
 
         Logger.print_debug("Sending query to AI server...")
 
-        chat = openai.ChatCompletion.create(
+        chat = self.client.chat.completions.create(
             model="gpt-4o-mini",
             messages=self.messages
         )
@@ -75,16 +75,7 @@ class ChatGPTQueryDispatcher:
             tuple: (success, filtered_content) where success is a boolean indicating if filtering was successful,
                   and filtered_content is the filtered text if successful, or None if not.
         """
-        prompt = (
-            "Please rewrite this story to pass OpenAI's DALL-E content filters. The rewritten version should:\n"
-            "1. Replace all specific names with generic terms (e.g., 'the family', 'the children', 'the adventurers')\n"
-            "2. Replace specific locations with generic descriptions (e.g., 'a beautiful lake', 'a scenic garden')\n"
-            "3. Remove any potentially sensitive or controversial content\n"
-            "4. Keep the core story and emotional tone\n\n"
-            "Story to rewrite:\n"
-            f"{content}\n\n"
-            "Return only the rewritten story with no additional text or explanation."
-        )
+        prompt = self._get_dalle_filter_prompt(content)
 
         for attempt in range(max_attempts):
             try:
@@ -99,3 +90,24 @@ class ChatGPTQueryDispatcher:
                     return False, None
         
         return False, None
+
+    def _get_dalle_filter_prompt(self, content):
+        """
+        Get the prompt for filtering content for DALL-E.
+        
+        Args:
+            content (str): The content to filter.
+            
+        Returns:
+            str: The prompt for filtering content.
+        """
+        return (
+            "Please rewrite this story to pass OpenAI's DALL-E content filters. The rewritten version should:\n"
+            "1. Replace all specific names with generic terms (e.g., 'the family', 'the children', 'the adventurers')\n"
+            "2. Replace specific locations with generic descriptions (e.g., 'a beautiful lake', 'a scenic garden')\n"
+            "3. Remove any potentially sensitive or controversial content\n"
+            "4. Keep the core story and emotional tone\n\n"
+            "Story to rewrite:\n"
+            f"{content}\n\n"
+            "Return only the rewritten story with no additional text or explanation."
+        )
