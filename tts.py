@@ -13,7 +13,7 @@ from utils import get_tempdir
 
 class TextToSpeech(ABC):
     @abstractmethod
-    def convert_text_to_speech(self, text: str):
+    def convert_text_to_speech(self, text: str, thread_id: str = None):
         pass
 
     def is_local_filepath(self, file_path: str) -> bool:
@@ -106,7 +106,7 @@ class GoogleTTS(TextToSpeech):
         super().__init__()
         Logger.print_info("Initializing GoogleTTS...")
 
-    def convert_text_to_speech(self, text: str, voice_id="en-US-Casual-K"):
+    def convert_text_to_speech(self, text: str, voice_id="en-US-Casual-K", thread_id: str = None):
         try:
             # Initialize the Text-to-Speech client
             client = tts.TextToSpeechClient()
@@ -121,7 +121,8 @@ class GoogleTTS(TextToSpeech):
             audio_config = tts.AudioConfig(
                 audio_encoding=tts.AudioEncoding.MP3)
 
-            Logger.print_debug("Converting text to speech...")
+            thread_prefix = f"{thread_id} " if thread_id else ""
+            Logger.print_debug(f"{thread_prefix}Converting text to speech...")
 
             # Perform the text-to-speech request
             response = client.synthesize_speech(
@@ -150,6 +151,6 @@ class GoogleTTS(TextToSpeech):
 
             return True, file_path
         except Exception as e:
-            Logger.print_error(f"Error converting text to speech: {e}")
+            Logger.print_error(f"{thread_prefix}Error converting text to speech: {e}")
             return False, None
 
