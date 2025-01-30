@@ -83,7 +83,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
 
     # Generate audio for this sentence
     Logger.print_info(f"{thread_id} Generating audio for sentence.")
-    success, audio_path = tts.convert_text_to_speech(sentence)
+    success, audio_path = tts.convert_text_to_speech(sentence, thread_id=thread_id)
     if not success:
         Logger.print_error(f"{thread_id} Failed to generate audio")
         return None, i
