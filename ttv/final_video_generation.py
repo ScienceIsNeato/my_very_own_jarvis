@@ -20,10 +20,63 @@ def _get_timestamped_filename(base_name: str) -> str:
     return f"{base_name}_{timestamp}.mp4"
 
 def concatenate_video_segments(video_segments, output_path):
+    """Concatenate video segments into a single video file.
+    
+    Args:
+        video_segments: List of paths to video segments
+        output_path: Path to save the concatenated video
+        
+    Returns:
+        str: Path to concatenated video if successful, None otherwise
+    """
     try:
-        # First, ensure all segments have consistent audio streams
+        # Input validation with detailed logging
+        if not video_segments:
+            Logger.print_error("No video segments provided for concatenation")
+            return None
+            
+        Logger.print_info(f"Starting validation of {len(video_segments)} video segments")
+        valid_segments = []
+        for i, segment in enumerate(video_segments):
+            if segment is None:
+                Logger.print_error(f"Segment {i} is None")
+                continue
+            if not isinstance(segment, str):
+                Logger.print_error(f"Segment {i} is not a string: {type(segment)}")
+                continue
+            if not os.path.exists(segment):
+                Logger.print_error(f"Segment {i} does not exist at path: {segment}")
+                continue
+            if not os.path.isfile(segment):
+                Logger.print_error(f"Segment {i} exists but is not a file: {segment}")
+                continue
+                
+            # Verify it's a video file
+            try:
+                ffprobe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", 
+                              "-show_entries", "stream=codec_type", "-of", "csv=p=0", segment]
+                Logger.print_info(f"Running ffprobe command: {ffprobe_cmd}")
+                result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
+                Logger.print_info(f"FFprobe result: {result.stdout.strip()}")
+                if result.stdout.strip() != "video":
+                    Logger.print_error(f"Segment {i} is not a valid video file: {segment}")
+                    continue
+            except Exception as e:
+                Logger.print_error(f"Error validating segment {i}: {str(e)}")
+                continue
+                
+            Logger.print_info(f"Segment {i} validated successfully: {segment}")
+            valid_segments.append(segment)
+
+        if not valid_segments:
+            Logger.print_error("No valid video segments found after validation")
+            return None
+            
+        Logger.print_info(f"Found {len(valid_segments)} valid segments to concatenate")
+
+        # Re-encode segments with consistent parameters
         reencoded_segments = []
-        for segment in video_segments:
+        for i, segment in enumerate(valid_segments):
             reencoded_segment = segment.replace(".mp4", "_reencoded.mp4")
             ffmpeg_cmd = [
                 "ffmpeg", "-y", "-i", segment,
@@ -31,22 +84,27 @@ def concatenate_video_segments(video_segments, output_path):
                 "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",  # Consistent audio parameters
                 reencoded_segment
             ]
-            Logger.print_info(f"Re-encoding video segment: {segment} to {reencoded_segment}")
+            Logger.print_info(f"Re-encoding segment {i}: {segment} -> {reencoded_segment}")
             result = run_ffmpeg_command(ffmpeg_cmd)
             if result:
-                Logger.print_info(f"Re-encoded video segment created: reencoded_segment={reencoded_segment}")
+                Logger.print_info(f"Successfully re-encoded segment {i}")
                 reencoded_segments.append(reencoded_segment)
             else:
-                Logger.print_error(f"Error re-encoding video segment: {segment}")
+                Logger.print_error(f"Failed to re-encode segment {i}")
                 return None
 
-        # Create concat list with re-encoded segments
-        concat_list_path = os.path.join(get_tempdir(), "ttv", "concat_list.txt")
+        # Create concat list
+        temp_dir = get_tempdir()
+        os.makedirs(os.path.join(temp_dir, "ttv"), exist_ok=True)
+        concat_list_path = os.path.join(temp_dir, "ttv", "concat_list.txt")
+        
+        Logger.print_info(f"Creating concat list at: {concat_list_path}")
         with open(concat_list_path, "w") as f:
             for segment in reencoded_segments:
                 f.write(f"file '{segment}'\n")
 
-        Logger.print_info(f"Concatenating video segments: {reencoded_segments}")
+        # Final concatenation
+        Logger.print_info(f"Concatenating {len(reencoded_segments)} segments to: {output_path}")
         ffmpeg_cmd = [
             "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
             "-c:v", "copy",  # Copy video stream
@@ -54,14 +112,18 @@ def concatenate_video_segments(video_segments, output_path):
             output_path
         ]
         result = run_ffmpeg_command(ffmpeg_cmd)
+        
         if result:
-            Logger.print_info(f"Main video created: output_path={output_path}")
+            Logger.print_info(f"Successfully created concatenated video: {output_path}")
             return output_path
         else:
             Logger.print_error("Failed to concatenate video segments")
             return None
+            
     except Exception as e:
-        Logger.print_error(f"Error concatenating video segments: {e}")
+        Logger.print_error(f"Error during video concatenation: {str(e)}")
+        import traceback
+        Logger.print_error(f"Traceback: {traceback.format_exc()}")
         return None
 
 def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path=None, config=None, closing_credits_lyrics=None):
