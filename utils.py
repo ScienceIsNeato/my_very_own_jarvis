@@ -144,12 +144,12 @@ class FFmpegThreadManager:
             
             if self._active_operations >= max_concurrent:
                 # If we're at max concurrent operations, use minimum viable threads
-                return max(2, base_thread_count // (self._active_operations * 2))
+                return max(2, int(base_thread_count / (self._active_operations * 2)))
             
             # For operations up to max_concurrent, distribute threads geometrically
             # This ensures each subsequent operation gets significantly fewer threads
             divisor = 2 ** (self._active_operations)
-            return max(2, base_thread_count // divisor)
+            return max(2, int(base_thread_count / divisor))
     
     def __enter__(self):
         """Context manager entry - register new FFmpeg operation"""
