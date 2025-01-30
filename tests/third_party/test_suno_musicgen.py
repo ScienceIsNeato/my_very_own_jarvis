@@ -68,7 +68,6 @@ def play_audio(audio_path):
     except Exception:
         pass
 
-@pytest.mark.third_party
 @pytest.mark.costly
 def test_suno_backend():
     """Test music generation using the Suno backend."""
