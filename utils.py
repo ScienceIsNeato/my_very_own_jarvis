@@ -10,6 +10,7 @@ from functools import lru_cache
 import threading
 import time
 import random
+from logger import Logger
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -165,32 +166,44 @@ class FFmpegThreadManager:
 # Global thread manager instance
 ffmpeg_thread_manager = FFmpegThreadManager()
 
-def exponential_backoff(func: Callable[..., Any], max_retries: int = 5, initial_delay: float = 1.0) -> Any:
+def exponential_backoff(func: Callable[..., Any], max_retries: int = 5, initial_delay: float = 1.0, thread_id: Optional[str] = None) -> Any:
     """
-    Execute a function with exponential backoff retry logic.
+    Execute a function with exponential backoff retry logic and improved logging.
     
     Args:
         func: The function to execute
         max_retries: Maximum number of retry attempts
-        initial_delay: Initial delay in seconds before first retry
+        initial_delay: Initial delay in seconds
+        thread_id: Optional thread ID for logging
         
     Returns:
-        The result of the function if successful
+        Any: The result of the function if successful
         
     Raises:
-        The last exception encountered if all retries fail
+        Exception: The last exception encountered if all retries fail
     """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    attempt = 1
     last_exception = None
-    for attempt in range(max_retries):
+
+    while attempt <= max_retries:
         try:
+            func_name = getattr(func, '__name__', '<unknown function>')
+            Logger.print_debug(f"{thread_prefix}Attempt {attempt}/{max_retries} calling {func_name}...")
             return func()
         except Exception as e:
             last_exception = e
-            if attempt == max_retries - 1:
+            if attempt == max_retries:
                 raise
             
-            delay = initial_delay * (2 ** attempt) + random.uniform(0, 0.1)
+            delay = initial_delay * (2 ** (attempt - 1))
+            # Add some jitter to prevent thundering herd
+            delay = delay * (0.5 + random.random())
+            
+            func_name = getattr(func, '__name__', '<unknown function>')
+            Logger.print_warning(f"{thread_prefix}Attempt {attempt}/{max_retries} calling {func_name} failed: {e}")
+            Logger.print_info(f"{thread_prefix}Retrying in {delay:.1f} seconds...")
             time.sleep(delay)
-    
-    if last_exception:
-        raise last_exception
+            attempt += 1
+
+    raise last_exception
