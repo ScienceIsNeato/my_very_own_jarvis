@@ -12,6 +12,9 @@ class TestStoryGeneration(unittest.TestCase):
         self.story_title = "Robot Dreams"
 
     def test_generate_filtered_story_success(self):
+        # Mock successful content filtering
+        self.query_dispatcher.filter_content_for_dalle.return_value = (True, "A friendly robot learns about human emotions")
+        
         # Mock response from query dispatcher
         mock_response = json.dumps({
             "style": "science fiction",
@@ -26,11 +29,12 @@ class TestStoryGeneration(unittest.TestCase):
         self.assertIn("style", result_json)
         self.assertIn("title", result_json)
         self.assertIn("story", result_json)
+        self.query_dispatcher.filter_content_for_dalle.assert_called_once_with(self.context)
         self.query_dispatcher.sendQuery.assert_called_once()
 
     def test_generate_filtered_story_failure(self):
-        # Mock an exception from query dispatcher
-        self.query_dispatcher.sendQuery.side_effect = Exception("API Error")
+        # Mock a failure in content filtering
+        self.query_dispatcher.filter_content_for_dalle.return_value = (False, None)
 
         result = generate_filtered_story(self.context, self.style, self.story_title, self.query_dispatcher)
         result_json = json.loads(result)
@@ -38,13 +42,15 @@ class TestStoryGeneration(unittest.TestCase):
         self.assertEqual(result_json["story"], "No story generated")
         self.assertEqual(result_json["style"], self.style)
         self.assertEqual(result_json["title"], self.story_title)
+        self.query_dispatcher.filter_content_for_dalle.assert_called_once_with(self.context)
+        self.query_dispatcher.sendQuery.assert_not_called()
 
-    @patch('openai.Image.create')
-    def test_generate_movie_poster_success(self, mock_create):
-        # Mock OpenAI response
+    @patch('ttv.story_generation.client')
+    def test_generate_movie_poster_success(self, mock_client):
+        # Mock successful image generation
         mock_response = MagicMock()
-        mock_response.data = [{'url': 'http://example.com/image.png'}]
-        mock_create.return_value = mock_response
+        mock_response.data = [MagicMock(url='http://example.com/image.png')]
+        mock_client.images.generate.return_value = mock_response
 
         filtered_story = json.dumps({
             "style": "science fiction",
@@ -56,7 +62,13 @@ class TestStoryGeneration(unittest.TestCase):
             result = generate_movie_poster(filtered_story, self.style, self.story_title, self.query_dispatcher)
             
             self.assertIsNotNone(result)
-            mock_create.assert_called_once()
+            mock_client.images.generate.assert_called_once_with(
+                model="dall-e-3",
+                prompt=f"Create a movie poster for the story titled '{self.story_title}' with the style of {self.style} and context: A heartwarming tale about an AI.",
+                size="1024x1024",
+                quality="standard",
+                n=1
+            )
             mock_save.assert_called_once()
 
     def test_filter_text_success(self):

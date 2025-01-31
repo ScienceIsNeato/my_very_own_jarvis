@@ -10,7 +10,6 @@ import subprocess
 from PIL import ImageFont
 import os
 import uuid
-import pkg_resources
 
 def get_default_font() -> str:
     """Get default font name."""

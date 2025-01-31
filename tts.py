@@ -9,11 +9,11 @@ import subprocess
 from urllib.parse import urlparse
 from datetime import datetime
 from logger import Logger
-from utils import get_tempdir
+from utils import get_tempdir, exponential_backoff
 
 class TextToSpeech(ABC):
     @abstractmethod
-    def convert_text_to_speech(self, text: str):
+    def convert_text_to_speech(self, text: str, voice_id: str = "en-US-Casual-K", thread_id: str = None):
         pass
 
     def is_local_filepath(self, file_path: str) -> bool:
@@ -106,50 +106,62 @@ class GoogleTTS(TextToSpeech):
         super().__init__()
         Logger.print_info("Initializing GoogleTTS...")
 
-    def convert_text_to_speech(self, text: str, voice_id="en-US-Casual-K"):
+    def _convert_text_to_speech_impl(self, text: str, voice_id="en-US-Casual-K", thread_id: str = None):
+        """Internal implementation of text-to-speech conversion."""
+        # Initialize the Text-to-Speech client
+        client = tts.TextToSpeechClient()
+
+        # Set up the text input and voice settings
+        synthesis_input = tts.SynthesisInput(text=text)
+        voice = tts.VoiceSelectionParams(
+            language_code="en-US",
+            name=voice_id,)
+
+        # Set the audio configuration
+        audio_config = tts.AudioConfig(
+            audio_encoding=tts.AudioEncoding.MP3)
+
+        thread_prefix = f"{thread_id} " if thread_id else ""
+        Logger.print_debug(f"{thread_prefix}Converting text to speech...")
+
+        # Perform the text-to-speech request
+        response = client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config)
+
+        # Create temp directory if it doesn't exist
+        temp_dir = get_tempdir()
+        os.makedirs(os.path.join(temp_dir, "tts"), exist_ok=True)
+
+        # Sanitize the text for use in filename
+        # Take first 3 words and replace problematic characters
+        words = text.split()[:3]
+        sanitized_words = []
+        for word in words:
+            # Replace slashes, parentheses, and other problematic characters
+            sanitized = re.sub(r'[^\w\s-]', '_', word)
+            sanitized_words.append(sanitized)
+        snippet = '_'.join(sanitized_words)
+
+        # Save the audio to a file
+        file_path = os.path.join(temp_dir, "tts", f"chatgpt_response_{snippet}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
+        with open(file_path, "wb") as out:
+            out.write(response.audio_content)
+
+        return True, file_path
+
+    def convert_text_to_speech(self, text: str, voice_id="en-US-Casual-K", thread_id: str = None):
+        """Convert text to speech with retry logic."""
         try:
-            # Initialize the Text-to-Speech client
-            client = tts.TextToSpeechClient()
-
-            # Set up the text input and voice settings
-            synthesis_input = tts.SynthesisInput(text=text)
-            voice = tts.VoiceSelectionParams(
-                language_code="en-US",
-                name=voice_id,)
-
-            # Set the audio configuration
-            audio_config = tts.AudioConfig(
-                audio_encoding=tts.AudioEncoding.MP3)
-
-            Logger.print_debug("Converting text to speech...")
-
-            # Perform the text-to-speech request
-            response = client.synthesize_speech(
-                input=synthesis_input,
-                voice=voice,
-                audio_config=audio_config)
-
-            # Create temp directory if it doesn't exist
-            temp_dir = get_tempdir()
-            os.makedirs(os.path.join(temp_dir, "tts"), exist_ok=True)
-
-            # Sanitize the text for use in filename
-            # Take first 3 words and replace problematic characters
-            words = text.split()[:3]
-            sanitized_words = []
-            for word in words:
-                # Replace slashes, parentheses, and other problematic characters
-                sanitized = re.sub(r'[^\w\s-]', '_', word)
-                sanitized_words.append(sanitized)
-            snippet = '_'.join(sanitized_words)
-
-            # Save the audio to a file
-            file_path = os.path.join(temp_dir, "tts", f"chatgpt_response_{snippet}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp3")
-            with open(file_path, "wb") as out:
-                out.write(response.audio_content)
-
-            return True, file_path
+            return exponential_backoff(
+                lambda: self._convert_text_to_speech_impl(text, voice_id, thread_id),
+                max_retries=5,
+                initial_delay=1.0,
+                thread_id=thread_id
+            )
         except Exception as e:
-            Logger.print_error(f"Error converting text to speech: {e}")
+            thread_prefix = f"{thread_id} " if thread_id else ""
+            Logger.print_error(f"{thread_prefix}Error converting text to speech: {e}")
             return False, None
 

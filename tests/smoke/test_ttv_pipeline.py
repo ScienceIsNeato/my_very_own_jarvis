@@ -54,20 +54,20 @@ HARD_CODED_CONFIG_PATH = "tests/integration/test_data/minimal_ttv_config.json"
 # Path to the test config file
 SIMULATED_PIPELINE_CONFIG = "tests/integration/test_data/simulated_pipeline_config.json"
 
-@pytest.mark.costly
-def test_generated_pipeline_execution():
-    """Test execution of TTV pipeline with generated content (music, images).
+def test_simulated_pipeline_execution():
+    """Test the full TTV pipeline with simulated responses for music and image generation.
     
-    This test verifies the pipeline works with:
-    1. DALL-E generated images
-    2. Suno-generated background music and closing credits
-    3. Dynamic captions in an urban contemporary style
+    This test verifies:
+    1. Image generation/loading from preloaded directory
+    2. Audio generation and synchronization
+    3. Background music integration
+    4. Closing credits generation and assembly
+    5. Final video compilation and validation
     """
-    print("\n=== Starting Generated Pipeline Integration Test ===")
+    print("\n=== Starting TTV Pipeline Integration Test ===")
     
     # Run the TTV command and capture output
-    config_path = "tests/integration/test_data/generated_pipeline_config.json"
-    command = f"PYTHONUNBUFFERED=1 python ganglia.py --text-to-video --ttv-config {config_path}"
+    command = f"PYTHONUNBUFFERED=1 python ganglia.py --text-to-video --ttv-config {SIMULATED_PIPELINE_CONFIG}"
     output = ""  # Initialize output here
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     for line in iter(process.stdout.readline, b''):
@@ -79,23 +79,23 @@ def test_generated_pipeline_execution():
     process.wait()
 
     # Save output to a file for debugging
-    with open("/tmp/GANGLIA/test_output_generated.log", "w") as f:
+    with open("/tmp/GANGLIA/test_output.log", "w") as f:
         f.write(output)
 
     # Validate all segments are present
-    validate_segment_count(output, config_path)
+    validate_segment_count(output, SIMULATED_PIPELINE_CONFIG)
 
-    # Validate segment durations and get total duration
-    total_video_duration = validate_audio_video_durations(output, config_path)
+    # Validate segment durations
+    total_video_duration = validate_audio_video_durations(output, SIMULATED_PIPELINE_CONFIG)
 
     # Add closing credits duration to total video duration
-    closing_credits_duration = validate_closing_credits_duration(output, config_path)
+    closing_credits_duration = validate_closing_credits_duration(output, SIMULATED_PIPELINE_CONFIG)
     total_video_duration += closing_credits_duration
 
     # Validate final video
-    final_video_path = validate_final_video_path(output, config_path)
+    final_video_path = validate_final_video_path(output, SIMULATED_PIPELINE_CONFIG)
     validate_total_duration(final_video_path, total_video_duration)
 
     # Clean up
     # os.remove(final_video_path)  # Commented out to preserve files for debugging
-    print("\n=== Test Complete ===\n")
+    print("\n=== Test Complete ===\n") 

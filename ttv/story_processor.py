@@ -83,7 +83,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
 
     # Generate audio for this sentence
     Logger.print_info(f"{thread_id} Generating audio for sentence.")
-    success, audio_path = tts.convert_text_to_speech(sentence)
+    success, audio_path = tts.convert_text_to_speech(sentence, thread_id=thread_id)
     if not success:
         Logger.print_error(f"{thread_id} Failed to generate audio")
         return None, i
@@ -239,24 +239,73 @@ def process_story(tts, style, story, skip_generation, query_dispatcher, story_ti
         
         # Wait for all futures to complete
         video_segments = []
-        for future in sentence_futures:
+        failed_segments = []
+        for i, future in enumerate(sentence_futures):
             try:
+                Logger.print_info(f"Processing result for segment {i}...")
                 result = future.result()
-                if result and result[0]:  # Check both result and video_path
-                    video_path, index = result
-                    video_segments.append((index, video_path))
-                else:
-                    Logger.print_error(f"Skipping segment due to None result or video path")
+                
+                if not result:
+                    Logger.print_error(f"Segment {i} processing returned None")
+                    failed_segments.append(i)
+                    continue
+                    
+                video_path, index = result
+                if not video_path:
+                    Logger.print_error(f"Segment {i} returned None for video path")
+                    failed_segments.append(i)
+                    continue
+                    
+                if not os.path.exists(video_path):
+                    Logger.print_error(f"Video path does not exist for segment {i}: {video_path}")
+                    failed_segments.append(i)
+                    continue
+                    
+                # Verify it's a valid video file
+                try:
+                    ffprobe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", 
+                                  "-show_entries", "stream=codec_type", "-of", "csv=p=0", video_path]
+                    Logger.print_info(f"Running ffprobe command: {ffprobe_cmd}")
+                    result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
+                    Logger.print_info(f"FFprobe result: {result.stdout.strip()}")
+                    if result.stdout.strip() != "video":
+                        Logger.print_error(f"Invalid video file for segment {i}: {video_path}")
+                        failed_segments.append(i)
+                        continue
+                except Exception as e:
+                    Logger.print_error(f"Error validating video for segment {i}: {str(e)}")
+                    failed_segments.append(i)
+                    continue
+                
+                Logger.print_info(f"Successfully processed segment {index}: {video_path}")
+                video_segments.append((index, video_path))
+                
             except Exception as e:
-                Logger.print_error(f"Error processing sentence: {e}")
+                Logger.print_error(f"Error processing segment {i}: {str(e)}")
+                import traceback
+                Logger.print_error(f"Traceback for segment {i}: {traceback.format_exc()}")
+                failed_segments.append(i)
 
         if not video_segments:
             Logger.print_error("No video segments were successfully created")
+            Logger.print_error(f"Failed segments: {failed_segments}")
             return None, None, None, None, None
 
         # Sort video segments by index
         video_segments.sort(key=lambda x: x[0])
+        Logger.print_info(f"Sorted {len(video_segments)} segments")
+        
+        # Check for missing segments
+        expected_indices = set(range(len(story)))
+        actual_indices = set(x[0] for x in video_segments)
+        missing_indices = expected_indices - actual_indices
+        
+        if missing_indices:
+            Logger.print_error(f"Missing segments for indices: {missing_indices}")
+            Logger.print_error("This may cause issues with video continuity")
+        
         video_segments = [segment[1] for segment in video_segments]
+        Logger.print_info(f"Final video segments: {video_segments}")
 
         # Calculate actual total duration of video segments
         total_duration = 0

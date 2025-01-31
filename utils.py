@@ -5,9 +5,12 @@ import tempfile
 import multiprocessing
 import platform
 import psutil
-from typing import Optional
+from typing import Optional, Callable, Any
 from functools import lru_cache
 import threading
+import time
+import random
+from logger import Logger
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -55,22 +58,37 @@ def get_ffmpeg_thread_count(is_ci: Optional[bool] = None) -> int:
     Returns:
         int: Number of threads to use for FFmpeg operations
     """
-    # Get physical CPU cores, excluding hyperthreading
-    cpu_count = psutil.cpu_count(logical=False)
-    if cpu_count is None:
-        cpu_count = os.cpu_count() or 1
+    # Get system info from cached function
+    system_info = get_system_info()
+    cpu_count = system_info['cpu_count']
     
     # Check if running in CI environment
-    # Uses standard CI=true environment variable that GitHub Actions and most CI platforms set automatically
     if is_ci is None:
         is_ci = os.environ.get('CI', '').lower() == 'true'
     
     if is_ci:
-        # Use reduced threads in CI to avoid resource contention
-        return max(2, min(6, cpu_count // 2))
+        # In CI: Use cpu_count/2 with min 2, max 4 threads
+        # Also consider memory constraints - reduce threads if < 4GB RAM
+        memory_gb = system_info['total_memory'] / (1024**3)
+        if memory_gb < 4:
+            return 2
+        
+        # For 1-2 cores, always use 2 threads
+        if cpu_count <= 2:
+            return 2
+        
+        # For 4 cores, use 4 threads
+        if cpu_count == 4:
+            return 4
+        
+        # For >4 cores, use cpu_count/2 but cap at 4
+        return min(4, cpu_count // 2)
     
-    # In non-CI environments, use all available cores
-    return cpu_count
+    # In production: Use 1.5x CPU count, capped at 16 threads
+    # For single core systems, use just 1 thread
+    if cpu_count == 1:
+        return 1
+    return min(16, int(cpu_count * 1.5))
 
 class FFmpegThreadManager:
     """
@@ -127,13 +145,12 @@ class FFmpegThreadManager:
             
             if self._active_operations >= max_concurrent:
                 # If we're at max concurrent operations, use minimum viable threads
-                return max(2, base_thread_count // (self._active_operations * 2))
+                return max(2, int(base_thread_count / (self._active_operations * 2)))
             
             # For operations up to max_concurrent, distribute threads geometrically
-            # This ensures a more balanced distribution while maintaining higher
-            # thread counts for earlier operations
-            divisor = 2 ** (self._active_operations - 1)
-            return max(2, base_thread_count // divisor)
+            # This ensures each subsequent operation gets significantly fewer threads
+            divisor = 2 ** (self._active_operations)
+            return max(2, int(base_thread_count / divisor))
     
     def __enter__(self):
         """Context manager entry - register new FFmpeg operation"""
@@ -148,3 +165,45 @@ class FFmpegThreadManager:
 
 # Global thread manager instance
 ffmpeg_thread_manager = FFmpegThreadManager()
+
+def exponential_backoff(func: Callable[..., Any], max_retries: int = 5, initial_delay: float = 1.0, thread_id: Optional[str] = None) -> Any:
+    """
+    Execute a function with exponential backoff retry logic and improved logging.
+    
+    Args:
+        func: The function to execute
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay in seconds
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        Any: The result of the function if successful
+        
+    Raises:
+        Exception: The last exception encountered if all retries fail
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    attempt = 1
+    last_exception = None
+
+    while attempt <= max_retries:
+        try:
+            func_name = getattr(func, '__name__', '<unknown function>')
+            Logger.print_debug(f"{thread_prefix}Attempt {attempt}/{max_retries} calling {func_name}...")
+            return func()
+        except Exception as e:
+            last_exception = e
+            if attempt == max_retries:
+                raise
+            
+            delay = initial_delay * (2 ** (attempt - 1))
+            # Add some jitter to prevent thundering herd
+            delay = delay * (0.5 + random.random())
+            
+            func_name = getattr(func, '__name__', '<unknown function>')
+            Logger.print_warning(f"{thread_prefix}Attempt {attempt}/{max_retries} calling {func_name} failed: {e}")
+            Logger.print_info(f"{thread_prefix}Retrying in {delay:.1f} seconds...")
+            time.sleep(delay)
+            attempt += 1
+
+    raise last_exception

@@ -5,7 +5,7 @@ from query_dispatch import ChatGPTQueryDispatcher
 from ttv.story_generation import generate_movie_poster, generate_filtered_story
 from utils import get_config_path
 
-@pytest.mark.unit
+
 def test_generate_movie_poster():
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:

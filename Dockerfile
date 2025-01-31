@@ -12,27 +12,15 @@ RUN apt-get update && apt-get install -y \
     fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file
+# Copy requirements files
 COPY requirements.txt .
+COPY requirements_core.txt .
+COPY requirements_large.txt .
 
-# Install numpy and pandas together to ensure compatibility
-RUN pip install --no-cache-dir "numpy==1.26.4" "pandas==2.2.3"
-
-# Install torch and other large dependencies first
-RUN pip install --no-cache-dir \
-    torch==2.0.0 \
-    torchaudio==2.0.0 \
-    transformers==4.36.0 \
-    keyboard \
-    google-cloud-speech \
-    google-cloud-texttospeech \
-    openai-whisper \
-    accelerate \
-    safetensors \
-    fonts
+RUN pip install --no-cache-dir -r requirements_large.txt
 
 # Install remaining dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements_core.txt
 
 # Copy application code
 COPY . .

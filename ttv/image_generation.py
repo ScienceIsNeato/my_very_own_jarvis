@@ -51,7 +51,8 @@ def generate_image(sentence, context, style, image_index, total_images, query_di
     
     for attempt in range(retries):
         try:
-            response = openai.Image.create(
+            client = openai.OpenAI()
+            response = client.images.generate(
                 model="dall-e-3",
                 prompt=prompt,
                 size="1024x1024",
@@ -59,7 +60,7 @@ def generate_image(sentence, context, style, image_index, total_images, query_di
                 n=1
             )
             if response.data:
-                image_url = response['data'][0]['url']
+                image_url = response.data[0].url
                 filename = os.path.join(get_tempdir(), "ttv", f"image_{image_index}.png")
                 save_image_with_caption(image_url, filename, sentence, image_index, total_images, thread_id=thread_id)
                 return filename, True
@@ -77,7 +78,7 @@ def generate_image(sentence, context, style, image_index, total_images, query_di
                     Logger.print_warning(f"{thread_prefix}Transient error encountered: {e}. Retrying in {retry_wait} seconds... (Attempt {attempt + 1} of {retries})")
                     time.sleep(retry_wait)
                     continue
-            Logger.print_error(f"{thread_prefix}An error occurred while generating the image. Retrying attempt {attempt + 1} of {retries}")
+            Logger.print_error(f"{thread_prefix}An error occurred while generating the image. Retrying attempt {attempt + 1} of {retries} \n Error: {e}")
             # Continue to next retry instead of returning
             continue
 

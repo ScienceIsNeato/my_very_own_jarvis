@@ -56,7 +56,7 @@ class MockMetaBackend(MetaMusicBackend):
         self.get_result_called = True
         return "/mock/path/to/meta_audio.wav"
 
-@pytest.mark.unit
+
 def test_instrumental_generation_no_fallback_needed():
     """Test that Meta fallback is not used when Suno succeeds."""
     suno_backend = MockSunoBackend(should_fail=False)
@@ -80,7 +80,7 @@ def test_instrumental_generation_no_fallback_needed():
     
     assert result == "/mock/path/to/audio.mp3"
 
-@pytest.mark.unit
+
 def test_instrumental_generation_with_retries_then_success():
     """Test that retries work before succeeding."""
     # Fail 3 times then succeed
@@ -106,7 +106,7 @@ def test_instrumental_generation_with_retries_then_success():
     
     assert result == "/mock/path/to/audio.mp3"
 
-@pytest.mark.unit
+
 def test_instrumental_generation_with_retries_then_fallback():
     """Test that Meta fallback is used after all retries fail."""
     suno_backend = MockSunoBackend(should_fail=True)
@@ -129,7 +129,7 @@ def test_instrumental_generation_with_retries_then_fallback():
     
     assert result == "/mock/path/to/meta_audio.wav"
 
-@pytest.mark.unit
+
 def test_lyrics_generation_no_fallback():
     """Test that Meta fallback is not used for lyrics generation, even if Suno fails."""
     suno_backend = MockSunoBackend(should_fail=True)
@@ -151,7 +151,7 @@ def test_lyrics_generation_no_fallback():
     
     assert result is None  # Should fail without fallback
 
-@pytest.mark.unit
+
 def test_instrumental_generation_no_fallback_configured():
     """Test behavior when no fallback is configured."""
     suno_backend = MockSunoBackend(should_fail=True)
@@ -168,7 +168,7 @@ def test_instrumental_generation_no_fallback_configured():
     
     assert result is None  # Should fail with no fallback
 
-@pytest.mark.unit
+
 def test_exponential_backoff():
     """Test that exponential backoff generates reasonable delays."""
     # Test a few attempts

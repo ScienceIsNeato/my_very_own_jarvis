@@ -1,6 +1,6 @@
 # GANGLIA Test Suite
 
-This directory contains the test suite for the GANGLIA project. The tests are organized into four main categories:
+This directory contains the test suite for the GANGLIA project. The tests are organized into directories based on their type:
 
 ## Test Categories
 
@@ -10,15 +10,6 @@ Fast tests that verify individual components. These tests:
 - Test focused functionality
 - Have minimal external dependencies
 - Are suitable for running during development
-
-### Smoke Tests (`tests/integration/`)
-Tests that verify key end-to-end functionality using mocks. These tests:
-- Use simulated/mocked responses for external services
-- Run relatively quickly
-- Verify core functionality
-- Provide quick feedback on basic system health
-- Are suitable for running during development
-- Are included in CI pipelines
 
 ### Integration Tests (`tests/integration/`)
 Tests that verify multiple components working together. These tests:
@@ -37,13 +28,9 @@ Tests that validate integration with external services. These tests:
 
 ## Test Markers
 
-Tests are marked with pytest markers to control execution:
+Tests can be marked with pytest markers to control execution:
 
-- `@pytest.mark.unit`: Fast tests with minimal dependencies
-- `@pytest.mark.smoke`: Key functionality tests using mocks
-- `@pytest.mark.integration`: Full end-to-end tests with real services
-- `@pytest.mark.third_party`: Tests requiring external services
-- `@pytest.mark.costly`: Time or resource-intensive tests (should only be used with integration or third-party tests)
+- `@pytest.mark.costly`: Time or resource-intensive tests that should be run with caution
 
 ## Test Environment
 
@@ -102,13 +89,13 @@ The script automatically:
 ### CI Pipeline
 The CI pipeline uses the same `run_tests.sh` script with different test types depending on the context:
 
-- On push to main:
-  - Runs unit and smoke tests
-  - `./run_tests.sh docker unit && ./run_tests.sh docker smoke`
+- On push to branch:
+  - Runs unit and integration tests
+  - `./run_tests.sh docker unit && ./run_tests.sh docker integration`
 
 - On pull request:
   - Runs all test types
-  - `./run_tests.sh docker unit && ./run_tests.sh docker smoke && ./run_tests.sh docker integration`
+  - `./run_tests.sh docker unit && ./run_tests.sh docker integration`
 
 Note: Third-party tests are never run in CI and must be run manually during development.
       These are for things such as: checking why your mic is not working, or why the SUNO API is not working.

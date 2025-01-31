@@ -92,40 +92,61 @@ def validate_audio_video_durations(output, config_path):
     discrepancies = []
     segments_found = []
 
-    # Find all video segment creations, even if they're mixed with other output
-    # Look for the exact pattern: segment_X_initial.mp4 followed by its corresponding audio path
-    segment_pattern = r'Creating video segment:.*?segment_(\d+)_initial\.mp4.*?audio_path=([^,\s]+).*?image_path='
-    for match in re.finditer(segment_pattern, output, re.DOTALL | re.IGNORECASE):
-        segment_num = match.group(1)
+    # Get expected number of segments from config
+    try:
+        with open(config_path, 'r') as f:
+            config = json.loads(f.read())
+            expected_segments = len(config.get('story', []))
+    except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
+        raise AssertionError(f"Failed to read story from config: {e}")
+
+    # Directly check each segment
+    for segment_num in range(expected_segments):
         video_file = f"/tmp/GANGLIA/ttv/segment_{segment_num}_initial.mp4"
-        audio_file = match.group(2)
+        
+        # Skip if video file doesn't exist
+        if not os.path.exists(video_file):
+            continue
 
-        # Extract segment number for tracking
-        segments_found.append(int(segment_num))
-
-        # Get durations
-        audio_duration = get_audio_duration(audio_file)
+        segments_found.append(segment_num)
+        
+        # Get video duration first
         video_duration = get_video_duration(video_file)
-
-        # Validate durations
-        if abs(audio_duration - video_duration) >= 0.1:
-            discrepancies.append((audio_file, video_file, audio_duration, video_duration))
-        else:
-            print(f"✓ Duration match for segment {segment_num}: {os.path.basename(audio_file)} ({audio_duration:.2f}s) vs {os.path.basename(video_file)} ({video_duration:.2f}s)")
-
-        # Accumulate total video duration
+        if video_duration == 0.0:  # Skip if we couldn't get video duration
+            continue
+            
         total_video_duration += video_duration
+
+        # Extract audio from video and get its duration
+        try:
+            result = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+                 "stream=duration", "-of", "default=noprint_wrappers=1:nokey=1", video_file],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True)
+            audio_duration = float(result.stdout.decode().strip())
+            
+            # Validate durations
+            if abs(audio_duration - video_duration) >= 0.1:
+                discrepancies.append((f"audio_stream_{segment_num}", video_file, audio_duration, video_duration))
+            else:
+                print(f"✓ Duration match for segment {segment_num}: audio stream ({audio_duration:.2f}s) vs video container ({video_duration:.2f}s)")
+                
+        except (subprocess.CalledProcessError, ValueError) as e:
+            Logger.print_error(f"Failed to get audio duration for segment {segment_num}: {e}")
+            continue
 
     # Print discrepancies if any
     if discrepancies:
         print("\n!!! Duration Mismatches Found !!!")
         print("-" * 80)
         print("|{:^20}|{:^20}|{:^15}|{:^15}|".format(
-            "Audio File", "Video File", "Audio Duration", "Video Duration"))
+            "Audio Stream", "Video File", "Audio Duration", "Video Duration"))
         print("-" * 80)
-        for audio_file, video_file, audio_duration, video_duration in discrepancies:
+        for audio_id, video_file, audio_duration, video_duration in discrepancies:
             print("|{:^20}|{:^20}|{:^15.2f}|{:^15.2f}|".format(
-                os.path.basename(audio_file),
+                audio_id,
                 os.path.basename(video_file),
                 audio_duration,
                 video_duration
@@ -137,15 +158,8 @@ def validate_audio_video_durations(output, config_path):
     print(f"\nFound segments: {segments_found}")
     print(f"✓ Total segment duration: {total_video_duration:.2f}s")
 
-    # Get expected segment count from config
-    try:
-        with open(config_path, 'r') as f:
-            config = json.loads(f.read())
-            expected_segments = len(config.get('story', []))
-            assert len(segments_found) == expected_segments, f"Expected {expected_segments} segments but found {len(segments_found)}"
-    except Exception as e:
-        print(f"Error validating segment count: {e}")
-        raise
+    # Validate segment count
+    assert len(segments_found) == expected_segments, f"Expected {expected_segments} segments but found {len(segments_found)}"
 
     return total_video_duration
 

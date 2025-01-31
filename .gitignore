@@ -14,6 +14,8 @@ recorded_audio.*
 
 # Environment and config
 .envrc
+.venv/
+venv/
 /output
 concat_list.txt
 coqui_config.json
@@ -22,7 +24,6 @@ config/chatgpt_session_config.json
 config/hotwords.json
 config/ttv_config.json
 config_backups/*
-venv/*
 
 # Test outputs
 tests/unit/ttv/test_outputs/

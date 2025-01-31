@@ -54,7 +54,6 @@ def play_audio(audio_path):
     except Exception:
         pass
 
-@pytest.mark.third_party
 def test_meta_backend():
     """Test the Meta MusicGen backend for instrumental music generation."""
     config = load_input("tests/integration/test_data/minimal_ttv_config.json")
@@ -95,7 +94,6 @@ def test_meta_backend():
     # Test short duration (7 seconds)
     verify_duration("A short peaceful piano melody. High quality recording.", 7)
 
-@pytest.mark.third_party
 @pytest.mark.costly
 def test_meta_backend_longer_durations():
     """Test the Meta MusicGen backend with a 25 second duration (maximum single generation length)."""
@@ -137,7 +135,6 @@ def test_meta_backend_longer_durations():
     # Test maximum single generation duration (25 seconds)
     verify_duration("An evolving ambient soundscape with gentle pads and subtle rhythms.", 25)
 
-@pytest.mark.third_party
 @pytest.mark.costly
 def test_meta_backend_looping():
     """Test the Meta MusicGen backend with a 3 minute duration that requires looping."""
