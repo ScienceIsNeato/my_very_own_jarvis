@@ -97,13 +97,14 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         Logger.print_error(f"{thread_id} Failed to generate audio")
         return None, i
 
-    # Create initial video segment
+    # Create initial video segment using ffmpeg_thread_manager
     Logger.print_info(f"{thread_id} Creating initial video segment.")
     temp_dir = get_tempdir()
     initial_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}_initial.mp4")
-    if not create_video_segment(filename, audio_path, initial_segment_path):
-        Logger.print_error(f"{thread_id} Failed to create video segment")
-        return None, i
+    with ffmpeg_thread_manager:
+        if not create_video_segment(filename, audio_path, initial_segment_path):
+            Logger.print_error(f"{thread_id} Failed to create video segment")
+            return None, i
 
     # Get caption style from config
     caption_style = getattr(config, 'caption_style', 'static')
@@ -121,13 +122,14 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
             return None, i
 
         final_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}.mp4")
-        captioned_path = create_dynamic_captions(
-            input_video=initial_segment_path,
-            captions=captions,
-            output_path=final_segment_path,
-            min_font_size=32,
-            max_font_size=48
-        )
+        with ffmpeg_thread_manager:
+            captioned_path = create_dynamic_captions(
+                input_video=initial_segment_path,
+                captions=captions,
+                output_path=final_segment_path,
+                min_font_size=32,
+                max_font_size=48
+            )
 
         if captioned_path:
             Logger.print_info(f"{thread_id} Successfully added dynamic captions")
@@ -140,12 +142,13 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         Logger.print_info(f"{thread_id} Adding static captions to video segment.")
         final_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}.mp4")
         captions = [CaptionEntry(sentence, 0.0, float('inf'))]  # Show for entire duration
-        captioned_path = create_static_captions(
-            input_video=initial_segment_path,
-            captions=captions,
-            output_path=final_segment_path,
-            font_size=40
-        )
+        with ffmpeg_thread_manager:
+            captioned_path = create_static_captions(
+                input_video=initial_segment_path,
+                captions=captions,
+                output_path=final_segment_path,
+                font_size=40
+            )
 
         if captioned_path:
             Logger.print_info(f"{thread_id} Successfully added static captions")
