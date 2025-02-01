@@ -21,7 +21,7 @@ class TestStoryGeneration(unittest.TestCase):
             "title": "Robot Dreams",
             "story": "A heartwarming tale about an AI learning about friendship"
         })
-        self.query_dispatcher.sendQuery.return_value = mock_response
+        self.query_dispatcher.send_query.return_value = mock_response
 
         result = generate_filtered_story(self.context, self.style, self.story_title, self.query_dispatcher)
         result_json = json.loads(result)
@@ -30,7 +30,7 @@ class TestStoryGeneration(unittest.TestCase):
         self.assertIn("title", result_json)
         self.assertIn("story", result_json)
         self.query_dispatcher.filter_content_for_dalle.assert_called_once_with(self.context)
-        self.query_dispatcher.sendQuery.assert_called_once()
+        self.query_dispatcher.send_query.assert_called_once()
 
     def test_generate_filtered_story_failure(self):
         # Mock a failure in content filtering
@@ -43,7 +43,7 @@ class TestStoryGeneration(unittest.TestCase):
         self.assertEqual(result_json["style"], self.style)
         self.assertEqual(result_json["title"], self.story_title)
         self.query_dispatcher.filter_content_for_dalle.assert_called_once_with(self.context)
-        self.query_dispatcher.sendQuery.assert_not_called()
+        self.query_dispatcher.send_query.assert_not_called()
 
     @patch('ttv.story_generation.client')
     def test_generate_movie_poster_success(self, mock_client):
@@ -73,7 +73,7 @@ class TestStoryGeneration(unittest.TestCase):
 
     def test_filter_text_success(self):
         mock_response = '{"text": "A friendly robot learns about human emotions"}'
-        self.query_dispatcher.sendQuery.return_value = mock_response
+        self.query_dispatcher.send_query.return_value = mock_response
 
         result = filter_text(
             "A robot learns about emotions",
@@ -83,7 +83,7 @@ class TestStoryGeneration(unittest.TestCase):
         )
 
         self.assertIn("text", result)
-        self.query_dispatcher.sendQuery.assert_called_once()
+        self.query_dispatcher.send_query.assert_called_once()
 
     @patch('requests.get')
     def test_save_image_without_caption(self, mock_get):

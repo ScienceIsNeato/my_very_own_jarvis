@@ -1,6 +1,6 @@
-"""Integration tests for the Text-to-Video (TTV) pipeline.
+"""Smoke tests for the Text-to-Video (TTV) pipeline.
 
-This module contains integration tests that verify the end-to-end functionality
+This module contains smoke tests that verify the end-to-end functionality for ttv
 of the TTV pipeline, including:
 - Audio/video generation and synchronization
 - Background music integration
@@ -36,6 +36,11 @@ from tests.integration.test_helpers import (
     wait_for_completion,
     validate_segment_count
 )
+from utils import get_tempdir
+from ttv.log_messages import (
+    LOG_BACKGROUND_MUSIC_SUCCESS,
+    LOG_BACKGROUND_MUSIC_FAILURE
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +58,16 @@ def parse_test_logs(log_file):
 HARD_CODED_CONFIG_PATH = "tests/integration/test_data/minimal_ttv_config.json"
 # Path to the test config file
 SIMULATED_PIPELINE_CONFIG = "tests/integration/test_data/simulated_pipeline_config.json"
+
+def validate_background_music(output: str) -> None:
+    """Validate background music was added successfully.
+    
+    Args:
+        output: The captured output from the pipeline execution
+    """
+    # Check for successful background music addition
+    assert LOG_BACKGROUND_MUSIC_SUCCESS in output, "Background music should be added successfully"
+    assert LOG_BACKGROUND_MUSIC_FAILURE not in output, "Background music should not fail to be added"
 
 def test_simulated_pipeline_execution():
     """Test the full TTV pipeline with simulated responses for music and image generation.
@@ -79,7 +94,7 @@ def test_simulated_pipeline_execution():
     process.wait()
 
     # Save output to a file for debugging
-    with open("/tmp/GANGLIA/test_output.log", "w") as f:
+    with open(get_tempdir() + "/test_output.log", "w") as f:
         f.write(output)
 
     # Validate all segments are present
@@ -87,6 +102,9 @@ def test_simulated_pipeline_execution():
 
     # Validate segment durations
     total_video_duration = validate_audio_video_durations(output, SIMULATED_PIPELINE_CONFIG)
+
+    # Validate background music was added successfully
+    validate_background_music(output)
 
     # Add closing credits duration to total video duration
     closing_credits_duration = validate_closing_credits_duration(output, SIMULATED_PIPELINE_CONFIG)

@@ -31,15 +31,25 @@ def text_to_video(config_path, skip_generation=False, output_path=None, tts=None
             config=config
         )
 
+        # Check for errors (i.e. no video segments)
+        if not video_segments:
+            Logger.print_error("No video segments generated")
+            return None
+
+        # Log paths for debugging
+        Logger.print_info(f"Background music path: {background_music_path}")
+        Logger.print_info(f"Closing credits path: {closing_credits_path}")
+        Logger.print_info(f"Movie poster path: {movie_poster_path}")
+
         # Assemble final video
         return assemble_final_video(
             video_segments=video_segments,
             music_path=background_music_path,
             song_with_lyrics_path=closing_credits_path,
             movie_poster_path=movie_poster_path,
+            output_path=output_path,
             config=config,
-            closing_credits_lyrics=closing_credits_lyrics,
-            output_path=output_path
+            closing_credits_lyrics=closing_credits_lyrics
         )
 
     except Exception as e:

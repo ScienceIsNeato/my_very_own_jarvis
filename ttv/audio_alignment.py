@@ -1,20 +1,35 @@
-"""Module for aligning text with audio to generate word-level timings."""
+"""Audio alignment module for text-to-video generation.
 
-from typing import List
-import whisper
-import torch
-from dataclasses import dataclass
-from .captions import CaptionEntry
-from functools import partial
-import sys
+This module provides functionality for aligning audio with video segments,
+including:
+- Audio duration calculation
+- Segment timing adjustment
+- Whisper-based audio transcription
+- FFmpeg-based audio processing
+"""
+
+# Standard library imports
 import os
 import subprocess
-import time
+import sys
 import threading
+import time
+import traceback
+from dataclasses import dataclass
+from functools import partial
+from typing import List
+
+# Third-party imports
+import torch
+import whisper
+
+# Local imports
+from .captions import CaptionEntry
+from logger import Logger
+from utils import exponential_backoff
 
 # Add parent directory to Python path to import logger
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from logger import Logger
 
 # Monkey patch torch.load to always use weights_only=True
 torch.load = partial(torch.load, weights_only=True)
@@ -159,74 +174,373 @@ def create_evenly_distributed_timings(audio_path: str, text: str) -> List[WordTi
         Logger.print_error(f"Error creating evenly distributed timings: {str(e)}")
         return []
 
-def create_word_level_captions(audio_path: str, text: str = "", is_music: bool = False) -> List[CaptionEntry]:
-    """
-    Create word-level caption entries from audio file.
+def create_word_level_captions(
+    audio_file: str,
+    text: str,
+    model_name: str = "base",
+    thread_id: str = None
+) -> List[CaptionEntry]:
+    """Create word-level captions by aligning text with audio using Whisper.
     
     Args:
-        audio_path: Path to the audio file
-        text: The text content of the audio, or empty string to auto-transcribe
-        is_music: Whether the audio contains music (uses a larger model and music-specific prompt)
+        audio_file: Path to the audio file
+        text: Text to align with audio
+        model_name: Whisper model name to use (default: "base")
+        thread_id: Optional thread ID for logging
         
     Returns:
-        List of CaptionEntry objects, one per word
+        List[CaptionEntry]: List of caption entries with word-level timings
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    
+    try:
+        Logger.print_info(
+            f"{thread_prefix}Creating word-level captions for: {audio_file}"
+        )
+
+        # Load model with retries using exponential backoff
+        def load_and_process_model():
+            with whisper_lock:
+                model = whisper.load_model(model_name)
+                result = model.transcribe(
+                    audio_file,
+                    language="en",
+                    word_timestamps=True,
+                    initial_prompt=text  # Add text as initial prompt to guide transcription
+                )
+                return model, result
+
+        # Use exponential backoff for model loading and processing
+        model, result = exponential_backoff(
+            load_and_process_model,
+            max_retries=5,
+            initial_delay=1.0,
+            thread_id=thread_id
+        )
+
+        # Extract word timings
+        words = []
+        for segment in result["segments"]:
+            for word in segment.get("words", []):
+                # Debug log the word structure
+                Logger.print_debug(f"{thread_prefix}Word data: {word}")
+                
+                # Get word text with fallback to empty string
+                word_text = word.get("text", word.get("word", ""))
+                if not word_text:
+                    Logger.print_warning(f"{thread_prefix}Empty word text in segment")
+                    continue
+                    
+                words.append({
+                    "text": word_text,
+                    "start": word.get("start", 0),
+                    "end": word.get("end", 0)
+                })
+
+        # Create caption entries
+        captions = []
+        for i, word in enumerate(words):
+            caption = CaptionEntry(
+                text=word["text"],
+                start_time=word["start"],
+                end_time=word["end"]
+            )
+            captions.append(caption)
+
+        return captions
+
+    except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+        Logger.print_error(f"{thread_prefix}Error creating word-level captions: {str(e)}")
+        Logger.print_error(f"{thread_prefix}Full traceback: {traceback.format_exc()}")
+        return None
+    except (OSError, IOError) as e:
+        Logger.print_error(
+            f"{thread_prefix}Error reading audio file: {str(e)}"
+        )
+        Logger.print_error(f"Traceback: {traceback.format_exc()}")
+        return []
+    except Exception as e:
+        Logger.print_error(
+            f"{thread_prefix}Unexpected error in create_word_level_captions: {str(e)}"
+        )
+        Logger.print_error(f"Traceback: {traceback.format_exc()}")
+        return []
+
+def get_audio_duration(audio_file: str, thread_id: str = None) -> float:
+    """Get the duration of an audio file in seconds.
+    
+    Args:
+        audio_file: Path to the audio file
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        float: Duration in seconds
     """
     try:
-        # Choose model size based on whether we're processing music
-        model_size = "base" if is_music else "tiny"
-        
-        if not text:
-            # Only transcribe if no text was provided
-            model = whisper.load_model(
-                model_size,
-                device="cpu",
-                download_root=None,
-                in_memory=True
-            )
-            
-            # Add an initial prompt if we're transcribing music
-            initial_prompt = "This is a song with lyrics. The lyrics are:" if is_music else None
-            
-            result = model.transcribe(
-                audio_path,
-                language="en",
-                initial_prompt=initial_prompt,
-                fp16=False
-            )
-            
-            if result and "text" in result:
-                text = result["text"].strip()
-                Logger.print_info(f"Transcribed {'lyrics' if is_music else 'text'}: {text}")
-            else:
-                Logger.print_error("Failed to transcribe audio")
-                return []
-        else:
-            # Use provided text directly
-            Logger.print_info(f"Using provided {'lyrics' if is_music else 'text'}: {text}")
+        thread_prefix = f"{thread_id} " if thread_id else ""
+        Logger.print_info(
+            f"{thread_prefix}Getting duration for audio file: {audio_file}"
+        )
 
-        # Now get word timings using the text
-        word_timings = align_words_with_audio(audio_path, text, model_size)
-        if not word_timings:
-            Logger.print_error(f"No word timings available for: {text}")
-            return []
+        # Use ffprobe to get duration
+        cmd = [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", audio_file
+        ]
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True
+        )
+        duration = float(result.stdout.strip())
+
+        Logger.print_info(
+            f"{thread_prefix}Audio duration: {duration:.2f} seconds"
+        )
+        return duration
+
+    except subprocess.CalledProcessError as e:
+        Logger.print_error(
+            f"{thread_prefix}FFprobe error: {e.stderr.decode()}"
+        )
+        raise
+    except (ValueError, OSError) as e:
+        Logger.print_error(
+            f"{thread_prefix}Error getting audio duration: {str(e)}"
+        )
+        raise
+
+def adjust_segment_timing(
+    segment_file: str,
+    target_duration: float,
+    thread_id: str = None
+) -> bool:
+    """Adjust audio segment timing to match target duration.
+    
+    Args:
+        segment_file: Path to the audio segment file
+        target_duration: Target duration in seconds
+        thread_id: Optional thread ID for logging
         
-        # Convert to caption entries
-        captions = []
-        for timing in word_timings:
-            captions.append(CaptionEntry(
-                text=timing.text,
-                start_time=timing.start,
-                end_time=timing.end,
-                timed_words=[(timing.text, timing.start, timing.end)]
-            ))
+    Returns:
+        bool: True if adjustment was successful, False otherwise
+    """
+    try:
+        thread_prefix = f"{thread_id} " if thread_id else ""
+        current_duration = get_audio_duration(segment_file, thread_id)
         
+        if abs(current_duration - target_duration) < 0.1:
+            Logger.print_info(
+                f"{thread_prefix}Duration already matches target "
+                f"({current_duration:.2f}s)"
+            )
+            return True
+
+        # Calculate tempo adjustment
+        tempo = (current_duration / target_duration) * 100
+        temp_output = f"{segment_file}.temp.mp3"
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", segment_file,
+            "-filter:a", f"atempo={tempo/100}",
+            "-acodec", "libmp3lame",
+            "-q:a", "2",
+            temp_output
+        ]
+
+        Logger.print_info(
+            f"{thread_prefix}Adjusting tempo to {tempo:.1f}% "
+            f"(target duration: {target_duration:.2f}s)"
+        )
+        
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
+        )
+
+        # Replace original with adjusted version
+        os.replace(temp_output, segment_file)
+        
+        # Verify final duration
+        final_duration = get_audio_duration(segment_file, thread_id)
+        Logger.print_info(
+            f"{thread_prefix}Final duration: {final_duration:.2f}s"
+        )
+        
+        return abs(final_duration - target_duration) < 0.1
+
+    except subprocess.CalledProcessError as e:
+        Logger.print_error(
+            f"{thread_prefix}FFmpeg error: {e.stderr.decode()}"
+        )
+        return False
+    except (OSError, IOError) as e:
+        Logger.print_error(
+            f"{thread_prefix}File operation error: {str(e)}"
+        )
+        return False
+
+def process_audio_segments(
+    segments: List[str],
+    target_durations: List[float],
+    thread_id: str = None
+) -> bool:
+    """Process multiple audio segments to match target durations.
+    
+    Args:
+        segments: List of paths to audio segment files
+        target_durations: List of target durations in seconds
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        bool: True if all segments were processed successfully
+    """
+    if len(segments) != len(target_durations):
+        raise ValueError(
+            "Number of segments must match number of target durations"
+        )
+
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    success = True
+
+    for i, (segment, duration) in enumerate(zip(segments, target_durations)):
+        Logger.print_info(
+            f"{thread_prefix}Processing segment {i+1}/{len(segments)}"
+        )
+        
+        if not adjust_segment_timing(segment, duration, thread_id):
+            Logger.print_error(
+                f"{thread_prefix}Failed to adjust timing for segment {i+1}"
+            )
+            success = False
+
+    return success
+
+def align_audio_with_text(
+    audio_file: str,
+    text: str,
+    output_file: str,
+    thread_id: str = None
+) -> bool:
+    """Align audio with text and save the result.
+    
+    Args:
+        audio_file: Path to the input audio file
+        text: Text to align with audio
+        output_file: Path to save the aligned audio
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        bool: True if alignment was successful
+    """
+    try:
+        thread_prefix = f"{thread_id} " if thread_id else ""
+        Logger.print_info(
+            f"{thread_prefix}Aligning audio with text: {text[:50]}..."
+        )
+
+        # Get word-level captions
+        captions = create_word_level_captions(
+            audio_file,
+            text,
+            thread_id=thread_id
+        )
         if not captions:
-            Logger.print_error(f"Failed to create captions from word timings for: {text}")
-            return []
-            
-        return captions
+            return False
+
+        # Create segments based on captions
+        segments = []
+        for caption in captions:
+            segment = {
+                'start': caption.start_time,
+                'end': caption.end_time,
+                'text': caption.text
+            }
+            segments.append(segment)
+
+        # Create FFmpeg filter complex for segments
+        filter_complex = create_filter_complex(segments)
+        if not filter_complex:
+            return False
+
+        # Apply filter complex using FFmpeg
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", audio_file,
+            "-filter_complex", filter_complex,
+            "-acodec", "libmp3lame",
+            "-q:a", "2",
+            output_file
+        ]
+
+        Logger.print_info(f"{thread_prefix}Applying audio alignment...")
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
+        )
+
+        Logger.print_info(
+            f"{thread_prefix}Successfully aligned audio: {output_file}"
+        )
+        return True
+
+    except subprocess.CalledProcessError as e:
+        Logger.print_error(
+            f"{thread_prefix}FFmpeg error: {e.stderr.decode()}"
+        )
+        return False
+    except (OSError, IOError) as e:
+        Logger.print_error(
+            f"{thread_prefix}File operation error: {str(e)}"
+        )
+        return False
     except Exception as e:
-        Logger.print_error(f"Error in create_word_level_captions: {str(e)}")
-        import traceback
+        Logger.print_error(
+            f"{thread_prefix}Unexpected error in align_audio_with_text: {str(e)}"
+        )
         Logger.print_error(f"Traceback: {traceback.format_exc()}")
-        return [] 
+        return False
+
+def create_filter_complex(segments: List[dict]) -> str:
+    """Create FFmpeg filter complex string for audio segments.
+    
+    Args:
+        segments: List of segment dictionaries with start, end, and text
+        
+    Returns:
+        str: FFmpeg filter complex string
+    """
+    try:
+        parts = []
+        for i, segment in enumerate(segments):
+            start = segment['start']
+            end = segment['end']
+            duration = end - start
+            
+            # Create segment filter
+            part = (
+                f"[0:a]atrim=start={start}:end={end},"
+                f"asetpts=PTS-STARTPTS[s{i}]"
+            )
+            parts.append(part)
+
+        # Concatenate all segments
+        parts.append(
+            "".join(f"[s{i}]" for i in range(len(segments))) +
+            f"concat=n={len(segments)}:v=0:a=1[out]"
+        )
+
+        return ";".join(parts)
+
+    except Exception as e:
+        Logger.print_error(f"Error creating filter complex: {str(e)}")
+        return ""
+
+# ... continue with other functions ... 

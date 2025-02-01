@@ -1,129 +1,194 @@
+"""Final video generation module.
+
+This module handles the final stages of video generation, including:
+- Combining video segments with transitions
+- Adding audio tracks and background music
+- Applying captions and overlays
+- Generating closing credits
+- Managing temporary files and cleanup
+"""
+
 import os
 import subprocess
-from logger import Logger
-from .ffmpeg_wrapper import run_ffmpeg_command
-from .video_generation import append_video_segments, create_still_video_with_fade
-from .audio_generation import get_audio_duration
-from logger import Logger
-import subprocess
-from utils import get_tempdir
-from typing import Optional, List
-from .audio_alignment import create_word_level_captions
-from .captions import create_dynamic_captions, create_static_captions, CaptionEntry
-from .log_messages import LOG_CLOSING_CREDITS_DURATION
-import json
+import tempfile
 from datetime import datetime
+from typing import List, Optional, Dict
 
-def _get_timestamped_filename(base_name: str) -> str:
-    """Generate a timestamped filename."""
-    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-    return f"{base_name}_{timestamp}.mp4"
+from logger import Logger
+from utils import get_tempdir
 
-def concatenate_video_segments(video_segments, output_path):
-    """Concatenate video segments into a single video file.
+from .audio_alignment import create_word_level_captions
+from .captions import CaptionEntry, create_dynamic_captions, create_static_captions
+from .ffmpeg_wrapper import run_ffmpeg_command
+from .log_messages import (
+    LOG_CLOSING_CREDITS_DURATION,
+    LOG_BACKGROUND_MUSIC_SUCCESS,
+    LOG_BACKGROUND_MUSIC_FAILURE
+)
+from .video_generation import append_video_segments, create_video_segment
+
+def run_ffmpeg_command(cmd: List[str]) -> subprocess.CompletedProcess:
+    """Run an FFmpeg command and handle errors.
     
     Args:
-        video_segments: List of paths to video segments
+        cmd: List of command arguments
+        
+    Returns:
+        subprocess.CompletedProcess: The completed process result
+        
+    Raises:
+        subprocess.CalledProcessError: If the command fails
+        OSError: If there's a system-level error
+    """
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
+        )
+        return result
+    except (subprocess.CalledProcessError, OSError) as e:
+        Logger.print_error(f"FFmpeg command failed: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
+        raise
+
+def read_file_contents(file_path: str, encoding: str = "utf-8") -> Optional[str]:
+    """Read contents of a file with proper encoding.
+    
+    Args:
+        file_path: Path to file to read
+        encoding: File encoding (default: utf-8)
+        
+    Returns:
+        Optional[str]: File contents if successful, None otherwise
+    """
+    try:
+        with open(file_path, "r", encoding=encoding) as f:
+            return f.read()
+    except (OSError, IOError) as e:
+        Logger.print_error(f"Failed to read file {file_path}: {str(e)}")
+        return None
+
+def _get_timestamped_filename(base_name: str) -> str:
+    """Generate a timestamped filename.
+    
+    Args:
+        base_name: Base name for the file
+        
+    Returns:
+        str: Filename with timestamp and .mp4 extension
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{base_name}_{timestamp}.mp4"
+
+def concatenate_video_segments(
+    video_segments: List[str],
+    output_path: str
+) -> Optional[str]:
+    """Concatenate multiple video segments into a single video.
+    
+    Args:
+        video_segments: List of video file paths to concatenate
         output_path: Path to save the concatenated video
         
     Returns:
-        str: Path to concatenated video if successful, None otherwise
+        Optional[str]: Path to output video if successful, None otherwise
     """
+    list_file = None
     try:
-        # Input validation with detailed logging
         if not video_segments:
-            Logger.print_error("No video segments provided for concatenation")
+            Logger.print_error("No video segments provided")
             return None
             
-        Logger.print_info(f"Starting validation of {len(video_segments)} video segments")
-        valid_segments = []
-        for i, segment in enumerate(video_segments):
-            if segment is None:
-                Logger.print_error(f"Segment {i} is None")
-                continue
-            if not isinstance(segment, str):
-                Logger.print_error(f"Segment {i} is not a string: {type(segment)}")
-                continue
-            if not os.path.exists(segment):
-                Logger.print_error(f"Segment {i} does not exist at path: {segment}")
-                continue
-            if not os.path.isfile(segment):
-                Logger.print_error(f"Segment {i} exists but is not a file: {segment}")
-                continue
-                
-            # Verify it's a video file
-            try:
-                ffprobe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", 
-                              "-show_entries", "stream=codec_type", "-of", "csv=p=0", segment]
-                Logger.print_info(f"Running ffprobe command: {ffprobe_cmd}")
-                result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
-                Logger.print_info(f"FFprobe result: {result.stdout.strip()}")
-                if result.stdout.strip() != "video":
-                    Logger.print_error(f"Segment {i} is not a valid video file: {segment}")
-                    continue
-            except Exception as e:
-                Logger.print_error(f"Error validating segment {i}: {str(e)}")
-                continue
-                
-            Logger.print_info(f"Segment {i} validated successfully: {segment}")
-            valid_segments.append(segment)
-
-        if not valid_segments:
-            Logger.print_error("No valid video segments found after validation")
-            return None
-            
-        Logger.print_info(f"Found {len(valid_segments)} valid segments to concatenate")
-
-        # Re-encode segments with consistent parameters
-        reencoded_segments = []
-        for i, segment in enumerate(valid_segments):
-            reencoded_segment = segment.replace(".mp4", "_reencoded.mp4")
-            ffmpeg_cmd = [
-                "ffmpeg", "-y", "-i", segment,
-                "-c:v", "copy",  # Copy video stream
-                "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",  # Consistent audio parameters
-                reencoded_segment
-            ]
-            Logger.print_info(f"Re-encoding segment {i}: {segment} -> {reencoded_segment}")
-            result = run_ffmpeg_command(ffmpeg_cmd)
-            if result:
-                Logger.print_info(f"Successfully re-encoded segment {i}")
-                reencoded_segments.append(reencoded_segment)
-            else:
-                Logger.print_error(f"Failed to re-encode segment {i}")
-                return None
-
-        # Create concat list
+        # Create temporary file list
         temp_dir = get_tempdir()
-        os.makedirs(os.path.join(temp_dir, "ttv"), exist_ok=True)
-        concat_list_path = os.path.join(temp_dir, "ttv", "concat_list.txt")
+        list_file = os.path.join(temp_dir, "segments.txt")
         
-        Logger.print_info(f"Creating concat list at: {concat_list_path}")
-        with open(concat_list_path, "w") as f:
-            for segment in reencoded_segments:
-                f.write(f"file '{segment}'\n")
-
-        # Final concatenation
-        Logger.print_info(f"Concatenating {len(reencoded_segments)} segments to: {output_path}")
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
-            "-c:v", "copy",  # Copy video stream
-            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",  # Consistent audio parameters
+        with open(list_file, "w", encoding="utf-8") as f:
+            for segment in video_segments:
+                f.write(f"file '{os.path.abspath(segment)}'\n")
+                
+        # Run FFmpeg command to concatenate videos
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", list_file,
+            "-c", "copy",
             output_path
         ]
-        result = run_ffmpeg_command(ffmpeg_cmd)
         
-        if result:
-            Logger.print_info(f"Successfully created concatenated video: {output_path}")
-            return output_path
-        else:
+        result = run_ffmpeg_command(cmd)
+        if not result:
             Logger.print_error("Failed to concatenate video segments")
             return None
             
+        return output_path
+            
+    except (OSError, IOError) as e:
+        Logger.print_error(f"Error concatenating video segments: {str(e)}")
+        return None
+    finally:
+        # Clean up temporary file
+        try:
+            if list_file and os.path.exists(list_file):
+                os.remove(list_file)
+        except OSError as e:
+            Logger.print_error(f"Error cleaning up list file: {str(e)}")
+
+def add_background_music(
+    video_path: str,
+    music_path: str,
+    output_path: str,
+    music_volume: float = 0.3
+) -> Optional[str]:
+    """Add background music to a video.
+    
+    Args:
+        video_path: Path to input video
+        music_path: Path to music file
+        output_path: Path to save the output video
+        music_volume: Volume level for music (default: 0.3)
+        
+    Returns:
+        Optional[str]: Path to output video if successful, None otherwise
+    """
+    try:
+        # Create FFmpeg filter complex with careful audio format normalization
+        filter_complex = (
+            # First upsample mono audio to 48kHz, then convert to stereo using pan
+            "[0:a]aresample=48000,aformat=sample_fmts=fltp[mono];"
+            "[mono]pan=stereo|c0=c0|c1=c0[v];"
+            # Process background music
+            f"[1:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume={music_volume}[m];"
+            # Mix the streams
+            "[v][m]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        )
+        
+        # Run FFmpeg command
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-i", music_path,
+            "-filter_complex", filter_complex,
+            "-map", "0:v",
+            "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            output_path
+        ]
+        
+        try:
+            run_ffmpeg_command(cmd)
+            Logger.print_info(LOG_BACKGROUND_MUSIC_SUCCESS)
+            return output_path
+        except (subprocess.CalledProcessError, OSError):
+            Logger.print_error(LOG_BACKGROUND_MUSIC_FAILURE)
+            return None
+            
     except Exception as e:
-        Logger.print_error(f"Error during video concatenation: {str(e)}")
-        import traceback
-        Logger.print_error(f"Traceback: {traceback.format_exc()}")
+        Logger.print_error(f"Error adding background music: {str(e)}")
         return None
 
 def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path=None, config=None, closing_credits_lyrics=None):
@@ -156,35 +221,47 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
         main_video_path = concatenate_video_segments(video_segments, main_video_path)
         final_output_path = main_video_path  # Update the final output path after this step
 
-        if music_path:
+        # Handle background music
+        if music_path and os.path.exists(music_path):
             Logger.print_info("Adding background music to main video...")
-            main_video_with_background_music_path = add_background_music_to_video(main_video_path, music_path)
-            final_output_path = main_video_with_background_music_path  # Update the final output path after this step
+            # Create a new path for the video with background music
+            main_video_with_music_path = os.path.join(temp_dir, "ttv", _get_timestamped_filename("main_video_with_music"))
+            main_video_with_background_music_path = add_background_music(
+                video_path=main_video_path,
+                music_path=music_path,
+                output_path=main_video_with_music_path
+            )
+            if main_video_with_background_music_path:
+                final_output_path = main_video_with_background_music_path
+                Logger.print_info(f"Successfully added background music from {music_path}")
+            else:
+                Logger.print_warning("Failed to add background music, using video without music")
+                main_video_with_background_music_path = main_video_path
         else:
-            Logger.print_info("Skipping background music (disabled in config)")
             main_video_with_background_music_path = main_video_path
 
-        if song_with_lyrics_path:
+        # Handle closing credits
+        if song_with_lyrics_path and os.path.exists(song_with_lyrics_path):
             Logger.print_info("Generating closing credits...")
-            if movie_poster_path:
+            if movie_poster_path and os.path.exists(movie_poster_path):
                 closing_credits = generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config, closing_credits_lyrics)
                 if closing_credits:
                     # now all we have to do is stitch together the main content and the credits
                     fully_assembled_movie_path = append_video_segments([main_video_with_background_music_path, closing_credits], output_path)
-                    final_output_path = fully_assembled_movie_path
-                    Logger.print_info(f"Final video with closing credits created: output_path={final_output_path}")
+                    if fully_assembled_movie_path:
+                        final_output_path = fully_assembled_movie_path
+                        Logger.print_info(f"Successfully added closing credits from {song_with_lyrics_path}")
+                    else:
+                        Logger.print_warning("Failed to append closing credits, using video without credits")
+                        final_output_path = main_video_with_background_music_path
                 else:
-                    Logger.print_warning("Failed to generate closing credits, using main video without credits")
+                    Logger.print_warning("Failed to generate closing credits, using video without credits")
                     final_output_path = main_video_with_background_music_path
-                    Logger.print_info(f"Final video without closing credits created: output_path={final_output_path}")
             else:
-                Logger.print_warning("No movie poster available for closing credits, using main video without credits")
+                Logger.print_warning("No movie poster available for closing credits, using video without credits")
                 final_output_path = main_video_with_background_music_path
-                Logger.print_info(f"Final video without closing credits created: output_path={final_output_path}")
         else:
-            Logger.print_info("Skipping closing credits (disabled in config)")
             final_output_path = main_video_with_background_music_path
-            Logger.print_info(f"Final video without closing credits created: output_path={final_output_path}")
 
         play_video(final_output_path)
         return final_output_path
@@ -209,77 +286,85 @@ def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_pa
     initial_credits_video_path = os.path.join(temp_dir, "initial_credits.mp4")
     closing_credits_video_path = os.path.join(temp_dir, "closing_credits.mp4")
 
-    # Get video duration from audio file
-    ffprobe_cmd = [
-        "ffprobe", "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        song_with_lyrics_path
-    ]
-    result = run_ffmpeg_command(ffprobe_cmd)
-    if not result:
-        Logger.print_error("Failed to get audio duration")
-        return None
-    duration = float(result.stdout.decode('utf-8').strip())
-    Logger.print_info(f"{LOG_CLOSING_CREDITS_DURATION}: {duration}s")
-
-    # Create video from poster image with duration matching audio
-    ffmpeg_cmd = [
-        "ffmpeg", "-y",
-        "-loop", "1",
-        "-i", movie_poster_path,
-        "-i", song_with_lyrics_path,
-        "-c:v", "libx264",
-        "-tune", "stillimage",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        initial_credits_video_path
-    ]
-
-    result = run_ffmpeg_command(ffmpeg_cmd)
-    if not result:
-        Logger.print_error("Failed to generate initial closing credits video")
-        return None
-
-    # Get caption style from config
-    caption_style = getattr(config, 'caption_style', 'static') if config else 'static'
-
-    # Create captions for the song lyrics - use provided lyrics if available
-    captions = create_word_level_captions(song_with_lyrics_path, lyrics if lyrics else "")
-    if not captions:
-        Logger.print_error("Failed to create captions for closing credits")
-        return initial_credits_video_path
-
-    if caption_style == "dynamic":
-        # Add dynamic captions to the video
-        captioned_path = create_dynamic_captions(
-            input_video=initial_credits_video_path,
-            captions=captions,
-            output_path=closing_credits_video_path,
-            min_font_size=32,
-            max_font_size=48
+    try:
+        # Get video duration from audio file
+        ffprobe_cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            song_with_lyrics_path
+        ]
+        result = subprocess.run(
+            ffprobe_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
         )
-    else:
-        # Combine all captions into one for static display
-        combined_text = " ".join(c.text for c in captions)
-        static_captions = [CaptionEntry(combined_text, 0.0, duration)]
-        
-        # Add static captions to the video
-        captioned_path = create_static_captions(
-            input_video=initial_credits_video_path,
-            captions=static_captions,
-            output_path=closing_credits_video_path,
-            font_size=40
-        )
+        duration = float(result.stdout.decode('utf-8').strip())
+        Logger.print_info(f"{LOG_CLOSING_CREDITS_DURATION}: {duration}s")
 
-    if captioned_path:
-        Logger.print_info(f"Generated closing credits video with captions at {closing_credits_video_path}")
-        return closing_credits_video_path
-    else:
-        Logger.print_error("Failed to add captions to closing credits video")
-        return initial_credits_video_path
+        # Create video from poster image with duration matching audio
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1",
+            "-i", movie_poster_path,
+            "-i", song_with_lyrics_path,
+            "-c:v", "libx264",
+            "-tune", "stillimage",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-pix_fmt", "yuv420p",
+            "-shortest",
+            initial_credits_video_path
+        ]
+
+        try:
+            run_ffmpeg_command(ffmpeg_cmd)
+        except (subprocess.CalledProcessError, OSError):
+            Logger.print_error("Failed to generate initial closing credits video")
+            return None
+
+        # Get caption style from config
+        caption_style = getattr(config, 'caption_style', 'static') if config else 'static'
+
+        # Create captions for the song lyrics - use provided lyrics if available
+        captions = create_word_level_captions(song_with_lyrics_path, lyrics if lyrics else "")
+        if not captions:
+            Logger.print_error("Failed to create captions for closing credits")
+            return initial_credits_video_path
+
+        if caption_style == "dynamic":
+            # Add dynamic captions to the video
+            captioned_path = create_dynamic_captions(
+                input_video=initial_credits_video_path,
+                captions=captions,
+                output_path=closing_credits_video_path,
+                min_font_size=32,
+                max_font_size=48
+            )
+        else:
+            # Combine all captions into one for static display
+            combined_text = " ".join(c.text for c in captions)
+            static_captions = [CaptionEntry(combined_text, 0.0, duration)]
+            
+            # Add static captions to the video
+            captioned_path = create_static_captions(
+                input_video=initial_credits_video_path,
+                captions=static_captions,
+                output_path=closing_credits_video_path,
+                font_size=40
+            )
+
+        if captioned_path:
+            Logger.print_info(f"Generated closing credits video with captions at {closing_credits_video_path}")
+            return closing_credits_video_path
+        else:
+            Logger.print_error("Failed to add captions to closing credits video")
+            return initial_credits_video_path
+
+    except (subprocess.CalledProcessError, OSError) as e:
+        Logger.print_error(f"Error generating closing credits: {str(e)}")
+        return None
 
 def play_video(video_path):
     """Play a video file if playback is enabled."""
@@ -289,46 +374,96 @@ def play_video(video_path):
         except subprocess.CalledProcessError as e:
             Logger.print_error(f"Error playing video: {e}")
 
-def add_background_music_to_video(final_video_path, music_path):
-    if final_video_path is None:
-        Logger.print_error("Final video path is None")
-        return None
-    if music_path is None:
-        Logger.print_error("Music path is None")
+def get_video_duration(video_path: str) -> Optional[float]:
+    """Get duration of a video file in seconds.
+    
+    Args:
+        video_path: Path to video file
+        
+    Returns:
+        Optional[float]: Duration in seconds if successful, None otherwise
+    """
+    try:
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True
+        )
+        
+        duration = float(result.stdout.decode().strip())
+        return duration
+            
+    except (subprocess.CalledProcessError, ValueError, OSError) as e:
+        Logger.print_error(f"Error getting video duration: {str(e)}")
         return None
 
-    # Ensure music_path is a string, not a dictionary
-    if isinstance(music_path, dict):
-        music_path = music_path.get('path')
-        if music_path is None:
-            Logger.print_error("Music path is missing in the dictionary")
-            return None
-
-    background_music_volume = 0.3  # Adjust this value to change the relative volume of the background music
-    main_video_with_background_music_path = "/tmp/GANGLIA/ttv/main_video_with_background_music.mp4"
+def create_video_with_captions(
+    segments: List[Dict[str, str]],
+    output_path: str,
+    thread_id: Optional[str] = None
+) -> Optional[str]:
+    """Create a video with captions from segments.
+    
+    Args:
+        segments: List of segment dictionaries with paths
+        output_path: Path to save final video
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        Optional[str]: Path to final video if successful
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    temp_dir = get_tempdir()
     
     try:
-        # Mix the audio streams with consistent parameters
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", 
-            "-i", final_video_path, 
-            "-i", music_path,
-            "-filter_complex",
-            f"[0:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[v];"
-            f"[1:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume={background_music_volume}[m];"
-            "[v][m]amix=inputs=2:duration=first:dropout_transition=2",
-            "-c:v", "copy",  # Copy video stream
-            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",  # Consistent audio parameters
-            main_video_with_background_music_path
-        ]
-        result = run_ffmpeg_command(ffmpeg_cmd)
-        if result:
-            Logger.print_info(f"Final video with background music created at {main_video_with_background_music_path}")
-            return main_video_with_background_music_path
-        else:
-            Logger.print_error("Failed to add background music")
-            return final_video_path
-
+        # Create video segments
+        video_segments = []
+        for i, segment in enumerate(segments):
+            try:
+                # Generate captions
+                captions = create_word_level_captions(
+                    segment["audio"],
+                    segment["text"],
+                    thread_id=thread_id
+                )
+                if not captions:
+                    raise ValueError(
+                        f"Failed to generate captions for segment {i + 1}"
+                    )
+                    
+                # Create video segment
+                video_path = create_video_segment(
+                    image_path=segment["image"],
+                    audio_path=segment["audio"],
+                    output_path=os.path.join(temp_dir, "ttv", f"segment_{i}_initial.mp4")
+                )
+                if not video_path:
+                    raise ValueError(
+                        f"Failed to create video for segment {i + 1}"
+                    )
+                    
+                video_segments.append(video_path)
+            except Exception as e:
+                Logger.print_error(f"{thread_prefix}Error creating video segment {i + 1}: {str(e)}")
+                return None
+                
+        # Concatenate video segments
+        result = concatenate_video_segments(video_segments, output_path)
+        if not result:
+            Logger.print_error(f"{thread_prefix}Failed to concatenate video segments")
+            return None
+            
+        return output_path
+            
     except Exception as e:
-        Logger.print_error(f"Error adding background music: {e}")
-        return final_video_path
+        Logger.print_error(f"{thread_prefix}Error creating video with captions: {str(e)}")
+        return None

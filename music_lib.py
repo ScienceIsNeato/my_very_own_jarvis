@@ -1,10 +1,11 @@
+"""Music generation library providing a unified interface for multiple music generation backends.
+
+This module implements a music generation service that can use different backends (Meta, Suno)
+with fallback support, retry mechanisms, and progress tracking.
+"""
+
 import os
 import time
-import json
-import requests
-import re
-from datetime import datetime
-from lyrics_lib import LyricsGenerator
 from logger import Logger
 from music_backends import MetaMusicBackend, SunoMusicBackend
 from ttv.config_loader import TTVConfig
@@ -89,7 +90,7 @@ class MusicGenerator:
                 
                 Logger.print_warning(f"Attempt {attempt + 1}/{self.MAX_RETRIES} failed, will retry...")
                 
-            except Exception as e:
+            except (RuntimeError, IOError, ValueError, TimeoutError) as e:
                 Logger.print_error(f"Error on attempt {attempt + 1}: {str(e)}")
                 if attempt == self.MAX_RETRIES - 1:
                     Logger.print_error("All retry attempts exhausted")
@@ -124,7 +125,7 @@ class MusicGenerator:
                 
             return result
             
-        except Exception as e:
+        except (RuntimeError, IOError, ValueError, TimeoutError) as e:
             Logger.print_error(f"Error with {backend.__class__.__name__}: {str(e)}")
             return None
     
@@ -153,10 +154,21 @@ class MusicGenerator:
         # Get result
         return self.backend.get_result(job_id)
 
-    def generate_music(self, prompt, model="chirp-v3-5", duration=10, with_lyrics=False, story_text=None, retries=5, wait_time=60, query_dispatcher=None):
+    def generate_music(self, prompt: str, with_lyrics: bool = False, story_text: str = None,
+                      query_dispatcher=None, **_kwargs) -> str:
         """Generate music using the configured backend.
         
         This is a legacy method that maps to either generate_instrumental or generate_with_lyrics.
+        
+        Args:
+            prompt: The text prompt for music generation
+            with_lyrics: Whether to generate music with lyrics
+            story_text: Optional story text for lyric-based generation
+            query_dispatcher: Optional query dispatcher for lyric generation
+            **_kwargs: Additional arguments (ignored for backward compatibility)
+            
+        Returns:
+            str: Path to the generated audio file, or None if generation failed
         """
         Logger.print_debug(f"Generating audio with prompt: {prompt}")
 
@@ -165,7 +177,7 @@ class MusicGenerator:
                 Logger.print_error("Error: Story text is required when generating audio with lyrics.")
                 return None
             return self.generate_with_lyrics(prompt, story_text, query_dispatcher=query_dispatcher)
-        else:
-            return self.generate_instrumental(prompt)
+        
+        return self.generate_instrumental(prompt)
 
     

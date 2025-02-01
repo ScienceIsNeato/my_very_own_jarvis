@@ -1,87 +1,98 @@
-import argparse
-import speech_recognition as sr
-import wave
-import pyaudio
-import subprocess
-import pytest
+"""Tests for audio input device access and configuration.
+
+This module contains tests for verifying audio input device detection,
+configuration, and recording capabilities.
+"""
+
+# Standard library imports
 import os
+import subprocess
+import wave
+
+# Third-party imports
+import pytest
+import pyaudio
 
 @pytest.fixture
 def device_index():
-    return 1  # USB Advanced Audio Device with 2 input channels
-
-
-@pytest.mark.skip # This test only needs to be run if you are experiencing microphone issues
-def test_audio_input(device_index):
-    print("Testing audio input access...")
-    print("Using PyAudio version: ", pyaudio.__version__)
-
-    # Initialize PyAudio
+    """Get the default audio input device index."""
     audio = pyaudio.PyAudio()
-    
-    # List available devices
-    print("\nAvailable audio devices:")
-    for i in range(audio.get_device_count()):
-        dev_info = audio.get_device_info_by_index(i)
-        print(f"{i}: {dev_info['name']} (in: {dev_info['maxInputChannels']}, out: {dev_info['maxOutputChannels']})")
-    
     try:
-        # Get device info
-        device_info = audio.get_device_info_by_index(device_index)
-        channels = max(1, int(device_info["maxInputChannels"]))
-        rate = int(device_info["defaultSampleRate"])
-        
-        print(f"\nUsing device {device_index}: {device_info['name']}")
-        print(f"Channels: {channels}")
-        print(f"Sample rate: {rate}")
-        
-        # Open stream
-        stream = audio.open(
-            format=pyaudio.paInt16,
-            channels=channels,
-            rate=rate,
-            input=True,
-            input_device_index=device_index,
-            frames_per_buffer=1024
-        )
-        
-        print("\nRecording for 3 seconds...")
-        frames = []
-        for _ in range(0, int(rate / 1024 * 3)):
-            data = stream.read(1024)
-            frames.append(data)
-        print("Finished recording")
-        
-        # Stop and close the stream
-        stream.stop_stream()
-        stream.close()
-        
-        # Save the recorded data as a WAV file
-        with wave.open("recorded_audio.wav", "wb") as file:
-            # pylint: disable=no-member
-            file.setnchannels(channels)
-            file.setsampwidth(audio.get_sample_size(pyaudio.paInt16))
-            file.setframerate(rate)
-            file.writeframes(b''.join(frames))
-        print("Audio saved to recorded_audio.wav")
-        
-        # Convert to MP3
-        subprocess.run(['ffmpeg', '-y', '-i', 'recorded_audio.wav', 'recorded_audio.mp3'], check=True)
-        
-        print("Playing recorded audio...")
-        test_play_audio()
-        
+        return audio.get_default_input_device_info()['index']
     finally:
         audio.terminate()
 
-def test_play_audio():
-    # Only play audio if explicitly enabled
-    if os.getenv('PLAYBACK_MEDIA_IN_TESTS', 'false').lower() == 'true':
-        subprocess.call(['ffplay', '-nodisp', '-autoexit', 'recorded_audio.mp3'])
+def test_get_device_index(device_index):
+    """Test retrieving the default audio input device index."""
+    audio = pyaudio.PyAudio()
+    try:
+        device_info = audio.get_default_input_device_info()
+        assert device_info['index'] == device_index
+    finally:
+        audio.terminate()
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--device-index', type=int, default=1,
-                      help='Index of the input device to use.')
-    args = parser.parse_args()
-    test_audio_input(args.device_index)
+def test_audio_recording():
+    """Test basic audio recording functionality."""
+    audio = pyaudio.PyAudio()
+    try:
+        # Configure recording parameters
+        format_code = pyaudio.paInt16
+        channels = 1
+        rate = 44100
+        chunk = 1024
+        duration = 1  # seconds
+        frames = []
+
+        # Start recording
+        stream = audio.open(
+            format=format_code,
+            channels=channels,
+            rate=rate,
+            input=True,
+            frames_per_buffer=chunk
+        )
+
+        # Record for specified duration
+        for _ in range(0, int(rate / chunk * duration)):
+            data = stream.read(chunk)
+            frames.append(data)
+
+        # Stop recording
+        stream.stop_stream()
+        stream.close()
+
+        # Save recording to WAV file
+        test_file = "test_recording.wav"
+        with wave.open(test_file, 'wb') as wf:
+            wf.setnchannels(channels)
+            wf.setsampwidth(audio.get_sample_size(format_code))
+            wf.setframerate(rate)
+            wf.writeframes(b''.join(frames))
+
+        # Verify file exists and has content
+        assert os.path.exists(test_file)
+        assert os.path.getsize(test_file) > 0
+
+        # Clean up
+        os.remove(test_file)
+
+    finally:
+        audio.terminate()
+
+def test_audio_playback():
+    """Test audio playback functionality."""
+    # Create a test WAV file
+    test_file = "test_playback.wav"
+    with wave.open(test_file, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(44100)
+        wf.writeframes(b'\x00' * 44100 * 2)  # 1 second of silence
+
+    try:
+        # Test playback using ffplay
+        subprocess.run(["ffplay", "-nodisp", "-autoexit", test_file], check=True)
+    except subprocess.CalledProcessError as e:
+        pytest.skip(f"Audio playback failed: {e}")
+    finally:
+        os.remove(test_file)

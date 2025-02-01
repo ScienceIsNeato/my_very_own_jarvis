@@ -47,7 +47,7 @@ class LyricsGenerator:
         The lyrics should capture the essence and themes of the story while being memorable and fitting the time constraint.
         """
 
-        response = query_dispatcher.sendQuery(prompt)
+        response = query_dispatcher.send_query(prompt)
         
         # Try to parse the response as JSON
         try:
@@ -87,7 +87,7 @@ class LyricsGenerator:
         )
 
         try:
-            response = query_dispatcher.sendQuery(prompt)
+            response = query_dispatcher.send_query(prompt)
             lyrical_style = response.strip().split('\n')[0]
 
             if lyrical_style not in example_lyrical_styles:

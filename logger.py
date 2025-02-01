@@ -1,11 +1,24 @@
 # logger.py
 
 import blessed
+import threading
 
 term = blessed.Terminal()
 
 class Logger:
-
+    """Thread-safe logging system with colored output.
+    
+    This class provides static methods for logging at different levels,
+    with thread-safe operations and optional thread ID prefixing.
+    Color coding is used to distinguish between different log levels:
+    - DEBUG: White
+    - INFO: Green
+    - WARNING: Yellow
+    - ERROR: Red
+    """
+    
+    _lock = threading.Lock()
+    
     @staticmethod
     def print_user_input(*args, **kwargs):
         print(f"{term.deepskyblue}", end="")
@@ -60,4 +73,3 @@ class Logger:
         print(term.blue("Informational Messages"))
         print(term.gray("Debug Messages"))
         print(term.magenta("===================="))
-

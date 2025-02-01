@@ -1,0 +1,87 @@
+[MASTER]
+# Python code to ignore
+ignore=CVS
+
+# Add any Python module names where you want to disable all warnings
+disable=
+
+# Files or directories to be skipped. They should be base names, not paths
+ignore-patterns=
+
+[FORMAT]
+# Maximum number of characters on a single line
+max-line-length=100
+
+# Expected format of line ending
+expected-line-ending-format=LF
+
+# Number of spaces of indent required inside a hanging or continued line
+indent-after-paren=4
+
+[BASIC]
+# Regular expression which should only match function or class names
+function-rgx=[a-z_][a-z0-9_]{2,50}$
+class-rgx=[A-Z_][a-zA-Z0-9]+$
+
+# Regular expression which should only match correct variable names
+variable-rgx=[a-z_][a-z0-9_]{2,30}$
+
+# Good variable names which should always be accepted
+good-names=i,j,k,ex,Run,_,id,f
+
+[IMPORTS]
+# Force import order to recognize a module as part of the standard library
+known-standard-library=
+
+# Force import order to recognize a module as part of a third party library
+known-third-party=numpy,torch,soundfile,transformers,requests,openai
+
+[MESSAGES CONTROL]
+# Only show warnings with the listed confidence levels
+confidence=HIGH,INFERENCE,INFERENCE_FAILURE,UNDEFINED
+
+# Rules configuration
+enable=
+    unused-import,      # W0611: Report unused imports
+    broad-exception-caught,  # W0718: Catching too general exception Exception
+    unused-argument,    # W0613: Unused argument
+    missing-module-docstring,  # C0114: Missing module docstring
+    missing-class-docstring,   # C0115: Missing class docstring
+    missing-function-docstring, # C0116: Missing function docstring
+    wrong-import-order,  # C0411: Wrong import order
+    trailing-whitespace,  # C0303: Trailing whitespace
+    line-too-long,      # C0301: Line too long
+    trailing-newlines,  # C0305: Trailing newlines
+    unspecified-encoding,  # W1514: Using open without explicitly specifying an encoding
+    invalid-name       # C0103: Invalid name
+
+# Specific rule settings
+[EXCEPTIONS]
+overgeneral-exceptions=Exception,BaseException,StandardError
+
+[REPORTS]
+# Set the output format
+output-format=text
+
+# Include a brief explanation of each error
+msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}
+
+[SIMILARITIES]
+# Minimum lines number of a similarity
+min-similarity-lines=4
+
+# Ignore comments when computing similarities
+ignore-comments=yes
+
+# Ignore docstrings when computing similarities
+ignore-docstrings=yes
+
+# Ignore imports when computing similarities
+ignore-imports=yes
+
+[SPELLING]
+# Spelling dictionary name
+spelling-dict=en_US
+
+# List of comma separated words that should not be checked
+spelling-ignore-words=musicgen,crossfade,atrim,acrossfade,suno,urandom,ffprobe,noprint,nokey,afplay,spacebar,tcgetattr,tcsetattr,TCSADRAIN,rlist,pyaudio,texttospeech,ffplay,nodisp,autoexit

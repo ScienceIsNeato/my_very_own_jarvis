@@ -7,7 +7,7 @@ from datetime import datetime
 from lyrics_lib import LyricsGenerator
 from logger import Logger
 from music_backends.base import MusicBackend
-
+from utils import get_tempdir
 class SunoMusicBackend(MusicBackend):
     """Suno API implementation for music generation."""
     
@@ -20,7 +20,7 @@ class SunoMusicBackend(MusicBackend):
             'api-key': self.api_key,
             'Content-Type': 'application/json'
         }
-        self.audio_directory = "/tmp/GANGLIA/music"
+        self.audio_directory = get_tempdir() + "/music"
         os.makedirs(self.audio_directory, exist_ok=True)
     
     def start_generation(self, prompt: str, with_lyrics: bool = False, **kwargs) -> str:

@@ -2,7 +2,6 @@
 # These are the larger dependencies that require significant disk space and processing power
 torch>=2.0.0
 transformers>=4.30.0
-tensorflow>=2.13.0
 torchaudio>=2.0.0
 accelerate>=0.27.0
 openai-whisper>=20231117

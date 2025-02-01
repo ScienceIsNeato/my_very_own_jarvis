@@ -1,20 +1,52 @@
-import unittest
+"""Tests for the story processor module.
+
+This module contains tests that verify the functionality of the story processor,
+including:
+- Story processing with file-based credits
+- Image and movie poster generation
+- Video segment creation
+- Error handling and failure cases
+"""
+
+# Standard library imports
 import json
-from unittest.mock import Mock, patch, MagicMock
-import pytest
-from ttv.story_processor import process_story
-from ttv.config_loader import TTVConfig, MusicConfig
-from query_dispatch import ChatGPTQueryDispatcher
 import os
+import unittest
+from unittest.mock import Mock, patch, MagicMock
+
+# Third-party imports
+import pytest
+
+# Local imports
+from query_dispatch import ChatGPTQueryDispatcher
+from ttv.config_loader import TTVConfig, MusicConfig
+from ttv.story_processor import process_story
 from utils import get_tempdir
 
 @pytest.fixture
-def mock_tts():
+def tts_mock():
+    """Provide a mock TTS instance for testing.
+    
+    Returns:
+        MagicMock: A mock TTS instance that returns a test audio file path
+    """
     mock = MagicMock()
-    mock.convert_text_to_speech.return_value = (True, os.path.join(get_tempdir(), "tts/test_audio.mp3"))
+    mock.convert_text_to_speech.return_value = (
+        True, 
+        os.path.join(get_tempdir(), "tts/test_audio.mp3")
+    )
     return mock
 
 class TestStoryProcessor(unittest.TestCase):
+    """Test suite for the story processor module.
+    
+    Tests the end-to-end functionality of the story processor, including:
+    - Story processing with file-based credits
+    - Image and movie poster generation
+    - Video segment creation
+    - Error handling and failure cases
+    """
+
     def setUp(self):
         """Set up test environment by creating necessary directories."""
         self.temp_dir = get_tempdir()
@@ -25,25 +57,43 @@ class TestStoryProcessor(unittest.TestCase):
     @patch('ttv.story_processor.generate_movie_poster')
     @patch('ttv.story_processor.generate_image')
     @patch('ttv.story_processor.create_video_segment')
-    def test_story_processor_with_file_based_credits(self, mock_create_video, mock_generate_image, mock_generate_poster):
-        """Test that the story processor correctly handles all aspects of video generation with file-based credits."""
+    def test_story_processor_with_file_based_credits(
+        self, mock_create_video, mock_generate_image, mock_generate_poster
+    ):
+        """Test story processor with file-based credits.
+        
+        Verifies that the story processor correctly handles all aspects of
+        video generation when using file-based credits, including:
+        - TTS conversion
+        - Image generation
+        - Movie poster generation
+        - Video segment creation
+        """
         # Mock dependencies
         mock_tts = Mock()
-        mock_tts.convert_text_to_speech.return_value = (True, os.path.join(self.temp_dir, "tts/test_audio.mp3"))
+        mock_tts.convert_text_to_speech.return_value = (
+            True, 
+            os.path.join(self.temp_dir, "tts/test_audio.mp3")
+        )
         mock_query_dispatcher = Mock(spec=ChatGPTQueryDispatcher)
         mock_music_gen = Mock()
-        
+
         # Mock movie poster generation
-        mock_generate_poster.return_value = os.path.join(self.temp_dir, "ttv", "movie_poster.png")
-        
+        mock_generate_poster.return_value = os.path.join(
+            self.temp_dir, "ttv", "movie_poster.png"
+        )
+
         # Mock image generation for each sentence
-        mock_generate_image.return_value = (os.path.join(self.temp_dir, "images", "test_image.png"), True)
-        
+        mock_generate_image.return_value = (
+            os.path.join(self.temp_dir, "images", "test_image.png"), 
+            True
+        )
+
         # Mock video segment creation
         mock_create_video.return_value = True
-        
+
         # Set up mock responses for content filtering
-        mock_query_dispatcher.sendQuery.return_value = json.dumps({
+        mock_query_dispatcher.send_query.return_value = json.dumps({
             "filtered_text": "Test filtered text",
             "is_safe": True
         })
@@ -59,7 +109,8 @@ class TestStoryProcessor(unittest.TestCase):
             )
         )
 
-        with patch('ttv.story_processor.MusicGenerator', return_value=mock_music_gen):
+        with patch('ttv.story_processor.MusicGenerator', 
+                  return_value=mock_music_gen):
             # Call process_story
             result = process_story(
                 mock_tts,
@@ -73,10 +124,14 @@ class TestStoryProcessor(unittest.TestCase):
 
             # Verify the overall result
             self.assertTrue(result, "Story processing should succeed")
-            
+
             # Verify TTS calls
-            self.assertEqual(mock_tts.convert_text_to_speech.call_count, len(test_config.story),
-                           "TTS should be called for each story line")
+            expected_calls = len(test_config.story)
+            self.assertEqual(
+                mock_tts.convert_text_to_speech.call_count,
+                expected_calls,
+                "TTS should be called for each story line"
+            )
             for i, story_line in enumerate(test_config.story):
                 mock_tts.convert_text_to_speech.assert_any_call(
                     story_line,
@@ -96,8 +151,11 @@ class TestStoryProcessor(unittest.TestCase):
             )
 
             # Verify that images were generated for each sentence
-            self.assertEqual(mock_generate_image.call_count, len(test_config.story),
-                           "Image generation should be called for each story line")
+            self.assertEqual(
+                mock_generate_image.call_count,
+                len(test_config.story),
+                "Image generation should be called for each story line"
+            )
             mock_generate_image.assert_any_call(
                 "Test story line 1",
                 "",  # context
@@ -120,8 +178,11 @@ class TestStoryProcessor(unittest.TestCase):
             )
 
             # Verify that video segments were created with correct parameters
-            self.assertEqual(mock_create_video.call_count, len(test_config.story),
-                           "Video segment creation should be called for each story line")
+            self.assertEqual(
+                mock_create_video.call_count,
+                len(test_config.story),
+                "Video segment creation should be called for each story line"
+            )
             for i in range(len(test_config.story)):
                 mock_create_video.assert_any_call(
                     os.path.join(self.temp_dir, "images", "test_image.png"),
@@ -129,27 +190,37 @@ class TestStoryProcessor(unittest.TestCase):
                     os.path.join(self.temp_dir, "ttv", f"segment_{i}_initial.mp4")
                 )
 
-            # Verify that music generation was NOT called since we're using file-based credits
+            # Verify that music generation was NOT called for file-based credits
             mock_music_gen.generate_music.assert_not_called()
 
     @patch('ttv.story_processor.generate_movie_poster')
     @patch('ttv.story_processor.generate_image')
     @patch('ttv.story_processor.create_video_segment')
-    def test_handles_generation_failures(self, mock_create_video, mock_generate_image, mock_generate_poster):
-        """Test that the story processor handles failures gracefully."""
+    def test_handles_generation_failures(
+        self, mock_create_video, mock_generate_image, mock_generate_poster
+    ):
+        """Test that the story processor handles failures gracefully.
+        
+        Verifies proper error handling for various failure scenarios:
+        - TTS conversion failure
+        - Image generation failure
+        - Movie poster generation failure
+        - Video segment creation failure
+        - Content filtering failure
+        """
         # Mock dependencies with failures
         mock_failing_tts = Mock()
-        mock_failing_tts.convert_text_to_speech.return_value = (False, None)  # TTS failure
+        mock_failing_tts.convert_text_to_speech.return_value = (False, None)
         mock_query_dispatcher = Mock(spec=ChatGPTQueryDispatcher)
         mock_music_gen = Mock()
-        
+
         # Mock failures
         mock_generate_poster.return_value = None  # Poster generation failure
         mock_generate_image.return_value = (None, False)  # Image generation failure
         mock_create_video.return_value = False  # Video creation failure
-        
+
         # Set up mock responses
-        mock_query_dispatcher.sendQuery.return_value = json.dumps({
+        mock_query_dispatcher.send_query.return_value = json.dumps({
             "filtered_text": None,
             "is_safe": False  # Content filtering failure
         })
@@ -164,7 +235,8 @@ class TestStoryProcessor(unittest.TestCase):
             )
         )
 
-        with patch('ttv.story_processor.MusicGenerator', return_value=mock_music_gen):
+        with patch('ttv.story_processor.MusicGenerator', 
+                  return_value=mock_music_gen):
             # Call process_story
             result = process_story(
                 mock_failing_tts,
@@ -178,7 +250,10 @@ class TestStoryProcessor(unittest.TestCase):
 
             # Verify that the result indicates failure
             self.assertIsInstance(result, tuple)
-            self.assertTrue(all(x is None for x in result), "All result components should be None on failure")
+            self.assertTrue(
+                all(x is None for x in result),
+                "All result components should be None on failure"
+            )
 
 if __name__ == '__main__':
     unittest.main() 

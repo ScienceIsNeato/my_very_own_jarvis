@@ -12,12 +12,6 @@ from hotwords import HotwordManager
 from conversation_context import ContextManager
 from fetch_and_display_logs import display_logs
 import datetime
-from ttv.image_generation import generate_image, save_image_with_caption, generate_blank_image, save_image_without_caption, generate_image_for_sentence
-from ttv.audio_generation import generate_audio, get_audio_duration
-from ttv.video_generation import create_video_segment, create_still_video_with_fade
-from music_lib import MusicGenerator
-from ttv.story_processor import process_story
-from ttv.final_video_generation import assemble_final_video, concatenate_video_segments
 from utils import get_tempdir, setup_tmp_dir
 
 def get_config_path():
@@ -41,7 +35,7 @@ def initialize_conversation(args):
     try:
         tts = parse_tts_interface(args.tts_interface)
         if tts == None:
-            sys.exit("ERROR - couldn't load tts sinterface")
+            sys.exit("ERROR - couldn't load tts interface")
         Logger.print_debug("Text-to-Speech interface initialized successfully. TTS: ", args.tts_interface)
     except Exception as e:
         Logger.print_error(f"Failed to initialize Text-to-Speech interface: {e}")
@@ -128,7 +122,7 @@ def ai_turn(prompt, query_dispatcher, AI_TURN_INDICATOR, args, hotword_manager, 
         # Hotword detected, skip query dispatcher
         response = hotword_phrase
     else:
-        response = query_dispatcher.sendQuery(prompt)
+        response = query_dispatcher.send_query(prompt)
 
     if AI_TURN_INDICATOR:
         AI_TURN_INDICATOR.input_out()
@@ -193,7 +187,7 @@ def main():
             Logger.print_error("JSON input file is required for --text-to-video.")
             sys.exit(1)
         current_datetime = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        output_path = f"/tmp/GANGLIA/ttv/final_output_{current_datetime}.mp4"
+        output_path = f"{get_tempdir()}/ttv/final_output_{current_datetime}.mp4"
         tts_client = parse_tts_interface(args.tts_interface)
         text_to_video(config_path=args.ttv_config, skip_generation=args.skip_image_generation, output_path=output_path, tts=tts_client, query_dispatcher=query_dispatcher)
         sys.exit(0)  # Exit after processing the video generation to avoid entering the conversational loop

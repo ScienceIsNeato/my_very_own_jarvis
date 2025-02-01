@@ -1,41 +1,28 @@
-"""Integration tests for the Text-to-Video (TTV) pipeline.
+"""Integration tests for the TTV pipeline.
 
-This module contains integration tests that verify the end-to-end functionality
-of the TTV pipeline, including:
-- Audio/video generation and synchronization
-- Background music integration
-- Closing credits generation
-- Final video assembly and validation
-
-Each test case validates:
-1. Audio/video duration matches for each segment
-2. Final video path and existence
-3. Total video duration including credits
-4. Proper cleanup of temporary files
+This module contains tests that verify the end-to-end functionality of the
+text-to-video pipeline, including video generation, audio synchronization,
+and output validation.
 """
 
-import os
-import time
-import pytest
+# Standard library imports
 import logging
 import subprocess
-import json
 import sys
-import re
-from logger import Logger
+
+# Third-party imports
+import pytest
+
+# Local imports
+from ttv.ttv import pipeline
 from tests.integration.test_helpers import (
+    validate_segment_count,
     validate_audio_video_durations,
     validate_final_video_path,
     validate_total_duration,
-    get_audio_duration,
-    get_video_duration,
-    LOG_FFPROBE_COMMAND,
-    LOG_VIDEO_SEGMENT_CREATE,
-    LOG_FINAL_VIDEO_CREATED,
-    validate_closing_credits_duration,
-    wait_for_completion,
-    validate_segment_count
+    validate_closing_credits_duration
 )
+from utils import get_tempdir
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +66,7 @@ def test_generated_pipeline_execution():
     process.wait()
 
     # Save output to a file for debugging
-    with open("/tmp/GANGLIA/test_output_generated.log", "w") as f:
+    with open(get_tempdir() + "/test_output_generated.log", "w") as f:
         f.write(output)
 
     # Validate all segments are present
@@ -99,3 +86,18 @@ def test_generated_pipeline_execution():
     # Clean up
     # os.remove(final_video_path)  # Commented out to preserve files for debugging
     print("\n=== Test Complete ===\n")
+
+def test_ttv_pipeline_with_config(tmp_path):
+    """Test the TTV pipeline with a configuration file."""
+    config_path = tmp_path / "test_config.json"
+    with open(config_path, "w", encoding='utf-8') as f:
+        f.write('{"story": ["test story"]}')
+
+    ttv_pipeline = pipeline(config_path)
+    output = ttv_pipeline.run()
+
+    validate_segment_count(output, config_path)
+    total_duration = validate_audio_video_durations(output, config_path)
+    final_video_path = validate_final_video_path(output, config_path)
+    validate_total_duration(final_video_path, total_duration)
+    validate_closing_credits_duration(output, config_path)

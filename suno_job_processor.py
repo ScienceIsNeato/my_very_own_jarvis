@@ -4,6 +4,7 @@ import requests
 from datetime import datetime
 from logger import Logger
 from suno_request_handler import SunoRequestHandler
+from utils import get_tempdir
 
 class SunoJobProcessor:
     def wait_for_completion(self, job_id, with_lyrics):
@@ -12,7 +13,7 @@ class SunoJobProcessor:
         expected_duration = 30 if with_lyrics else 120
         start_time = datetime.now()
 
-        log_file_path = "/tmp/GANGLIA/analytics.log" # TODO: not sure what this file is for
+        log_file_path = get_tempdir() + "/analytics.log" # TODO: not sure what this file is for
 
         # Ensure the directory exists
         os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
@@ -31,7 +32,7 @@ class SunoJobProcessor:
             if status_response.get("status") == "complete":
                 complete = True
                 audio_url = status_response.get("audio_url")
-                # Log the completion time to /tmp/GANGLIA/analytics.log
+                # Log the completion time to get_tempdir()/analytics.log
                 completion_time = (datetime.now() - start_time).total_seconds()
                 with open(log_file_path, "a") as log_file:
                     log_file.write(f"Completion time for {music_type} (job_id: {job_id}): {completion_time} seconds\n")

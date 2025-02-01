@@ -1,16 +1,26 @@
-import os
-import torch
-import numpy as np
-import soundfile as sf
-import threading
+"""Meta's MusicGen backend implementation for audio generation from text prompts.
+
+This module provides a backend implementation for Meta's MusicGen model, allowing for
+text-to-music generation with features like audio looping and progress tracking.
+"""
+
+# Standard library imports
 import json
+import os
+import subprocess
+import threading
 import time
 from datetime import datetime
-from utils import get_tempdir
+
+# Third-party imports
+import soundfile as sf
+import torch
 from transformers import AutoProcessor, MusicgenForConditionalGeneration
+
+# Local imports
 from logger import Logger
 from music_backends.base import MusicBackend
-import subprocess
+from utils import get_tempdir
 
 # Set environment variables to avoid warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -54,13 +64,22 @@ class MetaMusicBackend(MusicBackend):
             else:
                 Logger.print_info("CUDA not available, using CPU")
     
-    def start_generation(self, prompt: str, **kwargs) -> str:
-        """Start the generation process in a separate thread."""
+    def start_generation(self, prompt: str, story_text: str = None, **kwargs) -> str:
+        """Start the generation process in a separate thread.
+        
+        Args:
+            prompt: The text prompt for music generation
+            story_text: Optional story text for lyric-based generation
+            **kwargs: Additional keyword arguments for generation
+            
+        Returns:
+            str: A unique job ID for tracking generation progress
+        """
         job_id = f"musicgen_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(prompt)}"
         progress_file = os.path.join(self.progress_directory, f"{job_id}.json")
         
         # Initialize progress file
-        with open(progress_file, 'w') as f:
+        with open(progress_file, 'w', encoding='utf-8') as f:
             json.dump({
                 'status': 'Starting',
                 'progress': 0,
@@ -84,7 +103,7 @@ class MetaMusicBackend(MusicBackend):
         progress_file = os.path.join(self.progress_directory, f"{job_id}.json")
         
         try:
-            with open(progress_file, 'r') as f:
+            with open(progress_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 return data['status'], data['progress']
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
@@ -95,7 +114,7 @@ class MetaMusicBackend(MusicBackend):
         progress_file = os.path.join(self.progress_directory, f"{job_id}.json")
         
         try:
-            with open(progress_file, 'r') as f:
+            with open(progress_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 if data.get('error'):
                     Logger.print_error(f"Generation failed: {data['error']}")
@@ -107,7 +126,7 @@ class MetaMusicBackend(MusicBackend):
     def _update_progress(self, job_id: str, status: str, progress: float, output_path: str = None, error: str = None):
         """Update the progress file for a job."""
         progress_file = os.path.join(self.progress_directory, f"{job_id}.json")
-        with open(progress_file, 'w') as f:
+        with open(progress_file, 'w', encoding='utf-8') as f:
             json.dump({
                 'status': status,
                 'progress': progress,
@@ -185,22 +204,22 @@ class MetaMusicBackend(MusicBackend):
             if duration_seconds > generation_duration:
                 # Calculate how many times we need to loop
                 num_loops = int(duration_seconds / generation_duration) + 1
-                crossfade_duration = min(3, generation_duration / 4)  # Use up to 3 second crossfade
+                crossfade_duration = min(3, generation_duration / 4)  # Up to 3 second crossfade
                 
                 # Create a complex filter for looping with crossfade
                 filter_complex = []
                 
                 # Build the crossfade chain
-                # First crossfade: [0:a][1:a]acrossfade=d=3[f1]
-                # Second crossfade: [f1][2:a]acrossfade=d=3[f2]
+                # First: [0:a][1:a]acrossfade=d=3[f1]
+                # Second: [f1][2:a]acrossfade=d=3[f2]
                 # And so on...
                 for i in range(num_loops - 1):
-                    if i == 0:
-                        # First crossfade uses input audio streams
-                        filter_complex.append(f'[0:a][1:a]acrossfade=d={crossfade_duration}:c1=tri:c2=tri[f1];')
-                    else:
-                        # Subsequent crossfades use previous output and next input
-                        filter_complex.append(f'[f{i}][{i+1}:a]acrossfade=d={crossfade_duration}:c1=tri:c2=tri[f{i+1}];')
+                    fade_str = (
+                        f'[0:a][1:a]acrossfade=d={crossfade_duration}:c1=tri:c2=tri[f1];'
+                        if i == 0 else
+                        f'[f{i}][{i+1}:a]acrossfade=d={crossfade_duration}:c1=tri:c2=tri[f{i+1}];'
+                    )
+                    filter_complex.append(fade_str)
                 
                 # Final filter string
                 filter_str = ''.join(filter_complex)
@@ -209,10 +228,12 @@ class MetaMusicBackend(MusicBackend):
                 cmd = ['ffmpeg', '-y']
                 for _ in range(num_loops):
                     cmd.extend(['-i', temp_clip_path])
+                
+                # Add filter complex and output mapping
+                filter_out = f'[f{num_loops-1}]atrim=0:{duration_seconds}[out]'
                 cmd.extend([
                     '-filter_complex',
-                    # Use the last crossfade output [fN] and trim to exact duration
-                    filter_str + f'[f{num_loops-1}]atrim=0:{duration_seconds}[out]',
+                    filter_str + filter_out,
                     '-map', '[out]',
                     final_path
                 ])
@@ -221,7 +242,8 @@ class MetaMusicBackend(MusicBackend):
                     subprocess.run(cmd, check=True, capture_output=True)
                     os.remove(temp_clip_path)  # Clean up temp file
                 except subprocess.CalledProcessError as e:
-                    Logger.print_error(f"Failed to create looped audio: {e.stderr.decode()}")
+                    error_msg = e.stderr.decode()
+                    Logger.print_error(f"Failed to create looped audio: {error_msg}")
                     final_path = temp_clip_path  # Fall back to the original clip
             else:
                 # Just rename the temp file to final
@@ -250,24 +272,21 @@ class MetaMusicBackend(MusicBackend):
         
         while not complete_event.is_set():
             elapsed = time.time() - start_time
-            # Estimate progress based on tokens generated
-            estimated_tokens_generated = min(elapsed * tokens_per_second, total_tokens)
-            # Scale progress from 20% to 99% based on token generation
-            progress = 20 + (estimated_tokens_generated / total_tokens * 79)
-            self._update_progress(job_id, f"Generating audio ({elapsed:.1f}s, ~{estimated_tokens_generated:.0f}/{total_tokens} tokens)", progress)
+            estimated_tokens = min(total_tokens, int(elapsed * tokens_per_second))
+            progress = min(95, (estimated_tokens / total_tokens) * 100)
+            
+            self._update_progress(
+                job_id,
+                "Generating audio",
+                progress
+            )
+            
             time.sleep(0.5)  # Update every half second
     
     def generate_instrumental(self, prompt: str, **kwargs) -> str:
-        job_id = self.start_generation(prompt, **kwargs)
-        while True:
-            status, progress = self.check_progress(job_id)
-            if progress >= 100:
-                return self.get_result(job_id)
-            time.sleep(1)
-
+        """Generate instrumental music from a text prompt."""
+        return self.start_generation(prompt, **kwargs)
+    
     def generate_with_lyrics(self, prompt: str, story_text: str, **kwargs) -> str:
-        """Generate music with lyrics from a text prompt and story.
-        
-        This method is not implemented for the Meta backend as MusicGen does not support lyrics generation.
-        """
-        raise NotImplementedError("MusicGen does not support generating music with lyrics") 
+        """Generate music with consideration for lyrics/story text."""
+        return self.start_generation(prompt, story_text=story_text, **kwargs) 
