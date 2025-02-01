@@ -48,11 +48,11 @@ class TestStoryProcessor(unittest.TestCase):
     """
 
     def setUp(self):
-        """Set up test environment by creating necessary directories."""
-        self.temp_dir = get_tempdir()
-        os.makedirs(os.path.join(self.temp_dir, "ttv"), exist_ok=True)
-        os.makedirs(os.path.join(self.temp_dir, "tts"), exist_ok=True)
+        """Set up test environment."""
+        self.temp_dir = get_tempdir()  # Use the base temp dir
         os.makedirs(os.path.join(self.temp_dir, "images"), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir, "tts"), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir, "ttv"), exist_ok=True)
 
     @patch('ttv.story_processor.generate_movie_poster')
     @patch('ttv.story_processor.generate_image')
@@ -116,6 +116,7 @@ class TestStoryProcessor(unittest.TestCase):
                 mock_tts,
                 test_config.style,
                 test_config.story,
+                output_dir=self.temp_dir,  # Use the base temp dir
                 skip_generation=False,
                 query_dispatcher=mock_query_dispatcher,
                 story_title=test_config.title,
@@ -147,7 +148,8 @@ class TestStoryProcessor(unittest.TestCase):
                 }),
                 test_config.style,
                 test_config.title,
-                mock_query_dispatcher
+                mock_query_dispatcher,
+                output_dir=self.temp_dir  # Use the base temp dir
             )
 
             # Verify that images were generated for each sentence
@@ -164,7 +166,8 @@ class TestStoryProcessor(unittest.TestCase):
                 2,  # total_images
                 mock_query_dispatcher,
                 preloaded_images_dir=None,
-                thread_id="[Thread 1/2]"
+                thread_id="[Thread 1/2]",
+                output_dir=self.temp_dir  # Add output_dir parameter
             )
             mock_generate_image.assert_any_call(
                 "Test story line 2",
@@ -174,7 +177,8 @@ class TestStoryProcessor(unittest.TestCase):
                 2,  # total_images
                 mock_query_dispatcher,
                 preloaded_images_dir=None,
-                thread_id="[Thread 2/2]"
+                thread_id="[Thread 2/2]",
+                output_dir=self.temp_dir  # Add output_dir parameter
             )
 
             # Verify that video segments were created with correct parameters
@@ -242,6 +246,7 @@ class TestStoryProcessor(unittest.TestCase):
                 mock_failing_tts,
                 test_config.style,
                 test_config.story,
+                output_dir=self.temp_dir,
                 skip_generation=False,
                 query_dispatcher=mock_query_dispatcher,
                 story_title=test_config.title,

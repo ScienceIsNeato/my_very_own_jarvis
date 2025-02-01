@@ -220,10 +220,16 @@ class GoogleTTS(TextToSpeech):
     Text-to-Speech API, with support for various voices and audio configurations.
     """
 
+    # Class-level lock for gRPC client creation
+    _client_lock = threading.Lock()
+
     def __init__(self):
         """Initialize the Google TTS client."""
         super().__init__()
         Logger.print_info("Initializing GoogleTTS...")
+        # Create a single shared client instance with thread safety
+        with self._client_lock:
+            self._client = tts.TextToSpeechClient()
 
     def _convert_text_to_speech_impl(self, text: str, voice_id="en-US-Casual-K", 
                                    thread_id: str = None):
@@ -238,9 +244,6 @@ class GoogleTTS(TextToSpeech):
             tuple: (success: bool, file_path: str) where file_path is the path
                   to the generated audio file if successful
         """
-        # Initialize the Text-to-Speech client
-        client = tts.TextToSpeechClient()
-
         # Set up the text input and voice settings
         synthesis_input = tts.SynthesisInput(text=text)
         voice = tts.VoiceSelectionParams(
@@ -256,8 +259,8 @@ class GoogleTTS(TextToSpeech):
         thread_prefix = f"{thread_id} " if thread_id else ""
         Logger.print_debug(f"{thread_prefix}Converting text to speech...")
 
-        # Perform the text-to-speech request
-        response = client.synthesize_speech(
+        # Use the shared client instance
+        response = self._client.synthesize_speech(
             input=synthesis_input,
             voice=voice,
             audio_config=audio_config
@@ -290,7 +293,7 @@ class GoogleTTS(TextToSpeech):
 
     def convert_text_to_speech(self, text: str, voice_id="en-US-Casual-K", 
                              thread_id: str = None):
-        """Convert text to speech with retry logic.
+        """Convert text to speech using the specified voice with retry logic.
         
         Args:
             text: The text to convert to speech
@@ -301,6 +304,8 @@ class GoogleTTS(TextToSpeech):
             tuple: (success: bool, file_path: str) where file_path is the path
                   to the generated audio file if successful, None otherwise
         """
+        thread_prefix = f"{thread_id} " if thread_id else ""
+        
         try:
             return exponential_backoff(
                 lambda: self._convert_text_to_speech_impl(text, voice_id, thread_id),
@@ -309,7 +314,6 @@ class GoogleTTS(TextToSpeech):
                 thread_id=thread_id
             )
         except (tts.TextToSpeechError, IOError) as e:
-            thread_prefix = f"{thread_id} " if thread_id else ""
             Logger.print_error(
                 f"{thread_prefix}Error converting text to speech: {e}"
             )

@@ -3,10 +3,15 @@ from .story_processor import process_story
 from .final_video_generation import assemble_final_video
 from tts import GoogleTTS
 from logger import Logger
+from utils import get_timestamped_ttv_dir
+import os
 
-def text_to_video(config_path, skip_generation=False, output_path=None, tts=None, query_dispatcher=None):
+def text_to_video(config_path, skip_generation=False, tts=None, query_dispatcher=None):
     """Convert text to video using the provided configuration."""
     try:
+        # Create timestamped directory for this run
+        ttv_dir = get_timestamped_ttv_dir()
+        
         # Load configuration
         config = load_input(config_path)
         if not config:
@@ -28,7 +33,8 @@ def text_to_video(config_path, skip_generation=False, output_path=None, tts=None
             skip_generation=skip_generation,
             query_dispatcher=query_dispatcher,
             story_title=config.title,
-            config=config
+            config=config,
+            output_dir=ttv_dir
         )
 
         # Check for errors (i.e. no video segments)
@@ -44,10 +50,10 @@ def text_to_video(config_path, skip_generation=False, output_path=None, tts=None
         # Assemble final video
         return assemble_final_video(
             video_segments=video_segments,
+            output_dir=ttv_dir,
             music_path=background_music_path,
             song_with_lyrics_path=closing_credits_path,
             movie_poster_path=movie_poster_path,
-            output_path=output_path,
             config=config,
             closing_credits_lyrics=closing_credits_lyrics
         )

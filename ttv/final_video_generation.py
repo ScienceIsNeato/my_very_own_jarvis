@@ -12,7 +12,7 @@ import os
 import subprocess
 import tempfile
 from datetime import datetime
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from logger import Logger
 from utils import get_tempdir
@@ -23,9 +23,11 @@ from .ffmpeg_wrapper import run_ffmpeg_command
 from .log_messages import (
     LOG_CLOSING_CREDITS_DURATION,
     LOG_BACKGROUND_MUSIC_SUCCESS,
-    LOG_BACKGROUND_MUSIC_FAILURE
+    LOG_BACKGROUND_MUSIC_FAILURE,
+    LOG_FINAL_VIDEO_PATH
 )
-from .video_generation import append_video_segments, create_video_segment
+from .video_generation import append_video_segments, create_video_segment, subprocess_lock
+from .ffmpeg_constants import SLIDESHOW_VIDEO_ARGS, AUDIO_ENCODING_ARGS, VIDEO_ENCODING_ARGS, AUDIO_SAMPLE_RATE
 
 def run_ffmpeg_command(cmd: List[str]) -> subprocess.CompletedProcess:
     """Run an FFmpeg command and handle errors.
@@ -41,12 +43,14 @@ def run_ffmpeg_command(cmd: List[str]) -> subprocess.CompletedProcess:
         OSError: If there's a system-level error
     """
     try:
-        result = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True
-        )
+        with subprocess_lock:  # Protect subprocess.run from gRPC fork issues
+            Logger.print_info(f"Running FFmpeg command: {' '.join(cmd)}")
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True
+            )
         return result
     except (subprocess.CalledProcessError, OSError) as e:
         Logger.print_error(f"FFmpeg command failed: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
@@ -83,40 +87,50 @@ def _get_timestamped_filename(base_name: str) -> str:
 
 def concatenate_video_segments(
     video_segments: List[str],
-    output_path: str
+    output_dir: str,
+    force_reencode: bool = False
 ) -> Optional[str]:
     """Concatenate multiple video segments into a single video.
     
     Args:
         video_segments: List of video file paths to concatenate
-        output_path: Path to save the concatenated video
+        output_dir: Directory for output files
+        force_reencode: Whether to force re-encoding of streams (needed for closing credits)
         
     Returns:
         Optional[str]: Path to output video if successful, None otherwise
     """
-    list_file = None
     try:
         if not video_segments:
             Logger.print_error("No video segments provided")
             return None
             
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Create output path
+        output_path = os.path.join(output_dir, "main_video.mp4")
+            
         # Create temporary file list
-        temp_dir = get_tempdir()
-        list_file = os.path.join(temp_dir, "segments.txt")
+        concat_list_path = os.path.join(output_dir, "concat_list.txt")
         
-        with open(list_file, "w", encoding="utf-8") as f:
+        with open(concat_list_path, "w", encoding="utf-8") as f:
             for segment in video_segments:
                 f.write(f"file '{os.path.abspath(segment)}'\n")
                 
         # Run FFmpeg command to concatenate videos
-        cmd = [
+        base_cmd = [
             "ffmpeg", "-y",
             "-f", "concat",
             "-safe", "0",
-            "-i", list_file,
-            "-c", "copy",
-            output_path
+            "-i", concat_list_path
         ]
+
+        if force_reencode:
+            # Re-encode both video and audio streams
+            cmd = base_cmd + VIDEO_ENCODING_ARGS + AUDIO_ENCODING_ARGS + [output_path]
+        else:
+            # Just copy streams without re-encoding
+            cmd = base_cmd + ["-c", "copy", output_path]
         
         result = run_ffmpeg_command(cmd)
         if not result:
@@ -131,15 +145,15 @@ def concatenate_video_segments(
     finally:
         # Clean up temporary file
         try:
-            if list_file and os.path.exists(list_file):
-                os.remove(list_file)
+            if os.path.exists(concat_list_path):
+                os.remove(concat_list_path)
         except OSError as e:
             Logger.print_error(f"Error cleaning up list file: {str(e)}")
 
 def add_background_music(
     video_path: str,
     music_path: str,
-    output_path: str,
+    output_dir: str,
     music_volume: float = 0.3
 ) -> Optional[str]:
     """Add background music to a video.
@@ -147,37 +161,41 @@ def add_background_music(
     Args:
         video_path: Path to input video
         music_path: Path to music file
-        output_path: Path to save the output video
+        output_dir: Directory for output files
         music_volume: Volume level for music (default: 0.3)
         
     Returns:
         Optional[str]: Path to output video if successful, None otherwise
     """
     try:
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Create output path
+        output_path = os.path.join(output_dir, "main_video_with_music.mp4")
+
         # Create FFmpeg filter complex with careful audio format normalization
         filter_complex = (
             # First upsample mono audio to 48kHz, then convert to stereo using pan
-            "[0:a]aresample=48000,aformat=sample_fmts=fltp[mono];"
+            f"[0:a]aresample={AUDIO_SAMPLE_RATE},aformat=sample_fmts=fltp[mono];"
             "[mono]pan=stereo|c0=c0|c1=c0[v];"
             # Process background music
-            f"[1:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume={music_volume}[m];"
+            f"[1:a]aresample={AUDIO_SAMPLE_RATE},aformat=sample_fmts=fltp:channel_layouts=stereo,volume={music_volume}[m];"
             # Mix the streams
             "[v][m]amix=inputs=2:duration=first:dropout_transition=2[aout]"
         )
         
         # Run FFmpeg command
-        cmd = [
+        base_cmd = [
             "ffmpeg", "-y",
             "-i", video_path,
             "-i", music_path,
             "-filter_complex", filter_complex,
             "-map", "0:v",
             "-map", "[aout]",
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            output_path
+            "-c:v", "copy"
         ]
+        
+        cmd = base_cmd + AUDIO_ENCODING_ARGS + [output_path]
         
         try:
             run_ffmpeg_command(cmd)
@@ -191,49 +209,53 @@ def add_background_music(
         Logger.print_error(f"Error adding background music: {str(e)}")
         return None
 
-def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=None, movie_poster_path=None, output_path=None, config=None, closing_credits_lyrics=None):
-    """
-    Assembles the final video from given segments, adds background music, and generates closing credits.
+def assemble_final_video(
+    video_segments: List[str],
+    output_dir: str,
+    music_path: Optional[str] = None,
+    song_with_lyrics_path: Optional[str] = None,
+    movie_poster_path: Optional[str] = None,
+    config: Optional[Any] = None,
+    closing_credits_lyrics: Optional[str] = None
+) -> Optional[str]:
+    """Assembles the final video from given segments, adds background music, and generates closing credits.
 
     Args:
-        video_segments (list): List of paths to video segments.
-        music_path (str, optional): Path to the background music file. If None, no background music is added.
-        song_with_lyrics_path (str, optional): Path to the song with lyrics file for closing credits. If None, no closing credits are added.
-        movie_poster_path (str, optional): Path to the movie poster image for closing credits. Required if song_with_lyrics_path is provided.
-        output_path (str, optional): Path to save the final output video.
-        config (TTVConfig, optional): Configuration object containing caption style and other settings.
-        closing_credits_lyrics (str, optional): The lyrics to use for word alignment in closing credits.
+        video_segments: List of paths to video segments
+        output_dir: Directory for output files
+        music_path: Optional path to the background music file
+        song_with_lyrics_path: Optional path to the song with lyrics file for closing credits
+        movie_poster_path: Optional path to the movie poster image for closing credits
+        config: Optional configuration object
+        closing_credits_lyrics: Optional lyrics text for closing credits
 
     Returns:
-        str: Path to the most recent successfully generated video.
+        str: Path to the final video.
     """
     main_video_path = None
     main_video_with_background_music_path = None
     final_output_path = None
 
     try:
-        temp_dir = get_tempdir()
-        if not output_path:
-            output_path = os.path.join(temp_dir, "ttv", _get_timestamped_filename("final_output"))
+        os.makedirs(output_dir, exist_ok=True)
 
-        main_video_path = os.path.join(temp_dir, "ttv", _get_timestamped_filename("main_video"))
+        # Create initial concatenated video
         Logger.print_info("Concatenating video segments...")
-        main_video_path = concatenate_video_segments(video_segments, main_video_path)
-        final_output_path = main_video_path  # Update the final output path after this step
+        main_video_path = concatenate_video_segments(video_segments, output_dir, force_reencode=True)
+        final_output_path = main_video_path
 
         # Handle background music
         if music_path and os.path.exists(music_path):
             Logger.print_info("Adding background music to main video...")
-            # Create a new path for the video with background music
-            main_video_with_music_path = os.path.join(temp_dir, "ttv", _get_timestamped_filename("main_video_with_music"))
             main_video_with_background_music_path = add_background_music(
                 video_path=main_video_path,
                 music_path=music_path,
-                output_path=main_video_with_music_path
+                output_dir=output_dir
             )
             if main_video_with_background_music_path:
                 final_output_path = main_video_with_background_music_path
                 Logger.print_info(f"Successfully added background music from {music_path}")
+                Logger.print_info(f"Main video with music path: {main_video_with_background_music_path}")
             else:
                 Logger.print_warning("Failed to add background music, using video without music")
                 main_video_with_background_music_path = main_video_path
@@ -244,12 +266,21 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
         if song_with_lyrics_path and os.path.exists(song_with_lyrics_path):
             Logger.print_info("Generating closing credits...")
             if movie_poster_path and os.path.exists(movie_poster_path):
-                closing_credits = generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config, closing_credits_lyrics)
+                closing_credits = generate_closing_credits(
+                    movie_poster_path,
+                    song_with_lyrics_path,
+                    output_dir,
+                    config,
+                    closing_credits_lyrics
+                )
                 if closing_credits:
-                    # now all we have to do is stitch together the main content and the credits
-                    fully_assembled_movie_path = append_video_segments([main_video_with_background_music_path, closing_credits], output_path)
-                    if fully_assembled_movie_path:
-                        final_output_path = fully_assembled_movie_path
+                    # Stitch together the main content and the credits
+                    final_output_path = append_video_segments(
+                        [main_video_with_background_music_path, closing_credits],
+                        output_dir=output_dir,
+                        force_reencode=True  # Force re-encoding to fix audio playback
+                    )
+                    if final_output_path:
                         Logger.print_info(f"Successfully added closing credits from {song_with_lyrics_path}")
                     else:
                         Logger.print_warning("Failed to append closing credits, using video without credits")
@@ -263,28 +294,46 @@ def assemble_final_video(video_segments, music_path=None, song_with_lyrics_path=
         else:
             final_output_path = main_video_with_background_music_path
 
+        Logger.print_info(LOG_FINAL_VIDEO_PATH.format(final_output_path))
         play_video(final_output_path)
         return final_output_path
 
     except (OSError, subprocess.SubprocessError) as e:
         Logger.print_error(f"Error creating final video with music: {e}")
         if final_output_path:
-            Logger.print_info(f"Final video created at: output_path={final_output_path}")
+            Logger.print_info(LOG_FINAL_VIDEO_PATH.format(final_output_path))
             return final_output_path
         elif main_video_path:
-            Logger.print_info(f"Final video created at: output_path={main_video_path}")
+            Logger.print_info(LOG_FINAL_VIDEO_PATH.format(main_video_path))
             return main_video_path
         else:
-            fallback_path = os.path.join(get_tempdir(), "ttv", _get_timestamped_filename("fallback_video"))
-            Logger.print_info(f"Final video created at: output_path={fallback_path}")
+            fallback_path = os.path.join(output_dir, "fallback_video.mp4")
+            Logger.print_info(LOG_FINAL_VIDEO_PATH.format(fallback_path))
             return fallback_path
 
-def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_path, config=None, lyrics=None):
-    """Generate closing credits video with dynamic captions for song lyrics."""
-    # Create initial video with poster and music
-    temp_dir = get_tempdir()
-    initial_credits_video_path = os.path.join(temp_dir, "initial_credits.mp4")
-    closing_credits_video_path = os.path.join(temp_dir, "closing_credits.mp4")
+def generate_closing_credits(
+    movie_poster_path: str,
+    song_with_lyrics_path: str,
+    output_dir: str,
+    config: Optional[Any] = None,
+    lyrics: Optional[str] = None
+) -> Optional[str]:
+    """Generate closing credits video with dynamic captions for song lyrics.
+    
+    Args:
+        movie_poster_path: Path to the movie poster image
+        song_with_lyrics_path: Path to the song with lyrics file
+        output_dir: Directory for output files
+        config: Optional configuration object
+        lyrics: Optional lyrics text
+        
+    Returns:
+        str: Path to the closing credits video if successful, None otherwise
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    initial_credits_video_path = os.path.join(output_dir, "initial_credits.mp4")
+    closing_credits_video_path = os.path.join(output_dir, "closing_credits.mp4")
 
     try:
         # Get video duration from audio file
@@ -294,32 +343,29 @@ def generate_closing_credits(movie_poster_path, song_with_lyrics_path, output_pa
             "-of", "default=noprint_wrappers=1:nokey=1",
             song_with_lyrics_path
         ]
-        result = subprocess.run(
-            ffprobe_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True
-        )
+        with subprocess_lock:  # Protect subprocess.run from gRPC fork issues
+            result = subprocess.run(
+                ffprobe_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True
+            )
         duration = float(result.stdout.decode('utf-8').strip())
         Logger.print_info(f"{LOG_CLOSING_CREDITS_DURATION}: {duration}s")
 
         # Create video from poster image with duration matching audio
-        ffmpeg_cmd = [
+        base_cmd = [
             "ffmpeg", "-y",
             "-loop", "1",
             "-i", movie_poster_path,
-            "-i", song_with_lyrics_path,
-            "-c:v", "libx264",
-            "-tune", "stillimage",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-pix_fmt", "yuv420p",
-            "-shortest",
-            initial_credits_video_path
+            "-i", song_with_lyrics_path
         ]
+        
+        # Add encoding arguments from constants
+        cmd = base_cmd + SLIDESHOW_VIDEO_ARGS + AUDIO_ENCODING_ARGS + ["-shortest", initial_credits_video_path]
 
         try:
-            run_ffmpeg_command(ffmpeg_cmd)
+            run_ffmpeg_command(cmd)
         except (subprocess.CalledProcessError, OSError):
             Logger.print_error("Failed to generate initial closing credits video")
             return None

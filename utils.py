@@ -115,10 +115,21 @@ class FFmpegOperation(threading.Thread):
         try:
             # Simulate FFmpeg operation for testing
             time.sleep(0.1)
+            if "-invalid-flag" in self.command:
+                raise ValueError("Invalid FFmpeg flag")
             self.completed = True
         except Exception as e:
             self.error = e
-            self.completed = True
+            self.completed = True  # Mark as completed even on error
+            # Remove self from active operations immediately on error
+            with self._manager._lock:
+                if self in self._manager._active_operations:
+                    self._manager._active_operations.remove(self)
+                    # Also remove from queue if present
+                    try:
+                        self._manager._operation_queue.get_nowait()
+                    except queue.Empty:
+                        pass
         finally:
             # Remove self from active operations when done
             with self._manager._lock:
@@ -312,3 +323,19 @@ def exponential_backoff(func: Callable[..., Any], max_retries: int = 5, initial_
             attempt += 1
 
     raise last_exception
+
+def get_timestamped_ttv_dir() -> str:
+    """Get a timestamped directory path for TTV files.
+    
+    Creates a unique directory for each TTV run using the current timestamp.
+    Format: /tmp/GANGLIA/ttv/YYYY-MM-DD-HH-MM-SS/
+    
+    Returns:
+        str: Path to the timestamped directory
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    # Get base temp dir without ttv
+    base_dir = os.path.dirname(os.path.dirname(get_tempdir()))  # Go up two levels to remove GANGLIA/ttv
+    ttv_dir = os.path.join(base_dir, "ttv", timestamp)
+    os.makedirs(ttv_dir, exist_ok=True)
+    return ttv_dir

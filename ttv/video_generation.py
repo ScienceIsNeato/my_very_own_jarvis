@@ -5,6 +5,11 @@ from utils import get_tempdir, ffmpeg_thread_manager
 from ttv.log_messages import LOG_VIDEO_SEGMENT_CREATE
 import os
 import subprocess
+import threading
+from typing import List, Optional
+
+# Lock for subprocess operations to avoid gRPC fork handler issues
+subprocess_lock = threading.Lock()
 
 def create_video_segment(image_path, audio_path, output_path, thread_id=None):
     """Create a video segment from an image and audio file.
@@ -41,11 +46,12 @@ def create_video_segment(image_path, audio_path, output_path, thread_id=None):
                 "-shortest",
                 output_path
             ]
-            result = subprocess.run(
-                cmd,
-                check=True,
-                capture_output=True
-            )
+            with subprocess_lock:  # Protect subprocess.run from gRPC fork issues
+                result = subprocess.run(
+                    cmd,
+                    check=True,
+                    capture_output=True
+                )
 
         if result.returncode != 0:
             Logger.print_error(f"{thread_prefix}Failed to create video segment: {result.stderr.decode()}")
@@ -131,55 +137,39 @@ def create_final_video(video_segments, output_path):
 
     return output_path
 
-def append_video_segments(video_segments, output_path, thread_id=None):
+def append_video_segments(
+    video_segments: List[str],
+    thread_id: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    force_reencode: bool = False
+) -> Optional[str]:
     """Append multiple video segments together.
     
     Args:
         video_segments: List of video segment paths
-        output_path: Path to save the output video
         thread_id: Optional thread ID for logging
+        output_dir: Optional directory for output files
+        force_reencode: Whether to force re-encoding of streams (needed for closing credits)
         
     Returns:
         str: Path to the output video if successful, None otherwise
     """
     thread_prefix = f"{thread_id} " if thread_id else ""
     try:
-        # Re-encode segments with consistent parameters
-        reencoded_segments = []
-        for i, segment in enumerate(video_segments):
-            reencoded_segment = segment.replace(".mp4", "_reencoded.mp4")
-            with ffmpeg_thread_manager:
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-i", segment,
-                    "-vf", "scale=1024:1024",
-                    "-c:v", "libx264",
-                    "-c:a", "aac",
-                    "-ar", "48000",
-                    "-ac", "2",
-                    reencoded_segment
-                ]
-                result = subprocess.run(
-                    cmd,
-                    check=True,
-                    capture_output=True
-                )
+        # Use provided output directory or create one
+        if not output_dir:
+            output_dir = os.path.join(get_tempdir(), "ttv")
+        os.makedirs(output_dir, exist_ok=True)
 
-            if result.returncode != 0:
-                Logger.print_error(f"{thread_prefix}Failed to re-encode segment {i}: {result.stderr.decode()}")
-                continue
+        # Create output path
+        output_path = os.path.join(output_dir, "concatenated_video.mp4")
 
-            reencoded_segments.append(reencoded_segment)
-
-        if not reencoded_segments:
-            Logger.print_error(f"{thread_prefix}No segments were successfully re-encoded")
-            return None
-
-        # Create concat file
-        concat_list_path = os.path.join(get_tempdir(), "ttv", "concat_list.txt")
+        # Create concat file with absolute paths
+        concat_list_path = os.path.join(output_dir, "concat_list.txt")
         with open(concat_list_path, "w") as f:
-            for segment in reencoded_segments:
-                f.write(f"file '{segment}'\n")
+            for segment in video_segments:
+                abs_path = os.path.abspath(segment)
+                f.write(f"file '{abs_path}'\n")
 
         # Concatenate segments using thread manager
         with ffmpeg_thread_manager:
@@ -187,19 +177,28 @@ def append_video_segments(video_segments, output_path, thread_id=None):
                 "ffmpeg", "-y",
                 "-f", "concat",
                 "-safe", "0",
-                "-i", concat_list_path,
-                "-c:v", "libx264",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-ar", "48000",
-                "-ac", "2",
-                output_path
+                "-i", concat_list_path
             ]
-            result = subprocess.run(
-                cmd,
-                check=True,
-                capture_output=True
-            )
+            
+            if force_reencode:
+                # Re-encode both video and audio streams
+                cmd.extend([
+                    "-c:v", "libx264",  # Re-encode video
+                    "-c:a", "aac",      # Re-encode audio
+                    "-b:a", "192k"      # Set audio bitrate
+                ])
+            else:
+                # Just copy streams without re-encoding
+                cmd.extend(["-c", "copy"])
+                
+            cmd.append(output_path)
+            
+            with subprocess_lock:  # Protect subprocess.run from gRPC fork issues
+                result = subprocess.run(
+                    cmd,
+                    check=True,
+                    capture_output=True
+                )
 
         if result.returncode != 0:
             Logger.print_error(f"{thread_prefix}Failed to concatenate segments: {result.stderr.decode()}")
@@ -216,9 +215,6 @@ def append_video_segments(video_segments, output_path, thread_id=None):
         try:
             if os.path.exists(concat_list_path):
                 os.remove(concat_list_path)
-            for segment in reencoded_segments:
-                if os.path.exists(segment):
-                    os.remove(segment)
         except (OSError, UnboundLocalError):
             pass
 

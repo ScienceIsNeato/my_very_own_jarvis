@@ -31,7 +31,8 @@ def generate_image(
     total_images: int,
     query_dispatcher: ChatGPTQueryDispatcher,
     preloaded_images_dir: Optional[str] = None,
-    thread_id: Optional[str] = None
+    thread_id: Optional[str] = None,
+    output_dir: Optional[str] = None
 ) -> Tuple[Optional[str], bool]:
     """Generate an image for a given sentence.
     
@@ -44,6 +45,7 @@ def generate_image(
         query_dispatcher: Query dispatcher for API calls
         preloaded_images_dir: Optional directory with pre-generated images
         thread_id: Optional thread ID for logging
+        output_dir: Optional output directory for generated files
         
     Returns:
         Tuple[Optional[str], bool]: Path to generated image and success flag
@@ -54,6 +56,9 @@ def generate_image(
         f"using style '{style}'"
     )
     
+    # Use provided output_dir or fall back to get_tempdir()
+    base_dir = output_dir if output_dir else get_tempdir()
+    
     # Check for preloaded image
     if preloaded_images_dir:
         preloaded_path = os.path.join(
@@ -62,8 +67,8 @@ def generate_image(
         )
         if os.path.exists(preloaded_path):
             filename = os.path.join(
-                get_tempdir(),
-                "ttv",
+                base_dir,
+                "images",
                 f"image_{image_index}.png"
             )
             os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -98,12 +103,13 @@ def generate_image(
             return None, False
             
         # Generate output filename
-        temp_dir = get_tempdir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(
-            temp_dir,
+            base_dir,
+            "images",
             f"image_{image_index}_{timestamp}.png"
         )
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         
         # Generate image with DALL-E
         prompt = (
@@ -128,20 +134,21 @@ def generate_image(
         Logger.print_error(
             f"{thread_prefix}Failed to generate image {image_index}"
         )
-        blank_image = generate_blank_image(sentence, image_index, thread_id=thread_id)
+        blank_image = generate_blank_image(sentence, image_index, thread_id=thread_id, output_dir=output_dir)
         return blank_image, False
             
     except (OSError, IOError) as e:
         Logger.print_error(
             f"{thread_prefix}Error generating image {image_index}: {str(e)}"
         )
-        blank_image = generate_blank_image(sentence, image_index, thread_id=thread_id)
+        blank_image = generate_blank_image(sentence, image_index, thread_id=thread_id, output_dir=output_dir)
         return blank_image, False
 
 def generate_blank_image(
     text: str,
     image_index: int,
-    thread_id: Optional[str] = None
+    thread_id: Optional[str] = None,
+    output_dir: Optional[str] = None
 ) -> Optional[str]:
     """Generate a blank image with text overlay.
     
@@ -149,6 +156,7 @@ def generate_blank_image(
         text: Text to overlay on the image
         image_index: Index of the image in sequence
         thread_id: Optional thread ID for logging
+        output_dir: Optional output directory for generated files
         
     Returns:
         Optional[str]: Path to generated image if successful, None otherwise
@@ -186,10 +194,11 @@ def generate_blank_image(
         draw.text((x, y), wrapped_text, font=font, fill=text_color)
         
         # Save image
-        temp_dir = get_tempdir()
+        base_dir = output_dir if output_dir else get_tempdir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(
-            temp_dir,
+            base_dir,
+            "images",
             f"blank_image_{image_index}_{timestamp}.png"
         )
         

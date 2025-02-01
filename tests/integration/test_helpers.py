@@ -93,7 +93,7 @@ def validate_segment_count(output, config_path):
 def validate_audio_video_durations(output, config_path):
     """Validate that each audio file matches the corresponding video segment duration."""
     print("\n=== Validating Audio/Video Segment Durations ===")
-    total_video_duration = 0.0
+    main_video_duration = 0.0
     discrepancies = []
     segments_found = []
 
@@ -104,18 +104,20 @@ def validate_audio_video_durations(output, config_path):
     except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
         raise AssertionError(f"Failed to read story from config: {e}")
 
+    # First validate individual segments match their audio
     for segment_num in range(expected_segments):
-        video_file = f"{get_tempdir()}/ttv/segment_{segment_num}_initial.mp4"
-        
+        # Try final segment first, fall back to initial if not found
+        video_file = f"{get_tempdir()}/ttv/segment_{segment_num}.mp4"
         if not os.path.exists(video_file):
-            continue
+            video_file = f"{get_tempdir()}/ttv/segment_{segment_num}_initial.mp4"
+            if not os.path.exists(video_file):
+                continue
+            Logger.print_warning(f"Using initial segment for {segment_num} - final segment not found")
 
         segments_found.append(segment_num)
         video_duration = get_video_duration(video_file)
         if video_duration == 0.0:
             continue
-            
-        total_video_duration += video_duration
 
         try:
             cmd = [
@@ -141,6 +143,7 @@ def validate_audio_video_durations(output, config_path):
                     f"audio stream ({audio_duration:.2f}s) vs "
                     f"video container ({video_duration:.2f}s)"
                 )
+                main_video_duration += video_duration  # Add to total duration
                 
         except (subprocess.CalledProcessError, ValueError) as e:
             Logger.print_error(f"Failed to get audio duration for segment {segment_num}: {e}")
@@ -164,14 +167,21 @@ def validate_audio_video_durations(output, config_path):
 
     segments_found.sort()
     print(f"\nFound segments: {segments_found}")
-    print(f"✓ Total segment duration: {total_video_duration:.2f}s")
 
     if len(segments_found) != expected_segments:
         raise AssertionError(
             f"Expected {expected_segments} segments but found {len(segments_found)}"
         )
 
-    return total_video_duration
+    # Get duration from the main video with background music
+    main_video_path = os.path.join(get_tempdir(), "ttv", "main_video_with_background_music.mp4")
+    if os.path.exists(main_video_path):
+        main_video_duration = get_video_duration(main_video_path)
+    else:
+        Logger.print_warning("Main video with background music not found, using sum of segment durations")
+
+    print(f"✓ Main video duration (pre-credits): {main_video_duration:.2f}s")
+    return main_video_duration
 
 def extract_final_video_path(output):
     """Extract the final video path from the logs."""
@@ -212,19 +222,20 @@ def validate_final_video_path(output, config_path=None):
     
     return final_video_path
 
-def validate_total_duration(final_video_path, total_video_duration):
-    """Validate that the total video duration matches the expected duration."""
-    print("\n=== Validating Total Video Duration ===")
+def validate_total_duration(final_video_path, main_video_duration):
+    """Validate that the final video duration matches main video + credits."""
+    print("\n=== Validating Final Video Duration ===")
     final_duration = get_video_duration(final_video_path)
+    expected_duration = main_video_duration  # Credits duration is added by caller
     
-    if abs(final_duration - total_video_duration) >= 1.0:
+    if abs(final_duration - expected_duration) >= 1.0:
         raise AssertionError(
-            f"Final video duration ({final_duration}s) does not match expected "
-            f"duration ({total_video_duration}s)."
+            f"Final video duration ({final_duration:.2f}s) does not match expected "
+            f"duration of main video + credits ({expected_duration:.2f}s)."
         )
     print(
         f"✓ Final duration ({final_duration:.2f}s) matches expected duration "
-        f"({total_video_duration:.2f}s)"
+        f"({expected_duration:.2f}s)"
     )
 
 def validate_closing_credits_duration(output, config_path):

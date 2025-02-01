@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, Tuple, Union, Any
 import requests
 import tempfile
 
-def process_sentence(i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher, config):
+def process_sentence(i, sentence, context, style, total_images, tts, skip_generation, query_dispatcher, config, output_dir):
     """Process a single sentence into a video segment with audio and captions.
 
     This function handles the complete pipeline for converting a single sentence into a video segment:
@@ -45,6 +45,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
         skip_generation (bool): If True, generates blank images instead of using DALL-E
         query_dispatcher (QueryDispatcher): Interface for making API calls
         config (Config): Configuration object containing settings for image/caption generation
+        output_dir (str): Directory for output files (should be timestamped)
 
     Returns:
         tuple: A tuple containing (video_path, index) where:
@@ -62,10 +63,9 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
     Logger.print_info(f"{thread_id} Processing sentence: {sentence}")
 
     # Create necessary directories
-    temp_dir = get_tempdir()
-    os.makedirs(os.path.join(temp_dir, "ttv"), exist_ok=True)
-    os.makedirs(os.path.join(temp_dir, "tts"), exist_ok=True)
-    os.makedirs(os.path.join(temp_dir, "images"), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, "tts"), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, "images"), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, "ttv"), exist_ok=True)
 
     # Get preloaded images directory from config
     preloaded_images_dir = getattr(config, 'preloaded_images_dir', None)
@@ -73,7 +73,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
     # Generate image for this sentence
     filename = None
     if skip_generation:
-        filename = generate_blank_image(sentence, i, thread_id=thread_id)
+        filename = generate_blank_image(sentence, i, thread_id=thread_id, output_dir=output_dir)
     else:
         filename, success = generate_image(
             sentence,
@@ -83,7 +83,8 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
             total_images,
             query_dispatcher,
             preloaded_images_dir=preloaded_images_dir,
-            thread_id=thread_id
+            thread_id=thread_id,
+            output_dir=output_dir
         )
         if not success:
             return None, i
@@ -99,8 +100,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
 
     # Create initial video segment using ffmpeg_thread_manager
     Logger.print_info(f"{thread_id} Creating initial video segment.")
-    temp_dir = get_tempdir()
-    initial_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}_initial.mp4")
+    initial_segment_path = os.path.join(output_dir, "ttv", f"segment_{i}_initial.mp4")
     with ffmpeg_thread_manager:
         if not create_video_segment(filename, audio_path, initial_segment_path):
             Logger.print_error(f"{thread_id} Failed to create video segment")
@@ -121,7 +121,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
             Logger.print_error(f"{thread_id} Error creating word-level captions: {e}")
             return None, i
 
-        final_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}.mp4")
+        final_segment_path = os.path.join(output_dir, "ttv", f"segment_{i}.mp4")
         with ffmpeg_thread_manager:
             captioned_path = create_dynamic_captions(
                 input_video=initial_segment_path,
@@ -140,7 +140,7 @@ def process_sentence(i, sentence, context, style, total_images, tts, skip_genera
     else:
         # Add static captions
         Logger.print_info(f"{thread_id} Adding static captions to video segment.")
-        final_segment_path = os.path.join(temp_dir, "ttv", f"segment_{i}.mp4")
+        final_segment_path = os.path.join(output_dir, "ttv", f"segment_{i}.mp4")
         captions = [CaptionEntry(sentence, 0.0, float('inf'))]  # Show for entire duration
         with ffmpeg_thread_manager:
             captioned_path = create_static_captions(
@@ -161,6 +161,7 @@ def process_story(
     tts: GoogleTTS,
     style: str,
     story: List[str],
+    output_dir: str,
     skip_generation: bool = False,
     query_dispatcher: Optional[Any] = None,
     story_title: Optional[str] = None,
@@ -173,6 +174,7 @@ def process_story(
         tts: Text-to-speech engine instance
         style: Style to apply to generation
         story: List of story sentences to process
+        output_dir: Directory for output files
         skip_generation: Whether to skip image generation
         query_dispatcher: Optional query dispatcher for API calls
         story_title: Optional title of the story
@@ -227,7 +229,8 @@ def process_story(
                 story_json,
                 style,
                 story_title,
-                query_dispatcher
+                query_dispatcher,
+                output_dir=output_dir
             )
             if not movie_poster_path:
                 Logger.print_error(f"{thread_prefix}Failed to generate movie poster")
@@ -236,7 +239,10 @@ def process_story(
         # Process each segment
         segments = []
         segment_indices = []  # Keep track of successful segment indices
-        with ThreadPoolExecutor() as executor:
+        
+        # Use a smaller thread pool for TTS operations to avoid gRPC issues
+        max_workers = min(4, total_segments)  # Limit to 4 concurrent TTS operations
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
             for i, sentence in enumerate(story):
                 future = executor.submit(
@@ -249,7 +255,8 @@ def process_story(
                     tts=tts,
                     skip_generation=skip_generation,
                     query_dispatcher=query_dispatcher,
-                    config=config
+                    config=config,
+                    output_dir=output_dir
                 )
                 futures.append(future)
             

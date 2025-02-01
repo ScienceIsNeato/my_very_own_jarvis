@@ -73,8 +73,13 @@ def test_operation_completion(thread_manager):
     operation = "ffmpeg -i input.mp4 -t 1 output.mp4"
     thread_manager.add_operation(operation)
     
-    # Wait briefly for operation to complete
-    time.sleep(0.1)
+    # Wait for operation to complete with timeout
+    start_time = time.time()
+    timeout = 1.0  # 1 second timeout
+    while len(thread_manager._active_operations) > 0:
+        if time.time() - start_time > timeout:
+            break
+        time.sleep(0.1)
     
     # Check operation completed
     assert len(thread_manager._active_operations) == 0
@@ -100,13 +105,17 @@ def test_error_handling(thread_manager):
     # Invalid FFmpeg command
     invalid_operation = "ffmpeg -invalid-flag input.mp4 output.mp4"
     thread_manager.add_operation(invalid_operation)
-    
-    # Wait briefly for error to be processed
-    time.sleep(0.1)
-    
+
+    # Wait for operation to complete
+    start_time = time.time()
+    timeout = 1.0  # 1 second timeout
+    while len(thread_manager._active_operations) > 0:
+        if time.time() - start_time > timeout:
+            break
+        time.sleep(0.01)  # Short sleep to prevent busy waiting
+
     assert len(thread_manager._active_operations) == 0
     assert thread_manager._operation_queue.qsize() == 0
-    # Error should be logged but not crash the manager
 
 def test_resource_cleanup(thread_manager):
     """Test resource cleanup after operations."""

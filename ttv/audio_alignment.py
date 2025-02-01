@@ -17,7 +17,7 @@ import time
 import traceback
 from dataclasses import dataclass
 from functools import partial
-from typing import List
+from typing import List, Optional
 
 # Third-party imports
 import torch
@@ -74,10 +74,15 @@ def align_words_with_audio(audio_path: str, text: str, model_size: str = "tiny",
                 # Get word-level timestamps from audio
                 result = model.transcribe(
                     audio_path,
-                    language="en",
                     word_timestamps=True,
                     initial_prompt=text,  # Help guide the transcription
-                    fp16=False  # Force FP32
+                    condition_on_previous_text=False,  # Don't condition on previous text
+                    language="en",  # Pass language in decode_options
+                    temperature=0.0,  # Use greedy decoding for more consistent results
+                    no_speech_threshold=0.3,  # Lower threshold since we know we have speech
+                    logprob_threshold=-0.7,  # More strict about word confidence
+                    compression_ratio_threshold=2.0,  # Help detect hallucinations
+                    best_of=5  # Try multiple candidates and take the best one
                 )
                 
                 if not result or "segments" not in result:
@@ -201,12 +206,23 @@ def create_word_level_captions(
         # Load model with retries using exponential backoff
         def load_and_process_model():
             with whisper_lock:
-                model = whisper.load_model(model_name)
+                model = whisper.load_model(
+                    model_name,
+                    device="cpu",  # Force CPU usage
+                    download_root=None,  # Use default download location
+                    in_memory=True  # Keep model in memory
+                )
                 result = model.transcribe(
                     audio_file,
-                    language="en",
                     word_timestamps=True,
-                    initial_prompt=text  # Add text as initial prompt to guide transcription
+                    initial_prompt=text,  # Add text as initial prompt to guide transcription
+                    condition_on_previous_text=False,  # Don't condition on previous text
+                    language="en",  # Pass language in decode_options
+                    temperature=0.0,  # Use greedy decoding for more consistent results
+                    no_speech_threshold=0.3,  # Lower threshold since we know we have speech
+                    logprob_threshold=-0.7,  # More strict about word confidence
+                    compression_ratio_threshold=2.0,  # Help detect hallucinations
+                    best_of=5  # Try multiple candidates and take the best one
                 )
                 return model, result
 
@@ -237,6 +253,11 @@ def create_word_level_captions(
                     "end": word.get("end", 0)
                 })
 
+        # If no words were found, fall back to evenly distributed
+        if not words:
+            Logger.print_warning(f"{thread_prefix}No words found in Whisper output, falling back to even distribution")
+            return create_evenly_distributed_captions(audio_file, text, thread_id)
+
         # Create caption entries
         captions = []
         for i, word in enumerate(words):
@@ -252,18 +273,73 @@ def create_word_level_captions(
     except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
         Logger.print_error(f"{thread_prefix}Error creating word-level captions: {str(e)}")
         Logger.print_error(f"{thread_prefix}Full traceback: {traceback.format_exc()}")
-        return None
+        Logger.print_info(f"{thread_prefix}Falling back to evenly distributed captions")
+        return create_evenly_distributed_captions(audio_file, text, thread_id)
     except (OSError, IOError) as e:
         Logger.print_error(
             f"{thread_prefix}Error reading audio file: {str(e)}"
         )
         Logger.print_error(f"Traceback: {traceback.format_exc()}")
-        return []
+        Logger.print_info(f"{thread_prefix}Falling back to evenly distributed captions")
+        return create_evenly_distributed_captions(audio_file, text, thread_id)
     except Exception as e:
         Logger.print_error(
             f"{thread_prefix}Unexpected error in create_word_level_captions: {str(e)}"
         )
         Logger.print_error(f"Traceback: {traceback.format_exc()}")
+        Logger.print_info(f"{thread_prefix}Falling back to evenly distributed captions")
+        return create_evenly_distributed_captions(audio_file, text, thread_id)
+
+def create_evenly_distributed_captions(
+    audio_file: str,
+    text: str,
+    thread_id: Optional[str] = None
+) -> List[CaptionEntry]:
+    """Create evenly distributed captions when Whisper alignment fails.
+    
+    Args:
+        audio_file: Path to the audio file
+        text: Text to create captions for
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        List[CaptionEntry]: List of caption entries with evenly distributed timings
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    try:
+        # Get total audio duration using ffprobe
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_file],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True)
+        total_duration = float(result.stdout)
+        
+        # Split text into words
+        words = text.split()
+        if not words:
+            return []
+        
+        # Calculate time per word
+        time_per_word = total_duration / len(words)
+        
+        # Create evenly distributed captions
+        captions = []
+        for i, word in enumerate(words):
+            start_time = i * time_per_word
+            end_time = (i + 1) * time_per_word
+            captions.append(CaptionEntry(
+                text=word,
+                start_time=start_time,
+                end_time=end_time
+            ))
+        
+        Logger.print_info(f"{thread_prefix}Created evenly distributed captions for {len(words)} words over {total_duration:.2f}s")
+        return captions
+        
+    except Exception as e:
+        Logger.print_error(f"{thread_prefix}Error creating evenly distributed captions: {str(e)}")
         return []
 
 def get_audio_duration(audio_file: str, thread_id: str = None) -> float:

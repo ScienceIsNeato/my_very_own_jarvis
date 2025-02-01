@@ -6,6 +6,7 @@ import requests
 from logger import Logger
 from utils import get_tempdir
 from typing import Optional, Any, Dict
+from datetime import datetime
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -87,7 +88,16 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
             "story": "No story generated"
         })
 
-def generate_movie_poster(filtered_story_json, style, story_title, query_dispatcher, retries=5, wait_time=60, thread_id="[MoviePoster]"):
+def generate_movie_poster(
+    filtered_story_json: str,
+    style: str,
+    story_title: str,
+    query_dispatcher: Any,
+    retries: int = 5,
+    wait_time: float = 60,
+    thread_id: str = "[MoviePoster]",
+    output_dir: Optional[str] = None
+) -> Optional[str]:
     thread_prefix = f"{thread_id} " if thread_id else ""
     try:
         filtered_story = json.loads(filtered_story_json)
@@ -115,7 +125,10 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
                 )
                 if response.data:
                     image_url = response.data[0].url
-                    filename = os.path.join(get_tempdir(), "ttv", "movie_poster.png")
+                    # Use output_dir if provided, otherwise use default temp dir
+                    base_dir = output_dir if output_dir else get_tempdir()
+                    filename = os.path.join(base_dir, "ttv", "movie_poster.png")
+                    os.makedirs(os.path.dirname(filename), exist_ok=True)
                     save_image_without_caption(image_url, filename, thread_id=thread_id)
                     return filename
                 else:
@@ -143,7 +156,7 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
             continue
         # If we get here, we had a safety issue and filtered the content, so try again
         continue
-    
+            
     Logger.print_error(f"{thread_prefix}Failed to generate movie poster after {safety_retries} safety filtering attempts.")
     return None
 
