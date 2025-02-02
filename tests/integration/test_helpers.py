@@ -5,6 +5,7 @@ This module provides utility functions for integration testing, including:
 - Configuration file handling
 - Process completion waiting
 - File validation
+- Test log parsing
 """
 
 import os
@@ -12,14 +13,53 @@ import re
 import subprocess
 import time
 import json
+import logging
 from logger import Logger
 from utils import get_tempdir
 from ttv.log_messages import (
     LOG_FINAL_VIDEO_CREATED,
     LOG_CLOSING_CREDITS_DURATION,
     LOG_FFPROBE_COMMAND,
-    LOG_VIDEO_SEGMENT_CREATE
+    LOG_VIDEO_SEGMENT_CREATE,
+    LOG_BACKGROUND_MUSIC_SUCCESS,
+    LOG_BACKGROUND_MUSIC_FAILURE
 )
+
+logger = logging.getLogger(__name__)
+
+def parse_test_logs(log_file):
+    """Parse test run logs and extract results."""
+    results = []
+    with open(log_file, 'r', encoding='utf-8') as f:
+        # Basic log parsing logic
+        for line in f:
+            if 'TEST RESULT:' in line:
+                results.append(line.strip())
+    return results
+
+def validate_background_music(output: str) -> None:
+    """Validate background music generation and addition.
+    
+    Args:
+        output: The output log to validate
+        
+    Raises:
+        AssertionError: If background music validation fails
+    """
+    # Check for successful background music generation
+    success_pattern = re.compile(LOG_BACKGROUND_MUSIC_SUCCESS)
+    failure_pattern = re.compile(LOG_BACKGROUND_MUSIC_FAILURE)
+    
+    success_matches = success_pattern.findall(output)
+    failure_matches = failure_pattern.findall(output)
+    
+    # Either we should have a success message or a failure message
+    assert len(success_matches) + len(failure_matches) > 0, "No background music status found"
+    
+    if success_matches:
+        logger.info("Background music successfully added")
+    else:
+        logger.warning("Background music addition failed (expected in some test cases)")
 
 def wait_for_completion(timeout=300):
     """Wait for a process to complete within the specified timeout."""

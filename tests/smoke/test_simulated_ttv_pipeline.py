@@ -34,9 +34,11 @@ from tests.integration.test_helpers import (
     LOG_FINAL_VIDEO_CREATED,
     validate_closing_credits_duration,
     wait_for_completion,
-    validate_segment_count
+    validate_segment_count,
+    validate_background_music,
+    parse_test_logs
 )
-from utils import get_tempdir
+from utils import get_timestamped_ttv_dir
 from ttv.log_messages import (
     LOG_BACKGROUND_MUSIC_SUCCESS,
     LOG_BACKGROUND_MUSIC_FAILURE
@@ -44,30 +46,8 @@ from ttv.log_messages import (
 
 logger = logging.getLogger(__name__)
 
-def parse_test_logs(log_file):
-    """Parse test run logs and extract results."""
-    results = []
-    with open(log_file, 'r', encoding='utf-8') as f:
-        # Basic log parsing logic
-        for line in f:
-            if 'TEST RESULT:' in line:
-                results.append(line.strip())
-    return results
-
-# Path to the hardcoded config file
-HARD_CODED_CONFIG_PATH = "tests/integration/test_data/minimal_ttv_config.json"
-# Path to the test config file
+# Path to the test config files
 SIMULATED_PIPELINE_CONFIG = "tests/integration/test_data/simulated_pipeline_config.json"
-
-def validate_background_music(output: str) -> None:
-    """Validate background music was added successfully.
-    
-    Args:
-        output: The captured output from the pipeline execution
-    """
-    # Check for successful background music addition
-    assert LOG_BACKGROUND_MUSIC_SUCCESS in output, "Background music should be added successfully"
-    assert LOG_BACKGROUND_MUSIC_FAILURE not in output, "Background music should not fail to be added"
 
 def test_simulated_pipeline_execution():
     """Test the full TTV pipeline with simulated responses for music and image generation.
@@ -80,6 +60,10 @@ def test_simulated_pipeline_execution():
     5. Final video compilation and validation
     """
     print("\n=== Starting TTV Pipeline Integration Test ===")
+    
+    # Create timestamped output directory
+    output_dir = get_timestamped_ttv_dir()
+    os.makedirs(output_dir, exist_ok=True)
     
     # Run the TTV command and capture output
     command = f"PYTHONUNBUFFERED=1 python ganglia.py --text-to-video --ttv-config {SIMULATED_PIPELINE_CONFIG}"
@@ -94,20 +78,20 @@ def test_simulated_pipeline_execution():
     process.wait()
 
     # Save output to a file for debugging
-    with open(get_tempdir() + "/test_output.log", "w") as f:
+    with open(os.path.join(output_dir, "test_output.log"), "w") as f:
         f.write(output)
 
     # Validate all segments are present
     validate_segment_count(output, SIMULATED_PIPELINE_CONFIG)
 
     # Validate segment durations
-    total_video_duration = validate_audio_video_durations(output, SIMULATED_PIPELINE_CONFIG)
+    total_video_duration = validate_audio_video_durations(output, SIMULATED_PIPELINE_CONFIG, output_dir)
 
     # Validate background music was added successfully
     validate_background_music(output)
 
     # Add closing credits duration to total video duration
-    closing_credits_duration = validate_closing_credits_duration(output, SIMULATED_PIPELINE_CONFIG)
+    closing_credits_duration = validate_closing_credits_duration(output, SIMULATED_PIPELINE_CONFIG, output_dir)
     total_video_duration += closing_credits_duration
 
     # Validate final video

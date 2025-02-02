@@ -16,7 +16,6 @@ import textwrap
 from datetime import datetime
 from logger import Logger
 import time
-from utils import get_tempdir
 from typing import Optional, Tuple, List, Any
 from io import BytesIO
 from query_dispatch import ChatGPTQueryDispatcher
@@ -55,10 +54,7 @@ def generate_image(
         f"{thread_prefix}Generating image for: '{sentence}' "
         f"using style '{style}'"
     )
-    
-    # Use provided output_dir or fall back to get_tempdir()
-    base_dir = output_dir if output_dir else get_tempdir()
-    
+
     # Check for preloaded image
     if preloaded_images_dir:
         preloaded_path = os.path.join(
@@ -67,8 +63,7 @@ def generate_image(
         )
         if os.path.exists(preloaded_path):
             filename = os.path.join(
-                base_dir,
-                "images",
+                output_dir,
                 f"image_{image_index}.png"
             )
             os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -105,8 +100,7 @@ def generate_image(
         # Generate output filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(
-            base_dir,
-            "images",
+            output_dir,
             f"image_{image_index}_{timestamp}.png"
         )
         os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -194,11 +188,9 @@ def generate_blank_image(
         draw.text((x, y), wrapped_text, font=font, fill=text_color)
         
         # Save image
-        base_dir = output_dir if output_dir else get_tempdir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(
-            base_dir,
-            "images",
+            output_dir,
             f"blank_image_{image_index}_{timestamp}.png"
         )
         
@@ -382,8 +374,8 @@ def generate_image_with_dalle(
     size: str = "1024x1024",
     quality: str = "standard",
     style: str = "vivid",
-    retries: int = 3,
-    retry_delay: float = 1.0
+    retries: int = 5,
+    retry_delay: float = 60.0  # Increased default delay for rate limits
 ) -> Optional[str]:
     """Generate an image using DALL-E.
     
@@ -427,6 +419,11 @@ def generate_image_with_dalle(
             
         except Exception as e:
             if attempt < retries - 1:
+                if 'Rate limit exceeded' in str(e):
+                    Logger.print_warning(f"Rate limit exceeded. Retrying in {retry_delay} seconds... (Attempt {attempt + 1} of {retries})")
+                else:
+                    Logger.print_warning(f"Image generation failed. Retrying in {retry_delay/10} seconds... (Attempt {attempt + 1} of {retries})")
+                    retry_delay = retry_delay/10  # Use shorter delay for non-rate-limit errors
                 time.sleep(retry_delay)
                 continue
             Logger.print_error(f"Failed to generate image: {str(e)}")

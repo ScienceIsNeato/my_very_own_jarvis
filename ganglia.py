@@ -12,7 +12,7 @@ from hotwords import HotwordManager
 from conversation_context import ContextManager
 from fetch_and_display_logs import display_logs
 import datetime
-from utils import get_tempdir, setup_tmp_dir
+from utils import get_tempdir
 
 def get_config_path():
     """Get the path to the config directory relative to the project root."""
@@ -164,7 +164,7 @@ def main():
 
     args = load_config()
 
-    setup_tmp_dir()  # Create temp directory if it doesn't exist
+    get_tempdir()  # Create temp directory if it doesn't exist
 
     if args.display_log_hours:
         display_logs(args.display_log_hours)

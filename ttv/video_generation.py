@@ -117,30 +117,10 @@ def create_still_video_with_fade(image_path, audio_path, output_path, thread_id=
         Logger.print_error(f"{thread_prefix}Error creating video with fade: {str(e)}")
         return None
 
-def create_final_video(video_segments, output_path):
-    try:
-        concat_list_path = get_tempdir() + "/ttv/concat_list.txt"
-        with open(concat_list_path, "w") as f:
-            for segment in video_segments:
-                f.write(f"file '{segment}'\n")
-        Logger.print_info(f"Concatenating video segments: {video_segments}")
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
-            "-pix_fmt", "yuv420p", "-c:v", "libx264", "-crf", "23", "-preset", "medium",
-            "-c:a", "aac", "-b:a", "192k", output_path
-        ]
-        result = run_ffmpeg_command(ffmpeg_cmd)
-        if result:
-            Logger.print_info(f"Main video created: output_path={output_path}")
-    except Exception as e:
-        Logger.print_error(f"Error concatenating video segments: {e}")
-
-    return output_path
-
 def append_video_segments(
     video_segments: List[str],
     thread_id: Optional[str] = None,
-    output_dir: Optional[str] = None,
+    output_dir: str = None,
     force_reencode: bool = False
 ) -> Optional[str]:
     """Append multiple video segments together.
@@ -156,11 +136,6 @@ def append_video_segments(
     """
     thread_prefix = f"{thread_id} " if thread_id else ""
     try:
-        # Use provided output directory or create one
-        if not output_dir:
-            output_dir = os.path.join(get_tempdir(), "ttv")
-        os.makedirs(output_dir, exist_ok=True)
-
         # Create output path
         output_path = os.path.join(output_dir, "concatenated_video.mp4")
 

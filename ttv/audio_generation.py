@@ -15,7 +15,6 @@ from typing import Dict, List, Optional, Tuple, Union
 import requests
 
 from logger import Logger
-from utils import get_tempdir
 
 def generate_audio(
     text: str,

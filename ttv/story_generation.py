@@ -4,7 +4,6 @@ from openai import OpenAI
 import time
 import requests
 from logger import Logger
-from utils import get_tempdir
 from typing import Optional, Any, Dict
 from datetime import datetime
 
@@ -125,9 +124,7 @@ def generate_movie_poster(
                 )
                 if response.data:
                     image_url = response.data[0].url
-                    # Use output_dir if provided, otherwise use default temp dir
-                    base_dir = output_dir if output_dir else get_tempdir()
-                    filename = os.path.join(base_dir, "ttv", "movie_poster.png")
+                    filename = os.path.join(output_dir, "movie_poster.png")
                     os.makedirs(os.path.dirname(filename), exist_ok=True)
                     save_image_without_caption(image_url, filename, thread_id=thread_id)
                     return filename

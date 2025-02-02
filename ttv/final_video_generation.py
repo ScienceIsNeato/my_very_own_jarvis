@@ -15,7 +15,6 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from logger import Logger
-from utils import get_tempdir
 
 from .audio_alignment import create_word_level_captions
 from .captions import CaptionEntry, create_dynamic_captions, create_static_captions
@@ -468,7 +467,6 @@ def create_video_with_captions(
         Optional[str]: Path to final video if successful
     """
     thread_prefix = f"{thread_id} " if thread_id else ""
-    temp_dir = get_tempdir()
     
     try:
         # Create video segments
@@ -490,7 +488,7 @@ def create_video_with_captions(
                 video_path = create_video_segment(
                     image_path=segment["image"],
                     audio_path=segment["audio"],
-                    output_path=os.path.join(temp_dir, "ttv", f"segment_{i}_initial.mp4")
+                    output_path=os.path.join(output_path, f"segment_{i}_initial.mp4")
                 )
                 if not video_path:
                     raise ValueError(

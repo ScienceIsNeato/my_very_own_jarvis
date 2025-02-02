@@ -50,9 +50,7 @@ class TestStoryProcessor(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         self.temp_dir = get_tempdir()  # Use the base temp dir
-        os.makedirs(os.path.join(self.temp_dir, "images"), exist_ok=True)
-        os.makedirs(os.path.join(self.temp_dir, "tts"), exist_ok=True)
-        os.makedirs(os.path.join(self.temp_dir, "ttv"), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir), exist_ok=True)
 
     @patch('ttv.story_processor.generate_movie_poster')
     @patch('ttv.story_processor.generate_image')
@@ -73,19 +71,19 @@ class TestStoryProcessor(unittest.TestCase):
         mock_tts = Mock()
         mock_tts.convert_text_to_speech.return_value = (
             True, 
-            os.path.join(self.temp_dir, "tts/test_audio.mp3")
+            os.path.join(self.temp_dir, "test_audio.mp3")
         )
         mock_query_dispatcher = Mock(spec=ChatGPTQueryDispatcher)
         mock_music_gen = Mock()
 
         # Mock movie poster generation
         mock_generate_poster.return_value = os.path.join(
-            self.temp_dir, "ttv", "movie_poster.png"
+            self.temp_dir, "movie_poster.png"
         )
 
         # Mock image generation for each sentence
         mock_generate_image.return_value = (
-            os.path.join(self.temp_dir, "images", "test_image.png"), 
+            os.path.join(self.temp_dir, "test_image.png"), 
             True
         )
 
@@ -189,9 +187,9 @@ class TestStoryProcessor(unittest.TestCase):
             )
             for i in range(len(test_config.story)):
                 mock_create_video.assert_any_call(
-                    os.path.join(self.temp_dir, "images", "test_image.png"),
-                    os.path.join(self.temp_dir, "tts/test_audio.mp3"),
-                    os.path.join(self.temp_dir, "ttv", f"segment_{i}_initial.mp4")
+                    os.path.join(self.temp_dir, "test_image.png"),
+                    os.path.join(self.temp_dir, "test_audio.mp3"),
+                    os.path.join(self.temp_dir, f"segment_{i}_initial.mp4")
                 )
 
             # Verify that music generation was NOT called for file-based credits
