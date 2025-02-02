@@ -95,7 +95,7 @@ def generate_movie_poster(
     retries: int = 5,
     wait_time: float = 60,
     thread_id: str = "[MoviePoster]",
-    output_dir: Optional[str] = None
+    output_dir: str = None
 ) -> Optional[str]:
     thread_prefix = f"{thread_id} " if thread_id else ""
     try:

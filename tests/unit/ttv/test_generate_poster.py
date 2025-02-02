@@ -3,7 +3,7 @@ import pytest
 from logger import Logger
 from query_dispatch import ChatGPTQueryDispatcher
 from ttv.story_generation import generate_movie_poster, generate_filtered_story
-from utils import get_config_path
+from utils import get_config_path, get_timestamped_ttv_dir
 
 
 def test_generate_movie_poster():
@@ -30,8 +30,11 @@ def test_generate_movie_poster():
 
     filtered_story_json = generate_filtered_story(context, style, story_title, query_dispatcher)
 
+    # Get a timestamped directory for the output
+    output_dir = get_timestamped_ttv_dir()
+
     Logger.print_info("Submitting movie poster generation task...")
-    movie_poster_path = generate_movie_poster(filtered_story_json, style, story_title, query_dispatcher)
+    movie_poster_path = generate_movie_poster(filtered_story_json, style, story_title, query_dispatcher, output_dir=output_dir)
 
     assert movie_poster_path is not None, "Failed to generate movie poster"
     assert os.path.exists(movie_poster_path), "Movie poster file does not exist"

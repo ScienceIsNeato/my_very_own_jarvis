@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch, MagicMock
 import json
 import os
 from ttv.story_generation import generate_filtered_story, generate_movie_poster, filter_text, save_image_without_caption
+from utils import get_timestamped_ttv_dir
 
 class TestStoryGeneration(unittest.TestCase):
     def setUp(self):
@@ -10,6 +11,7 @@ class TestStoryGeneration(unittest.TestCase):
         self.context = "A story about a friendly robot"
         self.style = "science fiction"
         self.story_title = "Robot Dreams"
+        self.output_dir = get_timestamped_ttv_dir()
 
     def test_generate_filtered_story_success(self):
         # Mock successful content filtering
@@ -59,7 +61,7 @@ class TestStoryGeneration(unittest.TestCase):
         })
 
         with patch('ttv.story_generation.save_image_without_caption') as mock_save:
-            result = generate_movie_poster(filtered_story, self.style, self.story_title, self.query_dispatcher)
+            result = generate_movie_poster(filtered_story, self.style, self.story_title, self.query_dispatcher, output_dir=self.output_dir)
             
             self.assertIsNotNone(result)
             mock_client.images.generate.assert_called_once_with(
