@@ -130,13 +130,10 @@ def validate_segment_count(output, config_path):
     print("✓ All story segments are present")
     return actual_segments
 
-def validate_audio_video_durations(output, config_path):
+def validate_audio_video_durations(output, config_path, output_dir):
     """Validate that each audio file matches the corresponding video segment duration."""
     print("\n=== Validating Audio/Video Segment Durations ===")
-    main_video_duration = 0.0
-    discrepancies = []
-    segments_found = []
-
+    
     try:
         with open(config_path, encoding='utf-8') as f:
             config = json.loads(f.read())
@@ -144,84 +141,64 @@ def validate_audio_video_durations(output, config_path):
     except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
         raise AssertionError(f"Failed to read story from config: {e}")
 
-    # First validate individual segments match their audio
-    for segment_num in range(expected_segments):
+    print(f"Checking {expected_segments} segments in {output_dir}")
+    
+    # First get all the segment files
+    segments = []
+    for i in range(expected_segments):
         # Try final segment first, fall back to initial if not found
-        video_file = f"{get_tempdir()}/ttv/segment_{segment_num}.mp4"
-        if not os.path.exists(video_file):
-            video_file = f"{get_tempdir()}/ttv/segment_{segment_num}_initial.mp4"
-            if not os.path.exists(video_file):
-                continue
-            Logger.print_warning(f"Using initial segment for {segment_num} - final segment not found")
+        final_path = os.path.join(output_dir, f"segment_{i}.mp4")
+        initial_path = os.path.join(output_dir, f"segment_{i}_initial.mp4")
+        
+        if os.path.exists(final_path):
+            segments.append((i, final_path))
+            print(f"Found final segment {i}: {final_path}")
+        elif os.path.exists(initial_path):
+            segments.append((i, initial_path))
+            print(f"Found initial segment {i}: {initial_path}")
+        else:
+            print(f"No segment found for index {i}")
+    
+    if not segments:
+        raise AssertionError("No video segments found")
+    
+    if len(segments) != expected_segments:
+        raise AssertionError(f"Expected {expected_segments} segments but found {len(segments)}")
 
-        segments_found.append(segment_num)
-        video_duration = get_video_duration(video_file)
-        if video_duration == 0.0:
-            continue
-
-        try:
-            cmd = [
-                "ffprobe", "-v", "error", "-select_streams", "a:0",
-                "-show_entries", "stream=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1", video_file
-            ]
-            result = subprocess.run(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
-            )
-            audio_duration = float(result.stdout.decode().strip())
+    # Check each segment's audio/video duration
+    total_duration = 0.0
+    for i, segment_path in segments:
+        video_duration = get_video_duration(segment_path)
+        if video_duration is None:
+            raise AssertionError(f"Could not get video duration for segment {i}")
             
-            if abs(audio_duration - video_duration) >= 0.1:
-                discrepancies.append((
-                    f"audio_stream_{segment_num}",
-                    video_file,
-                    audio_duration,
-                    video_duration
-                ))
-            else:
-                print(
-                    f"✓ Duration match for segment {segment_num}: "
-                    f"audio stream ({audio_duration:.2f}s) vs "
-                    f"video container ({video_duration:.2f}s)"
-                )
-                main_video_duration += video_duration  # Add to total duration
-                
-        except (subprocess.CalledProcessError, ValueError) as e:
-            Logger.print_error(f"Failed to get audio duration for segment {segment_num}: {e}")
-            continue
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "a:0",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            segment_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        audio_duration = float(result.stdout.strip())
+        
+        if abs(audio_duration - video_duration) >= 0.1:
+            print(f"⚠️  Duration mismatch in segment {i}:")
+            print(f"   Audio: {audio_duration:.2f}s")
+            print(f"   Video: {video_duration:.2f}s")
+        else:
+            print(f"✓ Segment {i} durations match: {video_duration:.2f}s")
+            total_duration += video_duration
 
-    if discrepancies:
-        print("\n!!! Duration Mismatches Found !!!")
-        print("-" * 80)
-        header_fmt = "|{:^20}|{:^20}|{:^15}|{:^15}|"
-        print(header_fmt.format("Audio Stream", "Video File", "Audio Duration", "Video Duration"))
-        print("-" * 80)
-        row_fmt = "|{:^20}|{:^20}|{:^15.2f}|{:^15.2f}|"
-        for audio_id, video_file, audio_dur, video_dur in discrepancies:
-            print(row_fmt.format(
-                audio_id,
-                os.path.basename(video_file),
-                audio_dur,
-                video_dur
-            ))
-        print("-" * 80)
-
-    segments_found.sort()
-    print(f"\nFound segments: {segments_found}")
-
-    if len(segments_found) != expected_segments:
-        raise AssertionError(
-            f"Expected {expected_segments} segments but found {len(segments_found)}"
-        )
-
-    # Get duration from the main video with background music
-    main_video_path = os.path.join(get_tempdir(), "ttv", "main_video_with_background_music.mp4")
-    if os.path.exists(main_video_path):
-        main_video_duration = get_video_duration(main_video_path)
+    # Check the main video with background music
+    main_video = os.path.join(output_dir, "main_video_with_background_music.mp4")
+    if os.path.exists(main_video):
+        main_duration = get_video_duration(main_video)
+        print(f"✓ Main video with background music duration: {main_duration:.2f}s")
+        return main_duration
     else:
-        Logger.print_warning("Main video with background music not found, using sum of segment durations")
-
-    print(f"✓ Main video duration (pre-credits): {main_video_duration:.2f}s")
-    return main_video_duration
+        print(f"✓ Using total segment duration: {total_duration:.2f}s")
+        return total_duration
 
 def extract_final_video_path(output):
     """Extract the final video path from the logs."""
@@ -236,30 +213,14 @@ def extract_final_video_path(output):
     
     raise AssertionError("Final video path not found in logs.")
 
-def validate_final_video_path(output, config_path=None):
+def validate_final_video_path(config_path=None, output_dir=None):
     """Validate that the final video path is found in the logs."""
     print("\n=== Validating Final Video Path ===")
-    final_video_path = extract_final_video_path(output)
+    final_video_path = os.path.join(output_dir, "final_video.mp4")
     if not os.path.exists(final_video_path):
         raise AssertionError(f"Expected output video not found at {final_video_path}")
     print(f"✓ Final video found at: {os.path.basename(final_video_path)}")
-    
-    if config_path:
-        try:
-            with open(config_path, encoding='utf-8') as f:
-                config = json.loads(f.read())
-                if config.get('closing_credits') and 'without closing credits' in output:
-                    print(
-                        "\n⚠️  Warning: Closing credits were configured but not found "
-                        "in final video"
-                    )
-                    print(
-                        "   This might be due to Suno API being unavailable or other "
-                        "generation issues"
-                    )
-        except (IOError, ValueError) as e:
-            print(f"\n⚠️  Warning: Could not check closing credits configuration: {e}")
-    
+
     return final_video_path
 
 def validate_total_duration(final_video_path, main_video_duration):
@@ -278,7 +239,7 @@ def validate_total_duration(final_video_path, main_video_duration):
         f"({expected_duration:.2f}s)"
     )
 
-def validate_closing_credits_duration(output, config_path):
+def validate_closing_credits_duration(output, config_path, output_dir):
     """Validate that the closing credits audio and video durations match."""
     print("\n=== Validating Closing Credits Duration ===")
     

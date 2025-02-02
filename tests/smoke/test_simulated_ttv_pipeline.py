@@ -38,7 +38,7 @@ from tests.integration.test_helpers import (
     validate_background_music,
     parse_test_logs
 )
-from utils import get_timestamped_ttv_dir
+from utils import get_tempdir
 from ttv.log_messages import (
     LOG_BACKGROUND_MUSIC_SUCCESS,
     LOG_BACKGROUND_MUSIC_FAILURE
@@ -60,11 +60,7 @@ def test_simulated_pipeline_execution():
     5. Final video compilation and validation
     """
     print("\n=== Starting TTV Pipeline Integration Test ===")
-    
-    # Create timestamped output directory
-    output_dir = get_timestamped_ttv_dir()
-    os.makedirs(output_dir, exist_ok=True)
-    
+
     # Run the TTV command and capture output
     command = f"PYTHONUNBUFFERED=1 python ganglia.py --text-to-video --ttv-config {SIMULATED_PIPELINE_CONFIG}"
     output = ""  # Initialize output here
@@ -78,9 +74,12 @@ def test_simulated_pipeline_execution():
     process.wait()
 
     # Save output to a file for debugging
-    with open(os.path.join(output_dir, "test_output.log"), "w") as f:
+    with open(get_tempdir() + "/test_output.log", "w") as f:
         f.write(output)
 
+    # Get the output directory from the output by getting everything after the : following `Created TTV directory` from the output
+    output_dir = output.split("Created TTV directory: ")[1].split("\n")[0]
+    print(f"Detected output directory: {output_dir}")
     # Validate all segments are present
     validate_segment_count(output, SIMULATED_PIPELINE_CONFIG)
 
@@ -95,7 +94,7 @@ def test_simulated_pipeline_execution():
     total_video_duration += closing_credits_duration
 
     # Validate final video
-    final_video_path = validate_final_video_path(output, SIMULATED_PIPELINE_CONFIG)
+    final_video_path = validate_final_video_path(SIMULATED_PIPELINE_CONFIG, output_dir)
     validate_total_duration(final_video_path, total_video_duration)
 
     # Clean up

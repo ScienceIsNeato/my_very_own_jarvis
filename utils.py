@@ -24,19 +24,43 @@ import queue
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
+_CURRENT_TTV_DIR = None
+
 def get_tempdir():
     """
     Get the temporary directory in a platform-agnostic way.
     Creates and returns /tmp/GANGLIA for POSIX systems or %TEMP%/GANGLIA for Windows.
     """
-    temp_dir = os.getenv('GANGLIA_TEMP_DIR', tempfile.gettempdir())
-    temp_dir = os.path.join(temp_dir, 'GANGLIA')
+    # If the environment variable is set, use the full path directly
+    temp_dir = os.getenv('GANGLIA_TEMP_DIR', None)
+
+    # otherwise, use the default temp directory and append GANGLIA
+    if temp_dir == None:
+        temp_dir = os.path.join(tempfile.gettempdir(), 'GANGLIA')
     os.makedirs(temp_dir, exist_ok=True)
     return temp_dir
 
-# Alias for backward compatibility
-get_tmp_dir = get_tempdir
-setup_tmp_dir = get_tempdir  # This will create the directory as a side effect
+def get_timestamped_ttv_dir() -> str:
+    """Get a timestamped directory path for TTV files.
+    
+    Creates a unique directory for each TTV run using the current timestamp.
+    Format: /tmp/GANGLIA/ttv/YYYY-MM-DD-HH-MM-SS/
+    
+    The directory is created only on the first call and the same path
+    is returned for all subsequent calls within the same run.
+    
+    Returns:
+        str: Path to the timestamped directory
+    """
+    global _CURRENT_TTV_DIR
+    
+    if _CURRENT_TTV_DIR is None:
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        _CURRENT_TTV_DIR = os.path.join(get_tempdir(), "ttv", timestamp)
+        os.makedirs(_CURRENT_TTV_DIR, exist_ok=True)
+        Logger.print_info(f"Created TTV directory: {_CURRENT_TTV_DIR}")
+    
+    return _CURRENT_TTV_DIR
 
 def get_config_path():
     """Get the path to the config directory relative to the project root."""
@@ -323,19 +347,3 @@ def exponential_backoff(func: Callable[..., Any], max_retries: int = 5, initial_
             attempt += 1
 
     raise last_exception
-
-def get_timestamped_ttv_dir() -> str:
-    """Get a timestamped directory path for TTV files.
-    
-    Creates a unique directory for each TTV run using the current timestamp.
-    Format: /tmp/GANGLIA/ttv/YYYY-MM-DD-HH-MM-SS/
-    
-    Returns:
-        str: Path to the timestamped directory
-    """
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    # Get base temp dir without ttv
-    base_dir = os.path.dirname(os.path.dirname(get_tempdir()))  # Go up two levels to remove GANGLIA/ttv
-    ttv_dir = os.path.join(base_dir, "ttv", timestamp)
-    os.makedirs(ttv_dir, exist_ok=True)
-    return ttv_dir

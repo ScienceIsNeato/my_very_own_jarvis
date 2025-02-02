@@ -293,6 +293,15 @@ def assemble_final_video(
         else:
             final_output_path = main_video_with_background_music_path
 
+        # Before leaving method, standardize the name of the final video to final_video.mp4 by renaming whatever final_output_path is to final_video.mp4
+        
+        exit_output_path = os.path.join(output_dir, "final_video.mp4")
+        if os.path.exists(final_output_path):
+            os.rename(final_output_path, exit_output_path)
+            final_output_path = exit_output_path
+        else:
+            Logger.print_error("Failed to rename final video ")
+
         Logger.print_info(LOG_FINAL_VIDEO_PATH.format(final_output_path))
         play_video(final_output_path)
         return final_output_path
