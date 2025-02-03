@@ -19,10 +19,13 @@ jobs:
     
     - name: Set up Google Application Credentials
       run: |
+        # First, write the private key to a temporary file with proper newlines
+        echo "${{ secrets.GAC_PRIVATE_KEY }}" > /tmp/private_key.txt
+        # Then create the service account JSON using the private key from file
         jq -n --arg type "service_account" \
               --arg project_id "${{ secrets.GAC_PROJECT_ID }}" \
               --arg private_key_id "${{ secrets.GAC_PRIVATE_KEY_ID }}" \
-              --arg private_key "${{ secrets.GAC_PRIVATE_KEY }}" \
+              --arg private_key "$(cat /tmp/private_key.txt)" \
               --arg client_email "${{ secrets.GAC_CLIENT_EMAIL }}" \
               --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
               --arg auth_uri "https://accounts.google.com/o/oauth2/auth" \
@@ -44,6 +47,7 @@ jobs:
                 universe_domain: $universe_domain
               }' > /tmp/gcp-credentials.json
         chmod 644 /tmp/gcp-credentials.json
+        rm -f /tmp/private_key.txt  # Clean up the temporary private key file
       env:
         GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
 
@@ -76,10 +80,13 @@ jobs:
     
     - name: Set up Google Application Credentials
       run: |
+        # First, write the private key to a temporary file with proper newlines
+        echo "${{ secrets.GAC_PRIVATE_KEY }}" > /tmp/private_key.txt
+        # Then create the service account JSON using the private key from file
         jq -n --arg type "service_account" \
               --arg project_id "${{ secrets.GAC_PROJECT_ID }}" \
               --arg private_key_id "${{ secrets.GAC_PRIVATE_KEY_ID }}" \
-              --arg private_key "${{ secrets.GAC_PRIVATE_KEY }}" \
+              --arg private_key "$(cat /tmp/private_key.txt)" \
               --arg client_email "${{ secrets.GAC_CLIENT_EMAIL }}" \
               --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
               --arg auth_uri "https://accounts.google.com/o/oauth2/auth" \
@@ -101,6 +108,7 @@ jobs:
                 universe_domain: $universe_domain
               }' > /tmp/gcp-credentials.json
         chmod 644 /tmp/gcp-credentials.json
+        rm -f /tmp/private_key.txt  # Clean up the temporary private key file
       env:
         GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
 
