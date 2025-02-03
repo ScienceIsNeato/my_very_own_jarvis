@@ -19,6 +19,7 @@ from functools import lru_cache
 from typing import Optional, Callable, Any
 import multiprocessing
 import platform
+from google.cloud import storage
 
 import openai
 import psutil
@@ -84,6 +85,33 @@ def get_timestamped_ttv_dir() -> str:
 def get_config_path():
     """Get the path to the config directory relative to the project root."""
     return os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ganglia_config.json')
+
+def upload_to_gcs(local_file_path: str, bucket_name: str, project_name: str, destination_blob_name: Optional[str] = None) -> bool:
+    """Upload a file to Google Cloud Storage.
+    
+    Args:
+        local_file_path: Path to the local file to upload
+        bucket_name: Name of the GCS bucket
+        project_name: GCP project name
+        destination_blob_name: Optional name for the file in GCS. If not provided,
+                             uses the base name of the local file
+    
+    Returns:
+        bool: True if upload was successful, False otherwise
+    """
+    try:
+        
+        if not destination_blob_name:
+            destination_blob_name = os.path.basename(local_file_path)
+            
+        storage_client = storage.Client(project=project_name)
+        bucket = storage_client.get_bucket(bucket_name)
+        blob = bucket.blob(destination_blob_name)
+        blob.upload_from_filename(local_file_path)
+        return True
+    except Exception as error:
+        Logger.print_error(f"Error uploading file to cloud: {error}")
+        return False
 
 def run_ffmpeg_command(ffmpeg_cmd):
     """Run an FFmpeg command with managed thread allocation.

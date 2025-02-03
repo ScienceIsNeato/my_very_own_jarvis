@@ -57,13 +57,15 @@ enable=
     global-statement,   # W0603: Using the global statement
     protected-access,   # W0212: Access to a protected member
     bare-except,       # W0702: No exception type(s) specified
-    singleton-comparison  # C0121: Singleton comparison should use 'is'
+    singleton-comparison,  # C0121: Singleton comparison should use 'is'
+    fixme              # W0511: TODO/FIXME/XXX comments detected
 
 disable=
     line-too-long,  # C0301: Line too long
     invalid-name,   # C0103: Invalid name
     trailing-whitespace,  # C0303: Trailing whitespace
-    redefined-outer-name  # W0621: Redefining name from outer scope (needed for pytest fixtures)
+    redefined-outer-name,  # W0621: Redefining name from outer scope (needed for pytest fixtures)
+    unnecessary-pass # W0107: Unnecessary pass statement
 
 # Specific rule settings
 [EXCEPTIONS]

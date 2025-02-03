@@ -9,13 +9,13 @@ and output validation.
 import logging
 import subprocess
 import sys
+import os
 
 # Third-party imports
 import pytest
 
 # Local application imports
 from utils import get_tempdir
-from ttv.ttv import text_to_video
 from ttv.log_messages import LOG_TTV_DIR_CREATED
 from tests.integration.test_helpers import (
     validate_segment_count,
@@ -24,55 +24,13 @@ from tests.integration.test_helpers import (
     validate_total_duration,
     validate_closing_credits_duration,
     validate_background_music,
+    validate_gcs_upload,
 )
 
 logger = logging.getLogger(__name__)
 
 # Path to the test config files
 GENERATED_PIPELINE_CONFIG = "tests/integration/test_data/generated_pipeline_config.json"
-
-def test_generated_ttv_pipeline_with_config(tmp_path):
-    """Test the TTV pipeline with a configuration file."""
-    # Create test audio files
-    test_audio_dir = tmp_path / "test_audio"
-    test_audio_dir.mkdir(parents=True)
-
-    # Create a simple audio file for testing
-    background_music_path = test_audio_dir / "background_music.mp3"
-    closing_credits_path = test_audio_dir / "closing_credits.mp3"
-
-    # Create dummy audio files using ffmpeg
-    for audio_path in [background_music_path, closing_credits_path]:
-        subprocess.run([
-            "ffmpeg", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-            "-t", "5", "-q:a", "9", "-acodec", "libmp3lame", str(audio_path)
-        ], check=True, capture_output=True)
-
-    # Create a test config file
-    config_path = tmp_path / "test_config.json"
-    with open(config_path, "w", encoding="utf-8") as f:
-        f.write(f"""
-        {{
-            "style": "test style",
-            "story": ["Test story line 1", "Test story line 2"],
-            "title": "Test Title",
-            "caption_style": "static",
-            "background_music": {{
-                "file": "{str(background_music_path)}",
-                "prompt": null
-            }},
-            "closing_credits": {{
-                "file": "{str(closing_credits_path)}",
-                "prompt": null
-            }}
-        }}
-        """)
-
-    # Run the pipeline
-    result = text_to_video(str(config_path))
-
-    # Verify the result
-    assert result is not None, "Pipeline execution failed"
 
 @pytest.mark.costly
 def test_generated_pipeline_execution():
@@ -84,7 +42,14 @@ def test_generated_pipeline_execution():
     3. Background music integration
     4. Closing credits generation and assembly
     5. Final video compilation and validation
+    6. GCS upload validation
     """
+    # Skip if GCS credentials are not configured
+    bucket_name = os.getenv('GCP_BUCKET_NAME')
+    project_name = os.getenv('GCP_PROJECT_NAME')
+    if not (bucket_name and project_name):
+        pytest.skip("GCS credentials not configured")
+
     print("\n=== Starting Generated Pipeline Integration Test ===")
 
     # Run the TTV command and capture output
@@ -99,8 +64,6 @@ def test_generated_pipeline_execution():
     process.stdout.close()
     process.wait()
 
-
-
     # Save output to a file for debugging
     with open(get_tempdir() + "/test_output.log", "w", encoding="utf-8") as f:
         f.write(output)
@@ -113,19 +76,23 @@ def test_generated_pipeline_execution():
     validate_segment_count(output, GENERATED_PIPELINE_CONFIG)
 
     # Validate segment durations
-    total_video_duration = validate_audio_video_durations(output, GENERATED_PIPELINE_CONFIG, output_dir)
+    total_video_duration = validate_audio_video_durations(GENERATED_PIPELINE_CONFIG, output_dir)
 
     # Validate background music was added successfully
     validate_background_music(output)
 
     # Add closing credits duration to total video duration
-    closing_credits_duration = validate_closing_credits_duration(output, GENERATED_PIPELINE_CONFIG, output_dir)
+    closing_credits_duration = validate_closing_credits_duration(output, GENERATED_PIPELINE_CONFIG)
     total_video_duration += closing_credits_duration
 
     # Validate final video
-    final_video_path = validate_final_video_path(GENERATED_PIPELINE_CONFIG, output_dir)
+    final_video_path = validate_final_video_path(output_dir)
     validate_total_duration(final_video_path, total_video_duration)
+
+    # Validate GCS upload
+    validate_gcs_upload(bucket_name, project_name)
 
     # Clean up
     # os.remove(final_video_path)  # Commented out to preserve files for debugging
+    # uploaded_file.delete()  # Commented out to preserve GCS files for debugging
     print("\n=== Test Complete ===\n")

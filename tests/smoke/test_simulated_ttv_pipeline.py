@@ -12,18 +12,22 @@ Each test case validates:
 2. Final video path and existence
 3. Total video duration including credits
 4. Proper cleanup of temporary files
+5. GCS upload validation
 """
 
 import logging
 import subprocess
 import sys
+import os
+import pytest
 from tests.integration.test_helpers import (
     validate_audio_video_durations,
     validate_final_video_path,
     validate_total_duration,
     validate_closing_credits_duration,
     validate_segment_count,
-    validate_background_music
+    validate_background_music,
+    validate_gcs_upload
 )
 from utils import get_tempdir
 from ttv.log_messages import LOG_TTV_DIR_CREATED
@@ -43,7 +47,14 @@ def test_simulated_pipeline_execution():
     3. Background music integration
     4. Closing credits generation and assembly
     5. Final video compilation and validation
+    6. GCS upload validation
     """
+    # Skip if GCS credentials are not configured
+    bucket_name = os.getenv('GCP_BUCKET_NAME')
+    project_name = os.getenv('GCP_PROJECT_NAME')
+    if not (bucket_name and project_name):
+        pytest.skip("GCS credentials not configured")
+
     print("\n=== Starting TTV Pipeline Integration Test ===")
 
     # Run the TTV command and capture output
@@ -76,7 +87,7 @@ def test_simulated_pipeline_execution():
 
     # Validate segment durations
     total_video_duration = validate_audio_video_durations(
-        output, SIMULATED_PIPELINE_CONFIG, output_dir
+        SIMULATED_PIPELINE_CONFIG, output_dir
     )
 
     # Validate background music was added successfully
@@ -84,16 +95,18 @@ def test_simulated_pipeline_execution():
 
     # Add closing credits duration to total video duration
     closing_credits_duration = validate_closing_credits_duration(
-        output, SIMULATED_PIPELINE_CONFIG, output_dir
+        output, SIMULATED_PIPELINE_CONFIG
     )
     total_video_duration += closing_credits_duration
 
     # Validate final video
-    final_video_path = validate_final_video_path(
-        SIMULATED_PIPELINE_CONFIG, output_dir
-    )
+    final_video_path = validate_final_video_path(output_dir)
     validate_total_duration(final_video_path, total_video_duration)
+
+    # Validate GCS upload
+    validate_gcs_upload(bucket_name, project_name)
 
     # Clean up
     # os.remove(final_video_path)  # Commented out to preserve files for debugging
+    # uploaded_file.delete()  # Commented out to preserve GCS files for debugging
     print("\n=== Test Complete ===\n")

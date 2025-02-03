@@ -13,8 +13,10 @@ import subprocess
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
+from google.cloud import storage
+from google.oauth2 import service_account
 from logger import Logger
-from utils import run_ffmpeg_command
+from utils import run_ffmpeg_command, upload_to_gcs, get_video_stream_url
 from .audio_alignment import create_word_level_captions
 from .captions import CaptionEntry, create_dynamic_captions, create_static_captions
 
@@ -44,17 +46,50 @@ def read_file_contents(file_path: str, encoding: str = "utf-8") -> Optional[str]
         Logger.print_error(f"Failed to read file {file_path}: {str(e)}")
         return None
 
-def _get_timestamped_filename(base_name: str) -> str:
-    """Generate a timestamped filename.
+
+def _upload_to_test_outputs(local_file_path: str) -> bool:
+    """Upload a file to the test outputs directory in GCS.
     
     Args:
-        base_name: Base name for the file
+        local_file_path: Path to the local file to upload
         
     Returns:
-        str: Filename with timestamp and .mp4 extension
+        bool: True if upload was successful, False otherwise
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{base_name}_{timestamp}.mp4"
+    bucket_name = os.getenv('GCP_BUCKET_NAME')
+    project_name = os.getenv('GCP_PROJECT_NAME')
+    service_account_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+    
+    if not (bucket_name and project_name and service_account_path):
+        return False
+
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    gcs_path = f"test_outputs/{timestamp}_final_video.mp4"
+    
+    success = upload_to_gcs(
+        local_file_path=local_file_path,
+        bucket_name=bucket_name,
+        project_name=project_name,
+        destination_blob_name=gcs_path
+    )
+    
+    if success:
+        try:
+            # Create credentials from service account
+            credentials = service_account.Credentials.from_service_account_file(service_account_path)
+            storage_client = storage.Client(credentials=credentials, project=project_name)
+            bucket = storage_client.get_bucket(bucket_name)
+            blob = bucket.blob(gcs_path)
+            
+            Logger.print_info(f"Successfully uploaded final video to GCS: gs://{bucket_name}/{gcs_path}")
+            stream_url = get_video_stream_url(blob, service_account_path=service_account_path)
+            Logger.print_info(f"Stream URL: {stream_url}")
+        except Exception as e:
+            Logger.print_error(f"Failed to generate stream URL: {str(e)}")
+    else:
+        Logger.print_error("Failed to upload final video to GCS")
+    
+    return success
 
 def concatenate_video_segments(
     video_segments: List[str],
@@ -189,30 +224,27 @@ def assemble_final_video(
     config: Optional[Any] = None,
     closing_credits_lyrics: Optional[str] = None
 ) -> Optional[str]:
-    """Assembles the final video from given segments, adds background music, and generates closing credits.
-
+    """Assemble the final video with background music and closing credits.
+    
     Args:
-        video_segments: List of paths to video segments
+        video_segments: List of video segment paths to combine
         output_dir: Directory for output files
-        music_path: Optional path to the background music file
-        song_with_lyrics_path: Optional path to the song with lyrics file for closing credits
-        movie_poster_path: Optional path to the movie poster image for closing credits
+        music_path: Optional path to background music file
+        song_with_lyrics_path: Optional path to closing credits song
+        movie_poster_path: Optional path to movie poster image
         config: Optional configuration object
-        closing_credits_lyrics: Optional lyrics text for closing credits
-
+        closing_credits_lyrics: Optional lyrics for closing credits
+        
     Returns:
-        str: Path to the final video.
+        Optional[str]: Path to final video if successful, None otherwise
     """
-    main_video_path = None
-    main_video_with_background_music_path = None
-    final_output_path = None
-
     try:
-        os.makedirs(output_dir, exist_ok=True)
+        # Create main video from segments
+        main_video_path = concatenate_video_segments(video_segments, output_dir)
+        if not main_video_path:
+            Logger.print_error("Failed to concatenate video segments")
+            return None
 
-        # Create initial concatenated video
-        Logger.print_info("Concatenating video segments...")
-        main_video_path = concatenate_video_segments(video_segments, output_dir, force_reencode=True)
         final_output_path = main_video_path
 
         # Handle background music
@@ -265,14 +297,17 @@ def assemble_final_video(
         else:
             final_output_path = main_video_with_background_music_path
 
-        # Before leaving method, standardize the name of the final video to final_video.mp4 by renaming whatever final_output_path is to final_video.mp4
-
+        # Standardize the name of the final video to final_video.mp4
         exit_output_path = os.path.join(output_dir, "final_video.mp4")
         if os.path.exists(final_output_path):
             os.rename(final_output_path, exit_output_path)
             final_output_path = exit_output_path
         else:
-            Logger.print_error("Failed to rename final video ")
+            Logger.print_error("Failed to rename final video")
+
+        # Upload the final video to GCS test outputs
+        #  TODO: This shouldn't be specific to test outputs
+        _upload_to_test_outputs(final_output_path)
 
         Logger.print_info(LOG_FINAL_VIDEO_PATH.format(final_output_path))
         play_video(final_output_path)

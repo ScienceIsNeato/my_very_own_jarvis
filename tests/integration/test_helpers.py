@@ -14,13 +14,11 @@ import subprocess
 import time
 import json
 import logging
+from google.cloud import storage
 from logger import Logger
-from utils import get_tempdir
 from ttv.log_messages import (
-    LOG_FINAL_VIDEO_CREATED,
     LOG_CLOSING_CREDITS_DURATION,
     LOG_FFPROBE_COMMAND,
-    LOG_VIDEO_SEGMENT_CREATE,
     LOG_BACKGROUND_MUSIC_SUCCESS,
     LOG_BACKGROUND_MUSIC_FAILURE
 )
@@ -103,7 +101,7 @@ def validate_segment_count(output, config_path):
             config = json.loads(f.read())
             expected_segments = len(config.get('story', []))
     except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
-        raise AssertionError(f"Failed to read story from config: {e}")
+        raise AssertionError(f"Failed to read story from config: {e}") # pylint: disable=raise-missing-from
     
     segment_pattern = r'segment_(\d+)_initial\.mp4'
     found_segments = {int(m.group(1)) for m in re.finditer(segment_pattern, output)}
@@ -120,7 +118,7 @@ def validate_segment_count(output, config_path):
     print("✓ All story segments are present")
     return actual_segments
 
-def validate_audio_video_durations(output, config_path, output_dir):
+def validate_audio_video_durations(config_path, output_dir):
     """Validate that each audio file matches the corresponding video segment duration."""
     print("\n=== Validating Audio/Video Segment Durations ===")
     
@@ -129,7 +127,7 @@ def validate_audio_video_durations(output, config_path, output_dir):
             config = json.loads(f.read())
             expected_segments = len(config.get('story', []))
     except (json.JSONDecodeError, FileNotFoundError, KeyError) as e:
-        raise AssertionError(f"Failed to read story from config: {e}")
+        raise AssertionError(f"Failed to read story from config: {e}") # pylint: disable=raise-missing-from
 
     print(f"Checking {expected_segments} segments in {output_dir}")
     
@@ -203,7 +201,7 @@ def extract_final_video_path(output):
     
     raise AssertionError("Final video path not found in logs.")
 
-def validate_final_video_path(config_path=None, output_dir=None):
+def validate_final_video_path(output_dir=None):
     """Validate that the final video path is found in the logs."""
     print("\n=== Validating Final Video Path ===")
     final_video_path = os.path.join(output_dir, "final_video.mp4")
@@ -229,7 +227,7 @@ def validate_total_duration(final_video_path, main_video_duration):
         f"({expected_duration:.2f}s)"
     )
 
-def validate_closing_credits_duration(output, config_path, output_dir):
+def validate_closing_credits_duration(output, config_path):
     """Validate that the closing credits audio and video durations match."""
     print("\n=== Validating Closing Credits Duration ===")
     
@@ -288,4 +286,37 @@ def read_story_from_config_file_with_retry_and_wait(config_file_path):
             return json.load(f)
     except (IOError, ValueError) as e:
         Logger.print_error(f"Failed to read story from config: {e}")
-        return None 
+        return None
+
+def validate_gcs_upload(bucket_name: str, project_name: str) -> storage.Blob:
+    """Validate that a file was uploaded to GCS and return the uploaded file blob.
+    
+    Args:
+        bucket_name: The name of the GCS bucket
+        project_name: The GCP project name
+        
+    Returns:
+        storage.Blob: The most recently uploaded video file blob
+        
+    Raises:
+        AssertionError: If no uploaded file is found or if the file doesn't exist
+    """
+    print("\n=== Validating GCS Upload ===")
+    storage_client = storage.Client(project=project_name)
+    bucket = storage_client.get_bucket(bucket_name)
+    
+    # List blobs in test_outputs directory
+    blobs = list(bucket.list_blobs(prefix="test_outputs/"))
+    
+    # Find the most recently uploaded file
+    uploaded_file = None
+    for blob in blobs:
+        if blob.name.endswith("_final_video.mp4"):
+            if not uploaded_file or blob.time_created > uploaded_file.time_created:
+                uploaded_file = blob
+    
+    assert uploaded_file is not None, "Failed to find uploaded video in GCS"
+    assert uploaded_file.exists(), "Uploaded file does not exist in GCS"
+    
+    print(f"✓ Found uploaded file in GCS: {uploaded_file.name}")
+    return uploaded_file

@@ -19,17 +19,29 @@ jobs:
     
     - name: Set up Google Application Credentials
       run: |
-        jq -n --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
-              --arg client_secret "${{ secrets.GAC_CLIENT_SECRET }}" \
-              --arg quota_project_id "${{ secrets.GAC_QUOTA_PROJECT_ID }}" \
-              --arg refresh_token "${{ secrets.GAC_REFRESH_TOKEN }}" \
-              --arg type "${{ secrets.GAC_TYPE }}" \
+        jq -n --arg type "service_account" \
+              --arg project_id "${{ secrets.GAC_PROJECT_ID }}" \
+              --arg private_key_id "${{ secrets.GAC_PRIVATE_KEY_ID }}" \
+              --arg private_key "${{ secrets.GAC_PRIVATE_KEY }}" \
+              --arg client_email "${{ secrets.GAC_CLIENT_EMAIL }}" \
+              --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
+              --arg auth_uri "https://accounts.google.com/o/oauth2/auth" \
+              --arg token_uri "https://oauth2.googleapis.com/token" \
+              --arg auth_provider_x509_cert_url "https://www.googleapis.com/oauth2/v1/certs" \
+              --arg client_x509_cert_url "${{ secrets.GAC_CLIENT_X509_CERT_URL }}" \
+              --arg universe_domain "googleapis.com" \
               '{
+                type: $type,
+                project_id: $project_id,
+                private_key_id: $private_key_id,
+                private_key: $private_key,
+                client_email: $client_email,
                 client_id: $client_id,
-                client_secret: $client_secret,
-                quota_project_id: $quota_project_id,
-                refresh_token: $refresh_token,
-                type: $type
+                auth_uri: $auth_uri,
+                token_uri: $token_uri,
+                auth_provider_x509_cert_url: $auth_provider_x509_cert_url,
+                client_x509_cert_url: $client_x509_cert_url,
+                universe_domain: $universe_domain
               }' > /tmp/gcp-credentials.json
         chmod 644 /tmp/gcp-credentials.json
       env:
@@ -64,17 +76,29 @@ jobs:
     
     - name: Set up Google Application Credentials
       run: |
-        jq -n --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
-              --arg client_secret "${{ secrets.GAC_CLIENT_SECRET }}" \
-              --arg quota_project_id "${{ secrets.GAC_QUOTA_PROJECT_ID }}" \
-              --arg refresh_token "${{ secrets.GAC_REFRESH_TOKEN }}" \
-              --arg type "${{ secrets.GAC_TYPE }}" \
+        jq -n --arg type "service_account" \
+              --arg project_id "${{ secrets.GAC_PROJECT_ID }}" \
+              --arg private_key_id "${{ secrets.GAC_PRIVATE_KEY_ID }}" \
+              --arg private_key "${{ secrets.GAC_PRIVATE_KEY }}" \
+              --arg client_email "${{ secrets.GAC_CLIENT_EMAIL }}" \
+              --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
+              --arg auth_uri "https://accounts.google.com/o/oauth2/auth" \
+              --arg token_uri "https://oauth2.googleapis.com/token" \
+              --arg auth_provider_x509_cert_url "https://www.googleapis.com/oauth2/v1/certs" \
+              --arg client_x509_cert_url "${{ secrets.GAC_CLIENT_X509_CERT_URL }}" \
+              --arg universe_domain "googleapis.com" \
               '{
+                type: $type,
+                project_id: $project_id,
+                private_key_id: $private_key_id,
+                private_key: $private_key,
+                client_email: $client_email,
                 client_id: $client_id,
-                client_secret: $client_secret,
-                quota_project_id: $quota_project_id,
-                refresh_token: $refresh_token,
-                type: $type
+                auth_uri: $auth_uri,
+                token_uri: $token_uri,
+                auth_provider_x509_cert_url: $auth_provider_x509_cert_url,
+                client_x509_cert_url: $client_x509_cert_url,
+                universe_domain: $universe_domain
               }' > /tmp/gcp-credentials.json
         chmod 644 /tmp/gcp-credentials.json
       env:

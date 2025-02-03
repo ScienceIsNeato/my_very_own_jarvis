@@ -15,10 +15,9 @@ from datetime import datetime
 from typing import List
 from uuid import uuid4
 
-from google.cloud import storage
 
 from logger import Logger
-from utils import get_tempdir
+from utils import get_tempdir, upload_to_gcs
 
 class SessionEvent:
     """Represents a single interaction event in a conversation session.
@@ -147,13 +146,13 @@ class CLISessionLogger(SessionLogger):
 
     def store_in_cloud_background(self) -> None:
         """Upload the session log to Google Cloud Storage."""
-        try:
-            storage_client = storage.Client(project=self.project_name)
-            bucket = storage_client.get_bucket(self.bucket_name)
-            blob = bucket.blob(os.path.basename(self.file_name))
-            blob.upload_from_filename(self.file_name)
-        except Exception as error:
-            Logger.print_error(f"Error uploading logs to cloud: {error}")
+        success = upload_to_gcs(
+            local_file_path=self.file_name,
+            bucket_name=self.bucket_name,
+            project_name=self.project_name
+        )
+        if not success:
+            Logger.print_error("Failed to upload session log to cloud storage")
 
     def finalize_session(self) -> None:
         """Finalize the session and optionally upload to cloud storage."""
