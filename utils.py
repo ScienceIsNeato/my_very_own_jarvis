@@ -15,11 +15,14 @@ import tempfile
 import threading
 import time
 from datetime import datetime
+from datetime import timedelta
 from functools import lru_cache
+
 from typing import Optional, Callable, Any
 import multiprocessing
 import platform
 from google.cloud import storage
+from google.oauth2 import service_account
 
 import openai
 import psutil
@@ -29,29 +32,8 @@ from ttv.log_messages import LOG_TTV_DIR_CREATED
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-class TTVDirectoryManager:
-    """Manages the creation and retrieval of timestamped TTV directories.
-    
-    This singleton class ensures that only one TTV directory is created per session
-    and provides consistent access to that directory throughout the application.
-    """
-    def __init__(self):
-        self.current_dir = None
-
-    def get_dir(self) -> str:
-        """Get or create a timestamped TTV directory.
-        
-        Returns:
-            str: Path to the current TTV directory
-        """
-        if self.current_dir is None:
-            timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-            self.current_dir = os.path.join(get_tempdir(), "ttv", timestamp)
-            os.makedirs(self.current_dir, exist_ok=True)
-            Logger.print_info(f"{LOG_TTV_DIR_CREATED}{self.current_dir}")
-        return self.current_dir
-
-ttv_dir_manager = TTVDirectoryManager()
+# Global variable to store the current TTV directory
+_current_ttv_dir = None
 
 def get_tempdir():
     """
@@ -65,7 +47,6 @@ def get_tempdir():
     if temp_dir is None:
         temp_dir = os.path.join(tempfile.gettempdir(), 'GANGLIA')
     os.makedirs(temp_dir, exist_ok=True)
-    Logger.print_info(f"{LOG_TTV_DIR_CREATED}{temp_dir}")
     return temp_dir
 
 def get_timestamped_ttv_dir() -> str:
@@ -80,7 +61,13 @@ def get_timestamped_ttv_dir() -> str:
     Returns:
         str: Path to the timestamped directory
     """
-    return ttv_dir_manager.get_dir()
+    global _current_ttv_dir # pylint: disable=global-statement
+    if _current_ttv_dir is None:
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        _current_ttv_dir = os.path.join(get_tempdir(), "ttv", timestamp)
+        os.makedirs(_current_ttv_dir, exist_ok=True)
+        Logger.print_info(f"{LOG_TTV_DIR_CREATED}{_current_ttv_dir}")
+    return _current_ttv_dir
 
 def get_config_path():
     """Get the path to the config directory relative to the project root."""
@@ -100,11 +87,16 @@ def upload_to_gcs(local_file_path: str, bucket_name: str, project_name: str, des
         bool: True if upload was successful, False otherwise
     """
     try:
+        service_account_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+        if not service_account_path:
+            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable not set")
+            
+        credentials = service_account.Credentials.from_service_account_file(service_account_path)
+        storage_client = storage.Client(credentials=credentials, project=project_name)
         
         if not destination_blob_name:
             destination_blob_name = os.path.basename(local_file_path)
             
-        storage_client = storage.Client(project=project_name)
         bucket = storage_client.get_bucket(bucket_name)
         blob = bucket.blob(destination_blob_name)
         blob.upload_from_filename(local_file_path)
@@ -365,3 +357,64 @@ def exponential_backoff(
             attempt += 1
 
     raise last_exception
+
+def get_video_stream_url(blob: storage.Blob, expiration_minutes: int = 60, service_account_path: str = None) -> str:
+    """Generate a signed URL for streaming a video from GCS.
+    
+    Args:
+        blob: The GCS blob containing the video
+        expiration_minutes: How long the URL should be valid for, in minutes
+        service_account_path: Optional path to service account key file. If not provided,
+                            will try to use GOOGLE_APPLICATION_CREDENTIALS environment variable
+        
+    Returns:
+        str: A signed URL that can be used to stream the video
+        
+    Example:
+        ```python
+        uploaded_file = validate_gcs_upload(bucket_name, project_name)
+        stream_url = get_video_stream_url(
+            uploaded_file, 
+            service_account_path="path/to/service-account.json"
+        )
+        print(f"Stream video at: {stream_url}")
+        ```
+        
+    Raises:
+        ValueError: If no valid service account credentials are found
+    """
+    print("\n=== Generating Video Stream URL ===")
+    
+    # If service account path provided, use it to create new client
+    if service_account_path:
+        if not os.path.exists(service_account_path):
+            raise ValueError(f"Service account file not found at: {service_account_path}")
+            
+        credentials = service_account.Credentials.from_service_account_file(
+            service_account_path
+        )
+        storage_client = storage.Client(
+            credentials=credentials,
+            project=blob.bucket.client.project
+        )
+        # Get a new blob instance with the service account client
+        bucket = storage_client.get_bucket(blob.bucket.name)
+        blob = bucket.get_blob(blob.name)
+    
+    # Generate signed URL with content-type header for video streaming
+    try:
+        url = blob.generate_signed_url(
+            expiration=timedelta(minutes=expiration_minutes),
+            method='GET',
+            response_type='video/mp4',  # Ensure proper content-type for video streaming
+            version='v4'  # Use latest version of signing
+        )
+        print(f"✓ Generated stream URL (valid for {expiration_minutes} minutes)")
+        return url
+    except Exception as e:
+        print("\nError generating signed URL. Make sure you have:")
+        print("1. Set GOOGLE_APPLICATION_CREDENTIALS environment variable to point to your service account key file")
+        print("   export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json")
+        print("2. OR provided the service_account_path parameter")
+        print("3. The service account has Storage Object Viewer permissions")
+        raise ValueError("Failed to generate signed URL. See above for troubleshooting steps.") from e
