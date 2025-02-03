@@ -11,45 +11,22 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    
     steps:
     - uses: actions/checkout@v3
     
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
     
-    - name: Set up Google Application Credentials
-      run: |
-        # First, write the private key to a temporary file with proper newlines
-        echo "${{ secrets.GAC_PRIVATE_KEY }}" > /tmp/private_key.txt
-        # Then create the service account JSON using the private key from file
-        jq -n --arg type "service_account" \
-              --arg project_id "${{ secrets.GAC_PROJECT_ID }}" \
-              --arg private_key_id "${{ secrets.GAC_PRIVATE_KEY_ID }}" \
-              --arg private_key "$(cat /tmp/private_key.txt)" \
-              --arg client_email "${{ secrets.GAC_CLIENT_EMAIL }}" \
-              --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
-              --arg auth_uri "https://accounts.google.com/o/oauth2/auth" \
-              --arg token_uri "https://oauth2.googleapis.com/token" \
-              --arg auth_provider_x509_cert_url "https://www.googleapis.com/oauth2/v1/certs" \
-              --arg client_x509_cert_url "${{ secrets.GAC_CLIENT_X509_CERT_URL }}" \
-              --arg universe_domain "googleapis.com" \
-              '{
-                type: $type,
-                project_id: $project_id,
-                private_key_id: $private_key_id,
-                private_key: $private_key,
-                client_email: $client_email,
-                client_id: $client_id,
-                auth_uri: $auth_uri,
-                token_uri: $token_uri,
-                auth_provider_x509_cert_url: $auth_provider_x509_cert_url,
-                client_x509_cert_url: $client_x509_cert_url,
-                universe_domain: $universe_domain
-              }' > /tmp/gcp-credentials.json
-        chmod 644 /tmp/gcp-credentials.json
-        rm -f /tmp/private_key.txt  # Clean up the temporary private key file
-      env:
-        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: 'projects/179131920588/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+        service_account: 'ganglia-uploader@halloween2023.iam.gserviceaccount.com'
 
     - name: Make run_tests.sh executable
       run: chmod +x run_tests.sh
@@ -60,17 +37,16 @@ jobs:
         GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
         GCP_PROJECT_NAME: ${{ secrets.GCP_PROJECT_NAME }}
         SUNO_API_KEY: ${{ secrets.SUNO_API_KEY }}
-        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
       run: ./run_tests.sh docker unit
-    
-    - name: Clean up
-      if: always()
-      run: rm -f /tmp/gcp-credentials.json
 
   smoke-tests:
     needs: unit-tests
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     
     steps:
     - uses: actions/checkout@v3
@@ -78,39 +54,12 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
     
-    - name: Set up Google Application Credentials
-      run: |
-        # First, write the private key to a temporary file with proper newlines
-        echo "${{ secrets.GAC_PRIVATE_KEY }}" > /tmp/private_key.txt
-        # Then create the service account JSON using the private key from file
-        jq -n --arg type "service_account" \
-              --arg project_id "${{ secrets.GAC_PROJECT_ID }}" \
-              --arg private_key_id "${{ secrets.GAC_PRIVATE_KEY_ID }}" \
-              --arg private_key "$(cat /tmp/private_key.txt)" \
-              --arg client_email "${{ secrets.GAC_CLIENT_EMAIL }}" \
-              --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
-              --arg auth_uri "https://accounts.google.com/o/oauth2/auth" \
-              --arg token_uri "https://oauth2.googleapis.com/token" \
-              --arg auth_provider_x509_cert_url "https://www.googleapis.com/oauth2/v1/certs" \
-              --arg client_x509_cert_url "${{ secrets.GAC_CLIENT_X509_CERT_URL }}" \
-              --arg universe_domain "googleapis.com" \
-              '{
-                type: $type,
-                project_id: $project_id,
-                private_key_id: $private_key_id,
-                private_key: $private_key,
-                client_email: $client_email,
-                client_id: $client_id,
-                auth_uri: $auth_uri,
-                token_uri: $token_uri,
-                auth_provider_x509_cert_url: $auth_provider_x509_cert_url,
-                client_x509_cert_url: $client_x509_cert_url,
-                universe_domain: $universe_domain
-              }' > /tmp/gcp-credentials.json
-        chmod 644 /tmp/gcp-credentials.json
-        rm -f /tmp/private_key.txt  # Clean up the temporary private key file
-      env:
-        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: 'projects/179131920588/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+        service_account: 'ganglia-uploader@halloween2023.iam.gserviceaccount.com'
 
     - name: Make run_tests.sh executable
       run: chmod +x run_tests.sh
@@ -121,16 +70,15 @@ jobs:
         GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
         GCP_PROJECT_NAME: ${{ secrets.GCP_PROJECT_NAME }}
         SUNO_API_KEY: ${{ secrets.SUNO_API_KEY }}
-        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
       run: ./run_tests.sh docker smoke
-    
-    - name: Clean up
-      if: always()
-      run: rm -f /tmp/gcp-credentials.json
 
   integration-tests:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     
     steps:
     - uses: actions/checkout@v3
@@ -138,23 +86,12 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
     
-    - name: Set up Google Application Credentials
-      run: |
-        jq -n --arg client_id "${{ secrets.GAC_CLIENT_ID }}" \
-              --arg client_secret "${{ secrets.GAC_CLIENT_SECRET }}" \
-              --arg quota_project_id "${{ secrets.GAC_QUOTA_PROJECT_ID }}" \
-              --arg refresh_token "${{ secrets.GAC_REFRESH_TOKEN }}" \
-              --arg type "${{ secrets.GAC_TYPE }}" \
-              '{
-                client_id: $client_id,
-                client_secret: $client_secret,
-                quota_project_id: $quota_project_id,
-                refresh_token: $refresh_token,
-                type: $type
-              }' > /tmp/gcp-credentials.json
-        chmod 644 /tmp/gcp-credentials.json
-      env:
-        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: 'projects/179131920588/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
+        service_account: 'ganglia-uploader@halloween2023.iam.gserviceaccount.com'
 
     - name: Make run_tests.sh executable
       run: chmod +x run_tests.sh
@@ -165,10 +102,5 @@ jobs:
         GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
         GCP_PROJECT_NAME: ${{ secrets.GCP_PROJECT_NAME }}
         SUNO_API_KEY: ${{ secrets.SUNO_API_KEY }}
-        GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-credentials.json
       run: ./run_tests.sh docker integration
-    
-    - name: Clean up
-      if: always()
-      run: rm -f /tmp/gcp-credentials.json
 
