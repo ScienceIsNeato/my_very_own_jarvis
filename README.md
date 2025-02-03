@@ -308,3 +308,50 @@ docker build --build-arg GOOGLE_CREDENTIALS_PATH=/path/to/your/credentials.json 
 
 ### CI Environment
 In CI, credentials are handled automatically through GitHub Secrets. No additional setup is required.
+
+## Development Setup
+
+### Setting up your development environment
+
+1. Create and activate a Python 3.9 virtual environment:
+```bash
+python3.9 -m venv .venv
+source .venv/bin/activate  # On Unix/macOS
+# or
+.venv\Scripts\activate  # On Windows
+```
+
+2. Install core dependencies (includes test dependencies):
+```bash
+pip install -r requirements_core.txt
+```
+
+3. Install additional dependencies if needed:
+```bash
+pip install -r requirements_large.txt  # For ML/AI features
+```
+
+### Running Tests
+
+Always run tests from within the virtual environment to ensure you're using the correct dependencies:
+
+```bash
+# Activate virtual environment first
+source .venv/bin/activate  # On Unix/macOS
+# or
+.venv\Scripts\activate  # On Windows
+
+# Then run tests
+python -m pytest  # Run all tests
+python -m pytest tests/unit  # Run unit tests
+python -m pytest tests/integration  # Run integration tests
+python -m pytest tests/smoke  # Run smoke tests
+```
+
+Note: Always use `python -m pytest` instead of calling `pytest` directly to ensure you're using the version installed in your virtual environment.
+
+Common pytest options:
+- `-v`: Verbose output
+- `-s`: Show print statements (don't capture stdout)
+- `-k "test_name"`: Run tests matching the given name
+- `--pdb`: Drop into debugger on test failures

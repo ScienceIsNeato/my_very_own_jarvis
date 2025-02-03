@@ -1,143 +1,194 @@
 from logger import Logger
 from .audio_generation import get_audio_duration
-from .ffmpeg_wrapper import run_ffmpeg_command
-from utils import get_tempdir
+from utils import ffmpeg_thread_manager
 from ttv.log_messages import LOG_VIDEO_SEGMENT_CREATE
 import os
-import uuid
+import subprocess
+import threading
+from typing import List, Optional
 
-def create_video_segment(image_path, audio_path, output_path=None):
+# Lock for subprocess operations to avoid gRPC fork handler issues
+subprocess_lock = threading.Lock()
+
+def create_video_segment(image_path, audio_path, output_path, thread_id=None):
     """Create a video segment from an image and audio file.
     
     Args:
         image_path: Path to the image file
         audio_path: Path to the audio file
-        output_path: Optional path for the output video. If not provided, generates one.
+        output_path: Path to save the output video
+        thread_id: Optional thread ID for logging
         
     Returns:
-        str: Path to the created video segment, or None if creation failed
+        str: Path to the output video if successful, None otherwise
     """
+    thread_prefix = f"{thread_id} " if thread_id else ""
     try:
-        if not output_path:
-            temp_dir = get_tempdir()
-            output_path = os.path.join(temp_dir, "ttv", f"segment_{uuid.uuid4()}.mp4")
-        
-        Logger.print_info(f"{LOG_VIDEO_SEGMENT_CREATE}={output_path}, audio_path={audio_path}, image_path={image_path}")
-        # Get exact audio duration including padding
+        # Get audio duration
         duration = get_audio_duration(audio_path)
-        
-        ffmpeg_cmd = [
-            "ffmpeg", "-y",
-            "-loop", "1", "-i", image_path,  # Input 1: looped image
-            "-i", audio_path,                # Input 2: audio with padding
-            "-map", "0:v:0",                 # Map video from first input
-            "-map", "1:a:0",                 # Map audio from second input
-            "-c:v", "libx264",
-            "-tune", "stillimage", 
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-ar", "48000",
-            "-ac", "2",
-            "-pix_fmt", "yuv420p",
-            "-t", str(duration),             # Exact duration including padding
-            output_path
-        ]
-        result = run_ffmpeg_command(ffmpeg_cmd)
-        if result:
-            Logger.print_info(f"Video segment created: output_path={output_path}")
-            return output_path
-        else:
-            Logger.print_error("Failed to create video segment")
+        if duration is None:
+            Logger.print_error(f"{thread_prefix}Failed to get audio duration")
             return None
-    except Exception as e:
-        Logger.print_error(f"Error creating video segment: {str(e)}")
-        import traceback
-        Logger.print_error(f"Traceback: {traceback.format_exc()}")
+
+        # Create video segment using thread manager
+        with ffmpeg_thread_manager:
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1",
+                "-i", image_path,
+                "-i", audio_path,
+                "-c:v", "libx264",
+                "-tune", "stillimage",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-pix_fmt", "yuv420p",
+                "-shortest",
+                output_path
+            ]
+            with subprocess_lock:  # Protect subprocess.run from gRPC fork issues
+                result = subprocess.run(
+                    cmd,
+                    check=True,
+                    capture_output=True
+                )
+
+        if result.returncode != 0:
+            Logger.print_error(f"{thread_prefix}Failed to create video segment: {result.stderr.decode()}")
+            return None
+
+        Logger.print_info(f"{thread_prefix}Successfully created video segment at {output_path}")
+        return output_path
+
+    except (subprocess.CalledProcessError, OSError) as e:
+        Logger.print_error(f"{thread_prefix}Error creating video segment: {str(e)}")
         return None
 
-def create_still_video_with_fade(image_path, audio_path, output_path):
-    Logger.print_info("Creating still video with fade.")
-    audio_delay = "adelay=3000|3000"  # Delay audio by 3000ms (3 seconds)
-    audio_fade_in = "afade=t=in:ss=0:d=3"  # Fade-in effect over 3 seconds
-    audio_fade_out = "afade=t=out:st={}:d=5".format(get_audio_duration(audio_path))  # Fade-out effect starting at the end
-
-    # Combine audio filters
-    audio_filters = f"{audio_delay},{audio_fade_in},{audio_fade_out}"
-
-    ffmpeg_cmd = [
-        "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-i", audio_path,
-        "-vf", "fade=t=out:st=25:d=5", "-af", audio_filters,
-        "-t", str(get_audio_duration(audio_path) + 1 + 3),  # Add 3 seconds to the duration for the delay
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", output_path
-    ]
-    result = run_ffmpeg_command(ffmpeg_cmd)
-    if result:
-        Logger.print_info(f"Still video with fade created: output_path={output_path}")
-    return output_path
-
-
-def create_final_video(video_segments, output_path):
+def create_still_video_with_fade(image_path, audio_path, output_path, thread_id=None):
+    """Create a still video with fade effects.
+    
+    Args:
+        image_path: Path to the image file
+        audio_path: Path to the audio file
+        output_path: Path to save the output video
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        str: Path to the output video if successful, None otherwise
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
     try:
-        concat_list_path = "/tmp/GANGLIA/ttv/concat_list.txt"
+        # Get audio duration
+        duration = get_audio_duration(audio_path)
+        if duration is None:
+            Logger.print_error(f"{thread_prefix}Failed to get audio duration")
+            return None
+
+        # Create video with fade using thread manager
+        with ffmpeg_thread_manager:
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1",
+                "-i", image_path,
+                "-i", audio_path,
+                "-vf", "fade=t=out:st=25:d=5",
+                "-af", f"adelay=3000|3000,afade=t=in:ss=0:d=3,afade=t=out:st={duration}:d=5",
+                "-t", str(duration + 4),  # Add 4 seconds for fade effects
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                output_path
+            ]
+            result = subprocess.run(
+                cmd,
+                check=True,
+                capture_output=True
+            )
+
+        if result.returncode != 0:
+            Logger.print_error(f"{thread_prefix}Failed to create video with fade: {result.stderr.decode()}")
+            return None
+
+        Logger.print_info(f"{thread_prefix}Successfully created video with fade at {output_path}")
+        return output_path
+
+    except (subprocess.CalledProcessError, OSError) as e:
+        Logger.print_error(f"{thread_prefix}Error creating video with fade: {str(e)}")
+        return None
+
+def append_video_segments(
+    video_segments: List[str],
+    thread_id: Optional[str] = None,
+    output_dir: str = None,
+    force_reencode: bool = False
+) -> Optional[str]:
+    """Append multiple video segments together.
+    
+    Args:
+        video_segments: List of video segment paths
+        thread_id: Optional thread ID for logging
+        output_dir: Optional directory for output files
+        force_reencode: Whether to force re-encoding of streams (needed for closing credits)
+        
+    Returns:
+        str: Path to the output video if successful, None otherwise
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    try:
+        # Create output path
+        output_path = os.path.join(output_dir, "concatenated_video.mp4")
+
+        # Create concat file with absolute paths
+        concat_list_path = os.path.join(output_dir, "concat_list.txt")
         with open(concat_list_path, "w") as f:
             for segment in video_segments:
-                f.write(f"file '{segment}'\n")
-        Logger.print_info(f"Concatenating video segments: {video_segments}")
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
-            "-pix_fmt", "yuv420p", "-c:v", "libx264", "-crf", "23", "-preset", "medium",
-            "-c:a", "aac", "-b:a", "192k", output_path
-        ]
-        result = run_ffmpeg_command(ffmpeg_cmd)
-        if result:
-            Logger.print_info(f"Main video created: output_path={output_path}")
-    except Exception as e:
-        Logger.print_error(f"Error concatenating video segments: {e}")
+                abs_path = os.path.abspath(segment)
+                f.write(f"file '{abs_path}'\n")
 
-    return output_path
-
-def append_video_segments(video_segments, output_path):
-    try:
-        reencoded_segments = []
-        for segment in video_segments:
-            reencoded_segment = segment.replace(".mp4", "_reencoded.mp4")
-            ffmpeg_cmd = [
-                "ffmpeg", "-y", "-i", segment,
-                "-vf", "scale=1024:1024", "-c:v", "libx264", "-c:a", "aac", "-ar", "48000", "-ac", "2",
-                reencoded_segment
+        # Concatenate segments using thread manager
+        with ffmpeg_thread_manager:
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_list_path
             ]
-            Logger.print_info(f"Re-encoding video segment: {segment} to {reencoded_segment}")
-            result = run_ffmpeg_command(ffmpeg_cmd)
-            if result:
-                Logger.print_info(f"Re-encoded video segment created: reencoded_segment={reencoded_segment}")
-                reencoded_segments.append(reencoded_segment)
+            
+            if force_reencode:
+                # Re-encode both video and audio streams
+                cmd.extend([
+                    "-c:v", "libx264",  # Re-encode video
+                    "-c:a", "aac",      # Re-encode audio
+                    "-b:a", "192k"      # Set audio bitrate
+                ])
             else:
-                Logger.print_error(f"Error re-encoding video segment: {segment}")
-                return
+                # Just copy streams without re-encoding
+                cmd.extend(["-c", "copy"])
+                
+            cmd.append(output_path)
+            
+            with subprocess_lock:  # Protect subprocess.run from gRPC fork issues
+                result = subprocess.run(
+                    cmd,
+                    check=True,
+                    capture_output=True
+                )
 
-        concat_list_path = "/tmp/GANGLIA/ttv/concat_list.txt"
-        with open(concat_list_path, "w") as f:
-            for segment in reencoded_segments:
-                f.write(f"file '{segment}'\n")
-        Logger.print_info(f"Appending video segments: {reencoded_segments}")
+        if result.returncode != 0:
+            Logger.print_error(f"{thread_prefix}Failed to concatenate segments: {result.stderr.decode()}")
+            return None
 
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
-            "-c:v", "libx264",  # Re-encode video to ensure consistent duration
-            "-c:a", "aac",      # Re-encode audio to ensure consistent duration
-            "-b:a", "192k",     # Consistent audio bitrate
-            "-ar", "48000",     # Consistent audio sample rate
-            "-ac", "2",         # Consistent audio channels
-            output_path
-        ]
-        result = run_ffmpeg_command(ffmpeg_cmd)
-        if result:
-            Logger.print_info(f"Final video with closing credits created: output_path={output_path}")
-        else:
-            Logger.print_error("Error appending re-encoded video segments")
+        Logger.print_info(f"{thread_prefix}Successfully appended video segments to {output_path}")
+        return output_path
 
-    except Exception as e:
-        Logger.print_error(f"Error appending video segments: {e}")
-
-    return output_path
+    except (subprocess.CalledProcessError, OSError) as e:
+        Logger.print_error(f"{thread_prefix}Error appending video segments: {str(e)}")
+        return None
+    finally:
+        # Cleanup temporary files
+        try:
+            if os.path.exists(concat_list_path):
+                os.remove(concat_list_path)
+        except (OSError, UnboundLocalError):
+            pass
 

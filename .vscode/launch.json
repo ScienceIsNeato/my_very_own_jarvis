@@ -3,13 +3,13 @@
     "configurations": [
         {
             "name": "Python: ganglia.py",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/ganglia.py",
             "console": "integratedTerminal",
             "args": [
                 "--text-to-video",
-                "--ttv-config", "tests/integration/test_data/generated_pipeline_config.json",
+                "--ttv-config", "tests/integration/test_data/simulated_pipeline_config.json",
             ],
             "justMyCode": true
         }

@@ -4,7 +4,8 @@ from openai import OpenAI
 import time
 import requests
 from logger import Logger
-from utils import get_tempdir
+from typing import Optional, Any, Dict
+from datetime import datetime
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -51,7 +52,7 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
             })
 
         # Then format it into the required JSON structure
-        response = query_dispatcher.sendQuery(
+        response = query_dispatcher.send_query(
             f"Format this filtered story into a JSON object with the style '{style}' and title '{story_title}':\n\n"
             f"{filtered_content}\n\n"
             "IMPORTANT: Return ONLY a JSON object in this exact format with no other text before or after:\n"
@@ -86,7 +87,16 @@ def generate_filtered_story(context, style, story_title, query_dispatcher):
             "story": "No story generated"
         })
 
-def generate_movie_poster(filtered_story_json, style, story_title, query_dispatcher, retries=5, wait_time=60, thread_id="[MoviePoster]"):
+def generate_movie_poster(
+    filtered_story_json: str,
+    style: str,
+    story_title: str,
+    query_dispatcher: Any,
+    retries: int = 5,
+    wait_time: float = 60,
+    thread_id: str = "[MoviePoster]",
+    output_dir: str = None
+) -> Optional[str]:
     thread_prefix = f"{thread_id} " if thread_id else ""
     try:
         filtered_story = json.loads(filtered_story_json)
@@ -114,7 +124,8 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
                 )
                 if response.data:
                     image_url = response.data[0].url
-                    filename = os.path.join(get_tempdir(), "ttv", "movie_poster.png")
+                    filename = os.path.join(output_dir, "movie_poster.png")
+                    os.makedirs(os.path.dirname(filename), exist_ok=True)
                     save_image_without_caption(image_url, filename, thread_id=thread_id)
                     return filename
                 else:
@@ -142,70 +153,86 @@ def generate_movie_poster(filtered_story_json, style, story_title, query_dispatc
             continue
         # If we get here, we had a safety issue and filtered the content, so try again
         continue
-    
+            
     Logger.print_error(f"{thread_prefix}Failed to generate movie poster after {safety_retries} safety filtering attempts.")
     return None
 
-def filter_text(sentence, context, style, query_dispatcher, retries=5, wait_time=60, thread_id=None):
+def filter_text(
+    text: str,
+    context: Optional[str] = None,
+    style: Optional[str] = None,
+    query_dispatcher: Optional[Any] = None,
+    retries: int = 5,
+    wait_time: float = 60.0,
+    thread_id: Optional[str] = None
+) -> Dict[str, str]:
+    """Filter and process text for better story generation.
+    
+    Args:
+        text: Input text to filter
+        context: Optional context for filtering
+        style: Optional style to apply
+        query_dispatcher: Optional query dispatcher
+        retries: Number of retry attempts
+        wait_time: Wait time between retries in seconds
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        Dict[str, str]: Dictionary containing filtered text and metadata
+    """
     thread_prefix = f"{thread_id} " if thread_id else ""
-    Logger.print_debug(f"{thread_prefix}Filtering text to pass content filters: '{sentence}' with context '{context}' and style '{style}'")
-
+    
+    if not query_dispatcher:
+        Logger.print_warning(f"{thread_prefix}No query dispatcher provided, returning original text")
+        return {"text": text}
+    
+    # Build the prompt for filtering
     prompt = (
-        f"Please filter this text to ensure it passes content filters for generating an image:\n\n"
-        f"Sentence: {sentence}\n"
-        f"Context: {context}\n"
-        f"Style: {style}\n\n"
-        "Please ensure that the filtered text does not contain any sensitive or inappropriate content.\n\n"
-        "Please return ONLY a JSON object in this exact format (no other text):\n"
-        "{\n"
-        "  \"text\": \"<insert result here>\"\n"
-        "}"
+        f"Given the context: {context}, "
+        f"and style: {style}, "
+        f"filter this text: {text}\n\n"
+        "Return only the filtered text with no additional explanation or formatting."
     )
-
+    
     for attempt in range(retries):
         try:
-            response = query_dispatcher.sendQuery(prompt)
+            response = query_dispatcher.send_query(prompt)
+            filtered_text = response.strip()
+            Logger.print_info(
+                f"{thread_prefix}Successfully filtered text: {filtered_text}"
+            )
+            return {"text": filtered_text}
             
-            # Try to extract JSON from the response if it's not pure JSON
-            try:
-                # First try parsing the whole response
-                response_json = json.loads(response)
-            except json.JSONDecodeError:
-                # If that fails, try to find JSON-like content within the response
-                start = response.find('{')
-                end = response.rfind('}') + 1
-                if start >= 0 and end > start:
-                    try:
-                        response_json = json.loads(response[start:end])
-                    except json.JSONDecodeError:
-                        # If we still can't parse it, fall back to original sentence
-                        Logger.print_warning(f"{thread_prefix}Failed to parse JSON response, falling back to original sentence")
-                        return {"text": sentence}
-                else:
-                    # No JSON-like content found, fall back to original sentence
-                    Logger.print_warning(f"{thread_prefix}No JSON content found in response, falling back to original sentence")
-                    return {"text": sentence}
-
-            filtered_sentence = response_json.get("text", sentence)  # Fallback to original sentence if key is not found
-            if filtered_sentence != sentence:
-                Logger.print_debug(f"{thread_prefix}Filtered sentence: {filtered_sentence}")
-            return {"text": filtered_sentence}
         except Exception as e:
-            if 'Rate limit exceeded' in str(e) or 'APIError' in str(e):
-                Logger.print_warning(f"{thread_prefix}Rate limit or API error. Retrying in {wait_time} seconds... (Attempt {attempt + 1} of {retries})")
-                time.sleep(wait_time)
+            if attempt < retries - 1:
+                retry_wait = wait_time * (2 ** attempt)  # Exponential backoff
+                Logger.print_warning(
+                    f"{thread_prefix}Error filtering text: {str(e)}. "
+                    f"Retrying in {retry_wait} seconds... "
+                    f"(Attempt {attempt + 1} of {retries})"
+                )
+                time.sleep(retry_wait)
             else:
-                Logger.print_error(f"{thread_prefix}Network error: {e}")
-                return {"text": sentence}
-
-    Logger.print_error(f"{thread_prefix}Failed to filter text after {retries} attempts due to rate limiting.")
-    return {"text": sentence}
-
+                Logger.print_error(
+                    f"{thread_prefix}Failed to filter text after "
+                    f"{retries} attempts: {str(e)}"
+                )
+                return {"text": text}  # Return original text on failure
+    
+    return {"text": text}
 
 def save_image_without_caption(image_url, filename, thread_id=None):
+    """Save an image from URL without caption.
+    
+    Args:
+        image_url: URL of the image to save
+        filename: Path to save the image
+        thread_id: Optional thread ID for logging
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
     response = requests.get(image_url, timeout=30)  # 30 second timeout
     if response.status_code == 200:
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, 'wb') as file:
             file.write(response.content)
-    Logger.print_info(f"{thread_id}Movie poster saved to {filename}")
+    Logger.print_info(f"{thread_prefix}Movie poster saved to {filename}")

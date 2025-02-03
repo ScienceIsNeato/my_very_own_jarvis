@@ -1,62 +1,195 @@
-import subprocess
-import uuid
-import os
-from logger import Logger
-from utils import get_tempdir
+"""Audio generation module for text-to-video conversion.
 
-def generate_audio(tts, sentence, silence_padding=0.5):
-    """
-    Generate audio from text with optional silence padding at start and end.
+This module provides functionality for:
+- Generating audio from text using text-to-speech
+- Processing and manipulating audio files
+- Managing audio file operations and cleanup
+- Handling audio generation retries and error cases
+"""
+
+import os
+import subprocess
+import time
+from typing import Dict, List, Optional, Tuple, Union
+
+import requests
+
+from logger import Logger
+
+def generate_audio(
+    text: str,
+    output_path: str,
+    voice: str = "en-US-Neural2-F",
+    language_code: str = "en-US",
+    thread_id: Optional[str] = None
+) -> Optional[str]:
+    """Generate audio from text using text-to-speech.
     
     Args:
-        tts: Text-to-speech instance
-        sentence: Text to convert to speech
-        silence_padding: Seconds of silence to add before and after (default 0.5s)
+        text: Text to convert to speech
+        output_path: Path to save the audio file
+        voice: Voice ID to use for synthesis
+        language_code: Language code for synthesis
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        Optional[str]: Path to generated audio if successful, None otherwise
     """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    
     try:
-        success, file_path = tts.convert_text_to_speech(sentence)
-        if success:
-            if silence_padding > 0:
-                # Create temp path for padded audio
-                temp_dir = get_tempdir()
-                tts_dir = os.path.join(temp_dir, "tts")
-                os.makedirs(tts_dir, exist_ok=True)
-                padded_path = os.path.join(tts_dir, f"padded_{os.path.basename(file_path)}")
-                
-                # Add silence padding using ffmpeg
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-f", "lavfi", "-t", str(silence_padding), "-i", "anullsrc=r=24000:cl=mono",  # Generate silence
-                    "-i", file_path,  # Original audio
-                    "-f", "lavfi", "-t", str(silence_padding), "-i", "anullsrc=r=24000:cl=mono",  # More silence
-                    "-filter_complex", "[0][1][2]concat=n=3:v=0:a=1",  # Concatenate silence + audio + silence
-                    "-acodec", "libmp3lame",  # Use MP3 codec
-                    padded_path
-                ]
-                
-                try:
-                    subprocess.run(cmd, capture_output=True, text=True, check=True)
-                    # Remove original file and use padded version
-                    os.remove(file_path)
-                    file_path = padded_path
-                    Logger.print_info(f"Added {silence_padding}s silence padding to audio")
-                except subprocess.CalledProcessError as e:
-                    Logger.print_error(f"Failed to add silence padding: {e.stderr}")
-                    # Keep original file if padding failed
+        # Create output directory if needed
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Call text-to-speech API
+        response = requests.post(
+            "https://texttospeech.googleapis.com/v1/text:synthesize",
+            json={
+                "input": {"text": text},
+                "voice": {
+                    "languageCode": language_code,
+                    "name": voice
+                },
+                "audioConfig": {
+                    "audioEncoding": "LINEAR16",
+                    "pitch": 0,
+                    "speakingRate": 1.0
+                }
+            }
+        )
+        
+        if response.status_code != 200:
+            raise ValueError(
+                f"API request failed with status {response.status_code}"
+            )
             
-            Logger.print_info(f"Audio generation successful for: '{sentence}'. Saved to {file_path}")
-            return file_path
-        else:
-            Logger.print_error(f"Audio generation failed for: '{sentence}'")
-            return None
-    except (OSError, subprocess.SubprocessError, ValueError) as e:
-        Logger.print_error(f"Audio generation failed for: '{sentence}'. Error: {e}")
+        # Save audio data
+        with open(output_path, "wb") as f:
+            f.write(response.content)
+            
+        Logger.print_info(
+            f"{thread_prefix}Generated audio saved to: {output_path}"
+        )
+        return output_path
+        
+    except Exception as e:
+        Logger.print_error(
+            f"{thread_prefix}Error generating audio: {str(e)}"
+        )
         return None
 
-def get_audio_duration(audio_file):
-    result = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries",
-         "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_file],
-        stdout=subprocess.PIPE,
-        check=True)
-    return float(result.stdout)
+def get_audio_duration(
+    audio_path: str,
+    thread_id: Optional[str] = None
+) -> Optional[float]:
+    """Get the duration of an audio file in seconds.
+    
+    Args:
+        audio_path: Path to the audio file
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        Optional[float]: Duration in seconds if successful, None otherwise
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    
+    try:
+        # Use ffprobe to get duration
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                audio_path
+            ],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        duration = float(result.stdout.strip())
+        Logger.print_debug(
+            f"{thread_prefix}Audio duration: {duration:.2f} seconds"
+        )
+        return duration
+        
+    except (subprocess.CalledProcessError, ValueError) as e:
+        Logger.print_error(
+            f"{thread_prefix}Error getting audio duration: {str(e)}"
+        )
+        return None
+
+def mix_audio_tracks(
+    tracks: List[str],
+    output_path: str,
+    volumes: Optional[List[float]] = None,
+    thread_id: Optional[str] = None
+) -> Optional[str]:
+    """Mix multiple audio tracks with optional volume adjustment.
+    
+    Args:
+        tracks: List of audio file paths to mix
+        output_path: Path to save mixed audio
+        volumes: Optional list of volume multipliers for each track
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        Optional[str]: Path to mixed audio if successful, None otherwise
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    
+    try:
+        if not tracks:
+            raise ValueError("No audio tracks provided")
+            
+        # Use default volumes if not provided
+        if volumes is None:
+            volumes = [1.0] * len(tracks)
+            
+        if len(volumes) != len(tracks):
+            raise ValueError(
+                "Number of volume multipliers must match number of tracks"
+            )
+            
+        # Build filter complex for mixing
+        inputs = []
+        for i, track in enumerate(tracks):
+            inputs.extend(["-i", track])
+            
+        filter_parts = []
+        for i, volume in enumerate(volumes):
+            filter_parts.append(
+                f"[{i}:a]volume={volume}[a{i}]"
+            )
+            
+        mix_inputs = "".join(f"[a{i}]" for i in range(len(tracks)))
+        filter_parts.append(
+            f"{mix_inputs}amix=inputs={len(tracks)}:duration=longest[out]"
+        )
+        
+        filter_complex = ";".join(filter_parts)
+        
+        # Run ffmpeg command
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                *inputs,
+                "-filter_complex", filter_complex,
+                "-map", "[out]",
+                output_path
+            ],
+            check=True,
+            capture_output=True
+        )
+        
+        Logger.print_info(
+            f"{thread_prefix}Mixed audio saved to: {output_path}"
+        )
+        return output_path
+        
+    except (subprocess.CalledProcessError, ValueError) as e:
+        Logger.print_error(
+            f"{thread_prefix}Error mixing audio tracks: {str(e)}"
+        )
+        return None

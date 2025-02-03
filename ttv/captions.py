@@ -1,15 +1,21 @@
 """Module for handling dynamic video captions and SRT subtitle generation."""
 
-from typing import List, Tuple, Optional
-import tempfile
-from dataclasses import dataclass
-from logger import Logger
-from .caption_roi import find_roi_in_frame, get_contrasting_color
-from .ffmpeg_wrapper import run_ffmpeg_command
-import subprocess
-from PIL import ImageFont
 import os
+import subprocess
+import tempfile
+import traceback
 import uuid
+from dataclasses import dataclass
+from typing import List, Tuple, Optional
+
+from moviepy.video.VideoClip import TextClip
+from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+from moviepy.video.io.VideoFileClip import VideoFileClip
+from PIL import ImageFont
+
+from logger import Logger
+from utils import run_ffmpeg_command
+from .caption_roi import find_roi_in_frame, get_contrasting_color
 
 def get_default_font() -> str:
     """Get default font name."""
@@ -18,11 +24,11 @@ def get_default_font() -> str:
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux/Docker
         "/Library/Fonts/DejaVuSans.ttf",  # macOS
     ]
-    
+
     for path in font_paths:
         if os.path.exists(path):
             return path
-    
+
     raise RuntimeError(
         "DejaVu Sans font not found. You have two options:\n"
         "1. Run tests in Docker (recommended)\n"
@@ -86,22 +92,22 @@ def split_into_words(caption: CaptionEntry, words_per_second: float = 2.0, font_
     """
     if caption.timed_words:
         # Use pre-calculated word timings (e.g. from Whisper)
-        return [Word.from_timed_word(text, start, end, font_name) 
+        return [Word.from_timed_word(text, start, end, font_name)
                 for text, start, end in caption.timed_words]
-    
+
     # Fall back to calculating timing based on words_per_second
     words = caption.text.split()
     total_duration = caption.end_time - caption.start_time
     total_words = len(words)
     min_duration_needed = total_words / words_per_second
-    
+
     if min_duration_needed > total_duration:
         # If we need more time than available, spread words evenly
         word_duration = total_duration / total_words
     else:
         # Otherwise use the requested words_per_second
         word_duration = 1.0 / words_per_second
-    
+
     result = []
     current_time = caption.start_time
     for i, word in enumerate(words):
@@ -136,20 +142,20 @@ def calculate_word_position(
     except OSError:
         font = ImageFont.load_default()
     space_width = int(font.getlength(" "))
-    
+
     # Calculate word width at current font size
     word.calculate_width(font_size)
     word.font_size = font_size
     word.width = int(word.width)
-    
+
     # Add space width if not at start of line
     total_width = word.width
     if cursor_x > 0:
         total_width += space_width
-    
+
     # Use 80% of ROI width to force wrapping
     effective_width = int(roi_width * 0.8)
-    
+
     # Check if word fits on current line
     if cursor_x + total_width <= effective_width:
         # Word fits - place it at cursor
@@ -158,7 +164,7 @@ def calculate_word_position(
         new_cursor_x = int(word_x + word.width)
         new_cursor_y = int(cursor_y)
         return new_cursor_x, new_cursor_y, word_x, word_y, False
-        
+
     # Word doesn't fit - check if we have room for a new line
     if cursor_y + (2 * line_height) <= roi_height:
         # Try increasing previous word's size if it's the last on its line
@@ -175,14 +181,14 @@ def calculate_word_position(
                     previous_word.width = int(previous_word.width)
                     break
             previous_word.font_size = test_size
-        
+
         # Start new line
         word_x = 0
         word_y = int(cursor_y + line_height)
         new_cursor_x = int(word.width)
         new_cursor_y = word_y
         return new_cursor_x, new_cursor_y, word_x, word_y, False
-        
+
     # No room for new line - need new window
     return 0, 0, 0, 0, True
 
@@ -190,8 +196,8 @@ def create_caption_windows(
     words: List[Word],
     min_font_size: int,
     max_font_size: int,
-    safe_width: int,
-    safe_height: int,
+    roi_width: int,
+    roi_height: int,
 ) -> List[CaptionWindow]:
     """Group words into caption windows with appropriate font sizes and line breaks."""
     windows = []
@@ -200,7 +206,7 @@ def create_caption_windows(
     cursor_x = 0
     cursor_y = 0
     line_number = 0
-    
+
     i = 0
     while i < len(words):
         # Try current font size
@@ -211,24 +217,24 @@ def create_caption_windows(
             cursor_y = 0
             line_number = 0
             j = i
-            
+
             window_complete = False
             while j < len(words) and not window_complete:
                 word = words[j]
                 previous_word = current_window_words[-1] if current_window_words else None
-                
+
                 new_cursor_x, new_cursor_y, word_x, word_y, needs_new_window = calculate_word_position(
                     word=word,
                     cursor_x=int(cursor_x),
                     cursor_y=int(cursor_y),
                     line_height=int(current_font_size * 1.2),
-                    roi_width=int(safe_width),
-                    roi_height=int(safe_height),
+                    roi_width=int(roi_width),
+                    roi_height=int(roi_height),
                     font_size=current_font_size,
                     max_font_size=max_font_size,
                     previous_word=previous_word
                 )
-                
+
                 if needs_new_window:
                     window_complete = True
                 else:
@@ -241,7 +247,7 @@ def create_caption_windows(
                     if cursor_y > line_number * (current_font_size * 1.2):
                         line_number += 1
                     j += 1
-            
+
             if current_window_words:
                 # Window fits with current font size
                 window = CaptionWindow(
@@ -253,34 +259,20 @@ def create_caption_windows(
                 windows.append(window)
                 i = j
                 break
-            else:
-                # Try smaller font size
-                current_font_size = int(current_font_size * 0.9)
-        
-        # If we couldn't fit any words with minimum font size, force at least one word
+            current_font_size -= 1
+
         if current_font_size < min_font_size:
-            word = words[i]
-            word.font_size = min_font_size
-            word.calculate_width(min_font_size)
-            word.x_position = 0
-            word.line_number = 0
-            window = CaptionWindow(
-                words=[word],
-                start_time=word.start_time,
-                end_time=word.end_time,
-                font_size=min_font_size
-            )
-            windows.append(window)
+            # Failed to fit at any size - force split at current word
+            Logger.print_warning(f"Failed to fit word '{words[i].text}' at any size")
             i += 1
             current_font_size = max_font_size
-    
+
     return windows
 
 def calculate_word_positions(
     window: CaptionWindow,
     video_height: int,
     margin: int,
-    safe_width: int
 ) -> List[Tuple[float, float]]:
     """
     Calculate the (x, y) positions for each word in a caption window.
@@ -291,23 +283,23 @@ def calculate_word_positions(
     total_lines = max(w.line_number for w in window.words) + 1
     window_height = total_lines * line_height
     window_top = video_height - margin - window_height  # Start position of window
-    
+
     # Calculate positions for each word
     for word in window.words:
         # Calculate y position
         y_position = window_top + (word.line_number * line_height)  # Lines flow downward
-        
+
         # Adjust y position for larger font sizes to align baselines
         if word.font_size > window.font_size:
-            baseline_offset = (word.font_size - window.font_size)
+            baseline_offset = word.font_size - window.font_size
             y_position -= baseline_offset
-        
+
         # X position is already calculated in try_fit_words and stored in word.x_position
         # Just add the left margin
         x_position = margin + word.x_position
-        
+
         positions.append((x_position, y_position))
-    
+
     return positions
 
 def create_dynamic_captions(
@@ -327,20 +319,16 @@ def create_dynamic_captions(
     """
     temp_files = []  # Keep track of temp files for cleanup
     try:
-        from moviepy.video.io.VideoFileClip import VideoFileClip
-        from moviepy.video.VideoClip import TextClip
-        from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-
         # Load the video
         video = VideoFileClip(input_video)
-        
+
         # Get first frame for ROI detection
         first_frame = video.get_frame(0)
         roi = find_roi_in_frame(first_frame)
         if roi is None:
             Logger.print_error("Failed to find ROI for captions")
             return None
-            
+
         # Extract ROI dimensions and determine text color
         roi_x, roi_y, roi_width, roi_height = roi
         text_color, stroke_color = get_contrasting_color(first_frame, roi)
@@ -362,8 +350,8 @@ def create_dynamic_captions(
             words=all_words,
             min_font_size=min_font_size,
             max_font_size=max_font_size,
-            safe_width=roi_width,
-            safe_height=roi_height
+            roi_width=roi_width,
+            roi_height=roi_height
         )
 
         # Create text clips for each word
@@ -372,7 +360,7 @@ def create_dynamic_captions(
             cursor_x = 0
             cursor_y = 0
             previous_word = None
-            
+
             for word in window.words:
                 # Calculate position using cursor-based approach
                 new_cursor_x, new_cursor_y, x_position, y_position, _ = calculate_word_position(
@@ -386,10 +374,10 @@ def create_dynamic_captions(
                     max_font_size=max_font_size,
                     previous_word=previous_word
                 )
-                
+
                 # Calculate extra padding needed for border and shadow
                 horizontal_padding = border_thickness * 2 + int(shadow_offset[0] * 1.5)
-                
+
                 # Create outer shadow clip with larger offset
                 outer_shadow_clip = TextClip(
                     text=word.text,
@@ -403,7 +391,7 @@ def create_dynamic_captions(
                     margin=(horizontal_padding//2, 0, 0, int(word.font_size * 1.5),),  # Add left margin
                     text_align='left',
                     duration=window.end_time - word.start_time
-                ).with_position((int(roi_x + x_position - horizontal_padding//2 + shadow_offset[0] * 1.5), 
+                ).with_position((int(roi_x + x_position - horizontal_padding//2 + shadow_offset[0] * 1.5),
                                int(roi_y + y_position + shadow_offset[1] * 1.5))).with_opacity(0.3).with_start(word.start_time)
 
                 # Create inner shadow clip with regular offset
@@ -419,9 +407,9 @@ def create_dynamic_captions(
                     margin=(horizontal_padding//2, 0, 0, int(word.font_size * 1.5),),  # Add left margin
                     text_align='left',
                     duration=window.end_time - word.start_time
-                ).with_position((int(roi_x + x_position - horizontal_padding//2 + shadow_offset[0]), 
+                ).with_position((int(roi_x + x_position - horizontal_padding//2 + shadow_offset[0]),
                                int(roi_y + y_position + shadow_offset[1]))).with_opacity(0.6).with_start(word.start_time)
-                
+
                 # Create text clip with contrasting color and enhancements
                 txt_clip = TextClip(
                     text=word.text,
@@ -435,13 +423,13 @@ def create_dynamic_captions(
                     margin=(horizontal_padding//2, 0, 0, int(word.font_size * 1.5),),  # Add left margin
                     text_align='left',
                     duration=window.end_time - word.start_time  # Word persists until end of window
-                ).with_position((int(roi_x + x_position - horizontal_padding//2), 
+                ).with_position((int(roi_x + x_position - horizontal_padding//2),
                                int(roi_y + y_position))).with_start(word.start_time)
-                
+
                 text_clips.append(outer_shadow_clip)  # Add outer shadow first (furthest back)
                 text_clips.append(inner_shadow_clip)  # Add inner shadow next
                 text_clips.append(txt_clip)  # Add text last (on top)
-                
+
                 # Update cursor and previous word for next iteration
                 cursor_x = new_cursor_x
                 cursor_y = new_cursor_y
@@ -453,7 +441,7 @@ def create_dynamic_captions(
         # Generate unique filenames for temporary files
         temp_audio = os.path.join(os.path.dirname(output_path), f"temp_audio_{uuid.uuid4()}.m4a")
         temp_files.append(temp_audio)
-        
+
         # Extract audio from input video
         ffmpeg_cmd = [
             "ffmpeg", "-y",
@@ -470,7 +458,7 @@ def create_dynamic_captions(
         # Write video without audio first
         temp_video = os.path.join(os.path.dirname(output_path), f"temp_video_{uuid.uuid4()}.mp4")
         temp_files.append(temp_video)
-        
+
         final_video.write_videofile(
             temp_video,
             codec='libx264',
@@ -506,9 +494,8 @@ def create_dynamic_captions(
         Logger.print_info(f"Successfully added dynamic captions to video: {output_path}")
         return output_path
 
-    except Exception as e:
-        Logger.print_error(f"Error adding dynamic captions: {str(e)}")
-        import traceback
+    except Exception as exception:
+        Logger.print_error(f"Error adding dynamic captions: {str(exception)}")
         Logger.print_error(f"Traceback: {traceback.format_exc()}")
         return None
     finally:
@@ -517,8 +504,8 @@ def create_dynamic_captions(
             try:
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
-            except Exception as e:
-                Logger.print_error(f"Error cleaning up temporary file {temp_file}: {e}")
+            except Exception as exception:
+                Logger.print_error(f"Error cleaning up temporary file {temp_file}: {exception}")
 
 def create_srt_captions(
     captions: List[CaptionEntry],
@@ -541,9 +528,9 @@ def create_srt_captions(
                 f.write(f"{format_time(caption.start_time)} --> {format_time(caption.end_time)}\n")
                 f.write(f"{caption.text}\n\n")
         return output_path
-    except (OSError, IOError) as e:
-        Logger.print_error(f"Error creating SRT file: {e}")
-        return None 
+    except (OSError, IOError) as exception:
+        Logger.print_error(f"Error creating SRT file: {exception}")
+        return None
 
 def create_static_captions(
     input_video: str,
@@ -581,9 +568,8 @@ def create_static_captions(
         dimensions = run_ffmpeg_command(ffprobe_cmd)
         if not dimensions:
             raise ValueError("Could not determine video dimensions")
-        
-        width, height = map(int, dimensions.stdout.decode('utf-8').strip().split(','))
-        
+
+
         # Build drawtext filters for each caption
         drawtext_filters = []
         for caption in captions:
@@ -591,11 +577,11 @@ def create_static_captions(
             if position == "bottom":
                 y_position = f"h-{margin}-th"  # Position from bottom with margin
             else:
-                y_position = f"(h-th)/2"  # Center vertically
-                
+                y_position = "(h-th)/2"  # Center vertically
+
             # Escape special characters in text
             escaped_text = caption.text.replace("'", "\\'")
-            
+
             filter_text = (
                 f"drawtext=text='{escaped_text}'"
                 f":font={font_name}"
@@ -608,14 +594,14 @@ def create_static_captions(
                 f":boxcolor={box_color}"
             )
             drawtext_filters.append(filter_text)
-            
+
         # Combine all filters
         complete_filter = ",".join(drawtext_filters)
-        
+
         # Generate unique filenames for temporary files
         temp_audio = os.path.join(os.path.dirname(output_path), f"temp_audio_{uuid.uuid4()}.m4a")
         temp_files.append(temp_audio)
-        
+
         # Extract audio from input video
         ffmpeg_cmd = [
             "ffmpeg", "-y",
@@ -632,7 +618,7 @@ def create_static_captions(
         # Create video with captions
         temp_video = os.path.join(os.path.dirname(output_path), f"temp_video_{uuid.uuid4()}.mp4")
         temp_files.append(temp_video)
-        
+
         ffmpeg_cmd = [
             "ffmpeg", "-y",
             "-i", input_video,
@@ -666,18 +652,18 @@ def create_static_captions(
         Logger.print_info(f"Successfully added static captions to video: {output_path}")
         return output_path
 
-    except (ValueError, OSError, subprocess.CalledProcessError) as e:
-        Logger.print_error(f"Error adding static captions: {e}")
-        return None 
+    except (ValueError, OSError, subprocess.CalledProcessError) as exception:
+        Logger.print_error(f"Error adding static captions: {exception}")
+        return None
     finally:
         # Clean up temporary files
         for temp_file in temp_files:
             try:
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
-            except Exception as e:
-                Logger.print_error(f"Error cleaning up temporary file {temp_file}: {e}")
+            except Exception as exception:
+                Logger.print_error(f"Error cleaning up temporary file {temp_file}: {exception}")
 
     # TODO: Fix bug where long static captions overflow the screen width.
     #       Need to implement text wrapping for static captions similar to dynamic captions
-    #       to ensure text stays within safe viewing area. 
+    #       to ensure text stays within safe viewing area.

@@ -90,12 +90,12 @@ The script automatically:
 The CI pipeline uses the same `run_tests.sh` script with different test types depending on the context:
 
 - On push to branch:
-  - Runs unit and integration tests
-  - `./run_tests.sh docker unit && ./run_tests.sh docker integration`
+  - Runs unit and smoke tests
+  - `./run_tests.sh docker unit && ./run_tests.sh docker smoke`
 
 - On pull request:
-  - Runs all test types
-  - `./run_tests.sh docker unit && ./run_tests.sh docker integration`
+  - Runs all integration tests
+  - `./run_tests.sh docker integration`
 
 Note: Third-party tests are never run in CI and must be run manually during development.
       These are for things such as: checking why your mic is not working, or why the SUNO API is not working.
@@ -109,7 +109,10 @@ tests/
 ├── third_party/       # External service tests
 │   ├── ttv/           # TTV third-party tests
 │   └── ...            # Other third-party tests
-└── integration/       # Multi-component tests
+├── smoke/             # Smoke tests
+│   ├── ttv/           # TTV smoke tests
+│   └── ...            # Other smoke tests
+├── integration/       # Multi-component tests
     ├── ttv/           # TTV integration tests
     └── ...            # Other integration tests
 ```

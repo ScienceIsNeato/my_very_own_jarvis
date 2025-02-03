@@ -26,4 +26,6 @@ pydub>=0.25.1
 # Image and Media Handling
 pillow>=10.0.0
 python-magic>=0.4.27
-ffmpeg-python>=0.2.0 
+
+# Development dependencies
+pylint==3.0.3  # For code linting

@@ -1,20 +1,35 @@
-"""Module for aligning text with audio to generate word-level timings."""
+"""Audio alignment module for text-to-video generation.
 
-from typing import List
-import whisper
-import torch
-from dataclasses import dataclass
-from .captions import CaptionEntry
-from functools import partial
-import sys
+This module provides functionality for aligning audio with video segments,
+including:
+- Audio duration calculation
+- Segment timing adjustment
+- Whisper-based audio transcription
+- FFmpeg-based audio processing
+"""
+
+# Standard library imports
 import os
 import subprocess
-import time
+import sys
 import threading
+import time
+import traceback
+from dataclasses import dataclass
+from functools import partial
+from typing import List, Optional
+
+# Third-party imports
+import torch
+import whisper
+
+# Local imports
+from .captions import CaptionEntry
+from logger import Logger
+from utils import exponential_backoff
 
 # Add parent directory to Python path to import logger
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from logger import Logger
 
 # Monkey patch torch.load to always use weights_only=True
 torch.load = partial(torch.load, weights_only=True)
@@ -59,10 +74,15 @@ def align_words_with_audio(audio_path: str, text: str, model_size: str = "tiny",
                 # Get word-level timestamps from audio
                 result = model.transcribe(
                     audio_path,
-                    language="en",
                     word_timestamps=True,
                     initial_prompt=text,  # Help guide the transcription
-                    fp16=False  # Force FP32
+                    condition_on_previous_text=False,  # Don't condition on previous text
+                    language="en",  # Pass language in decode_options
+                    temperature=0.0,  # Use greedy decoding for more consistent results
+                    no_speech_threshold=0.3,  # Lower threshold since we know we have speech
+                    logprob_threshold=-0.7,  # More strict about word confidence
+                    compression_ratio_threshold=2.0,  # Help detect hallucinations
+                    best_of=5  # Try multiple candidates and take the best one
                 )
                 
                 if not result or "segments" not in result:
@@ -159,74 +179,211 @@ def create_evenly_distributed_timings(audio_path: str, text: str) -> List[WordTi
         Logger.print_error(f"Error creating evenly distributed timings: {str(e)}")
         return []
 
-def create_word_level_captions(audio_path: str, text: str = "", is_music: bool = False) -> List[CaptionEntry]:
-    """
-    Create word-level caption entries from audio file.
+def create_word_level_captions(
+    audio_file: str,
+    text: str,
+    model_name: str = "base",
+    thread_id: str = None
+) -> List[CaptionEntry]:
+    """Create word-level captions by aligning text with audio using Whisper.
     
     Args:
-        audio_path: Path to the audio file
-        text: The text content of the audio, or empty string to auto-transcribe
-        is_music: Whether the audio contains music (uses a larger model and music-specific prompt)
+        audio_file: Path to the audio file
+        text: Text to align with audio
+        model_name: Whisper model name to use (default: "base")
+        thread_id: Optional thread ID for logging
         
     Returns:
-        List of CaptionEntry objects, one per word
+        List[CaptionEntry]: List of caption entries with word-level timings
     """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    
     try:
-        # Choose model size based on whether we're processing music
-        model_size = "base" if is_music else "tiny"
-        
-        if not text:
-            # Only transcribe if no text was provided
-            model = whisper.load_model(
-                model_size,
-                device="cpu",
-                download_root=None,
-                in_memory=True
-            )
-            
-            # Add an initial prompt if we're transcribing music
-            initial_prompt = "This is a song with lyrics. The lyrics are:" if is_music else None
-            
-            result = model.transcribe(
-                audio_path,
-                language="en",
-                initial_prompt=initial_prompt,
-                fp16=False
-            )
-            
-            if result and "text" in result:
-                text = result["text"].strip()
-                Logger.print_info(f"Transcribed {'lyrics' if is_music else 'text'}: {text}")
-            else:
-                Logger.print_error("Failed to transcribe audio")
-                return []
-        else:
-            # Use provided text directly
-            Logger.print_info(f"Using provided {'lyrics' if is_music else 'text'}: {text}")
+        Logger.print_info(
+            f"{thread_prefix}Creating word-level captions for: {audio_file}"
+        )
 
-        # Now get word timings using the text
-        word_timings = align_words_with_audio(audio_path, text, model_size)
-        if not word_timings:
-            Logger.print_error(f"No word timings available for: {text}")
+        # Load model with retries using exponential backoff
+        def load_and_process_model():
+            with whisper_lock:
+                model = whisper.load_model(
+                    model_name,
+                    device="cpu",  # Force CPU usage
+                    download_root=None,  # Use default download location
+                    in_memory=True  # Keep model in memory
+                )
+                result = model.transcribe(
+                    audio_file,
+                    word_timestamps=True,
+                    initial_prompt=text,  # Add text as initial prompt to guide transcription
+                    condition_on_previous_text=False,  # Don't condition on previous text
+                    language="en",  # Pass language in decode_options
+                    temperature=0.0,  # Use greedy decoding for more consistent results
+                    no_speech_threshold=0.3,  # Lower threshold since we know we have speech
+                    logprob_threshold=-0.7,  # More strict about word confidence
+                    compression_ratio_threshold=2.0,  # Help detect hallucinations
+                    best_of=5  # Try multiple candidates and take the best one
+                )
+                return model, result
+
+        # Use exponential backoff for model loading and processing
+        model, result = exponential_backoff(
+            load_and_process_model,
+            max_retries=5,
+            initial_delay=1.0,
+            thread_id=thread_id
+        )
+
+        # Extract word timings
+        words = []
+        for segment in result["segments"]:
+            for word in segment.get("words", []):
+                # Debug log the word structure
+                Logger.print_debug(f"{thread_prefix}Word data: {word}")
+                
+                # Get word text with fallback to empty string
+                word_text = word.get("text", word.get("word", ""))
+                if not word_text:
+                    Logger.print_warning(f"{thread_prefix}Empty word text in segment")
+                    continue
+                    
+                words.append({
+                    "text": word_text,
+                    "start": word.get("start", 0),
+                    "end": word.get("end", 0)
+                })
+
+        # If no words were found, fall back to evenly distributed
+        if not words:
+            Logger.print_warning(f"{thread_prefix}No words found in Whisper output, falling back to even distribution")
+            return create_evenly_distributed_captions(audio_file, text, thread_id)
+
+        # Create caption entries
+        captions = []
+        for i, word in enumerate(words):
+            caption = CaptionEntry(
+                text=word["text"],
+                start_time=word["start"],
+                end_time=word["end"]
+            )
+            captions.append(caption)
+
+        return captions
+
+    except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+        Logger.print_error(f"{thread_prefix}Error creating word-level captions: {str(e)}")
+        Logger.print_error(f"{thread_prefix}Full traceback: {traceback.format_exc()}")
+        Logger.print_info(f"{thread_prefix}Falling back to evenly distributed captions")
+        return create_evenly_distributed_captions(audio_file, text, thread_id)
+    except (OSError, IOError) as e:
+        Logger.print_error(
+            f"{thread_prefix}Error reading audio file: {str(e)}"
+        )
+        Logger.print_error(f"Traceback: {traceback.format_exc()}")
+        Logger.print_info(f"{thread_prefix}Falling back to evenly distributed captions")
+        return create_evenly_distributed_captions(audio_file, text, thread_id)
+    except Exception as e:
+        Logger.print_error(
+            f"{thread_prefix}Unexpected error in create_word_level_captions: {str(e)}"
+        )
+        Logger.print_error(f"Traceback: {traceback.format_exc()}")
+        Logger.print_info(f"{thread_prefix}Falling back to evenly distributed captions")
+        return create_evenly_distributed_captions(audio_file, text, thread_id)
+
+def create_evenly_distributed_captions(
+    audio_file: str,
+    text: str,
+    thread_id: Optional[str] = None
+) -> List[CaptionEntry]:
+    """Create evenly distributed captions when Whisper alignment fails.
+    
+    Args:
+        audio_file: Path to the audio file
+        text: Text to create captions for
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        List[CaptionEntry]: List of caption entries with evenly distributed timings
+    """
+    thread_prefix = f"{thread_id} " if thread_id else ""
+    try:
+        # Get total audio duration using ffprobe
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_file],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True)
+        total_duration = float(result.stdout)
+        
+        # Split text into words
+        words = text.split()
+        if not words:
             return []
         
-        # Convert to caption entries
+        # Calculate time per word
+        time_per_word = total_duration / len(words)
+        
+        # Create evenly distributed captions
         captions = []
-        for timing in word_timings:
+        for i, word in enumerate(words):
+            start_time = i * time_per_word
+            end_time = (i + 1) * time_per_word
             captions.append(CaptionEntry(
-                text=timing.text,
-                start_time=timing.start,
-                end_time=timing.end,
-                timed_words=[(timing.text, timing.start, timing.end)]
+                text=word,
+                start_time=start_time,
+                end_time=end_time
             ))
         
-        if not captions:
-            Logger.print_error(f"Failed to create captions from word timings for: {text}")
-            return []
-            
+        Logger.print_info(f"{thread_prefix}Created evenly distributed captions for {len(words)} words over {total_duration:.2f}s")
         return captions
+        
     except Exception as e:
-        Logger.print_error(f"Error in create_word_level_captions: {str(e)}")
-        import traceback
-        Logger.print_error(f"Traceback: {traceback.format_exc()}")
-        return [] 
+        Logger.print_error(f"{thread_prefix}Error creating evenly distributed captions: {str(e)}")
+        return []
+
+def get_audio_duration(audio_file: str, thread_id: str = None) -> float:
+    """Get the duration of an audio file in seconds.
+    
+    Args:
+        audio_file: Path to the audio file
+        thread_id: Optional thread ID for logging
+        
+    Returns:
+        float: Duration in seconds
+    """
+    try:
+        thread_prefix = f"{thread_id} " if thread_id else ""
+        Logger.print_info(
+            f"{thread_prefix}Getting duration for audio file: {audio_file}"
+        )
+
+        # Use ffprobe to get duration
+        cmd = [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", audio_file
+        ]
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True
+        )
+        duration = float(result.stdout.strip())
+
+        Logger.print_info(
+            f"{thread_prefix}Audio duration: {duration:.2f} seconds"
+        )
+        return duration
+
+    except subprocess.CalledProcessError as e:
+        Logger.print_error(
+            f"{thread_prefix}FFprobe error: {e.stderr.decode()}"
+        )
+        raise
+    except (ValueError, OSError) as e:
+        Logger.print_error(
+            f"{thread_prefix}Error getting audio duration: {str(e)}"
+        )
+        raise
