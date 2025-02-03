@@ -1,12 +1,12 @@
 """Module for handling dynamic video captions and SRT subtitle generation."""
 
+import subprocess
 from typing import List, Tuple, Optional
 import tempfile
 from dataclasses import dataclass
 from logger import Logger
+from utils import run_ffmpeg_command
 from .caption_roi import find_roi_in_frame, get_contrasting_color
-from .ffmpeg_wrapper import run_ffmpeg_command
-import subprocess
 from PIL import ImageFont
 import os
 import uuid

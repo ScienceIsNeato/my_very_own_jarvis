@@ -18,7 +18,7 @@ from logger import Logger
 
 from .audio_alignment import create_word_level_captions
 from .captions import CaptionEntry, create_dynamic_captions, create_static_captions
-from .ffmpeg_wrapper import run_ffmpeg_command
+from utils import run_ffmpeg_command
 from .log_messages import (
     LOG_CLOSING_CREDITS_DURATION,
     LOG_BACKGROUND_MUSIC_SUCCESS,
@@ -27,33 +27,6 @@ from .log_messages import (
 )
 from .video_generation import append_video_segments, create_video_segment, subprocess_lock
 from .ffmpeg_constants import SLIDESHOW_VIDEO_ARGS, AUDIO_ENCODING_ARGS, VIDEO_ENCODING_ARGS, AUDIO_SAMPLE_RATE
-
-def run_ffmpeg_command(cmd: List[str]) -> subprocess.CompletedProcess:
-    """Run an FFmpeg command and handle errors.
-    
-    Args:
-        cmd: List of command arguments
-        
-    Returns:
-        subprocess.CompletedProcess: The completed process result
-        
-    Raises:
-        subprocess.CalledProcessError: If the command fails
-        OSError: If there's a system-level error
-    """
-    try:
-        with subprocess_lock:  # Protect subprocess.run from gRPC fork issues
-            Logger.print_info(f"Running FFmpeg command: {' '.join(cmd)}")
-            result = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=True
-            )
-        return result
-    except (subprocess.CalledProcessError, OSError) as e:
-        Logger.print_error(f"FFmpeg command failed: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
-        raise
 
 def read_file_contents(file_path: str, encoding: str = "utf-8") -> Optional[str]:
     """Read contents of a file with proper encoding.

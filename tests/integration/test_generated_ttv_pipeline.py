@@ -24,9 +24,9 @@ from tests.integration.test_helpers import (
     validate_total_duration,
     validate_closing_credits_duration,
     validate_background_music,
-    parse_test_logs
 )
 from utils import get_tempdir, get_timestamped_ttv_dir
+from ttv.log_messages import LOG_TTV_DIR_CREATED
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ def test_generated_pipeline_execution():
         f.write(output)
 
     # Get the output directory from the output by getting everything after the : following `Created TTV directory` from the output
-    output_dir = output.split("Created TTV directory: ")[1].split("\n")[0]
+    output_dir = output.split(LOG_TTV_DIR_CREATED)[1].split("\n")[0]
     print(f"Detected output directory: {output_dir}")
 
     # Validate all segments are present

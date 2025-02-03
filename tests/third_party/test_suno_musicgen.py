@@ -42,21 +42,6 @@ class MockQueryDispatcher:
             ])
         })
 
-def is_space_pressed():
-    """Check if spacebar is pressed without blocking.
-    
-    Returns:
-        bool: True if spacebar was pressed, False otherwise
-    """
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(sys.stdin.fileno())
-        ch = sys.stdin.read(1)
-        return ch == ' '
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
 def play_audio(audio_path):
     """Play audio file and allow skipping with spacebar.
     

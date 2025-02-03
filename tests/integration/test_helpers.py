@@ -27,16 +27,6 @@ from ttv.log_messages import (
 
 logger = logging.getLogger(__name__)
 
-def parse_test_logs(log_file):
-    """Parse test run logs and extract results."""
-    results = []
-    with open(log_file, 'r', encoding='utf-8') as f:
-        # Basic log parsing logic
-        for line in f:
-            if 'TEST RESULT:' in line:
-                results.append(line.strip())
-    return results
-
 def validate_background_music(output: str) -> None:
     """Validate background music generation and addition.
     

@@ -53,7 +53,9 @@ enable=
     line-too-long,      # C0301: Line too long
     trailing-newlines,  # C0305: Trailing newlines
     unspecified-encoding,  # W1514: Using open without explicitly specifying an encoding
-    invalid-name       # C0103: Invalid name
+    invalid-name,       # C0103: Invalid name
+    unused-variable,    # W0612: Unused variable
+    constant-redefined  # W0622: Redefining built-in or constant
 
 # Specific rule settings
 [EXCEPTIONS]
@@ -78,10 +80,3 @@ ignore-docstrings=yes
 
 # Ignore imports when computing similarities
 ignore-imports=yes
-
-[SPELLING]
-# Spelling dictionary name
-spelling-dict=en_US
-
-# List of comma separated words that should not be checked
-spelling-ignore-words=musicgen,crossfade,atrim,acrossfade,suno,urandom,ffprobe,noprint,nokey,afplay,spacebar,tcgetattr,tcsetattr,TCSADRAIN,rlist,pyaudio,texttospeech,ffplay,nodisp,autoexit
