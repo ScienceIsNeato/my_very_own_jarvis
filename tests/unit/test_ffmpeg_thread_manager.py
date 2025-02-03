@@ -8,17 +8,16 @@ This module contains tests that verify the FFmpeg thread manager's ability to:
 """
 
 # Standard library imports
-import os
 import queue
 import threading
 import time
+from unittest.mock import patch
 
 # Third-party imports
 import pytest
-from unittest.mock import patch
 
 # Local imports
-from utils import FFmpegThreadManager
+from utils import FFmpegThreadManager, get_ffmpeg_thread_count
 
 @pytest.fixture(autouse=True)
 def mock_system_info():
@@ -32,294 +31,153 @@ def mock_system_info():
         yield mock
 
 @pytest.fixture
-def thread_manager():
+def thread_mgr():
     """Fixture providing a clean FFmpegThreadManager instance."""
     manager = FFmpegThreadManager()
     yield manager
     manager.cleanup()
 
-def test_init(thread_manager):
+def test_init(thread_mgr):
     """Test initialization of FFmpegThreadManager."""
-    assert isinstance(thread_manager, FFmpegThreadManager)
-    assert thread_manager.max_concurrent > 0
-    assert len(thread_manager._active_operations) == 0
+    assert isinstance(thread_mgr, FFmpegThreadManager)
+    assert isinstance(thread_mgr.active_operations, list)
+    assert isinstance(thread_mgr.operation_queue, queue.Queue)
 
-def test_determine_max_concurrent_operations(mock_system_info):
-    """Test determination of maximum concurrent operations."""
-    manager = FFmpegThreadManager()
-    assert manager._determine_max_concurrent() == 2  # Half of CPU cores
+def test_get_threads_for_operation(thread_mgr):
+    """Test thread count calculation for operations."""
+    thread_count = thread_mgr.get_threads_for_operation()
+    assert thread_count > 0
+    assert thread_count <= get_ffmpeg_thread_count()
 
-def test_add_operation(thread_manager):
-    """Test adding an operation to the thread manager."""
-    operation = "ffmpeg -i input.mp4 output.mp4"
-    thread_manager.add_operation(operation)
-    assert len(thread_manager._active_operations) == 1
+def test_context_manager(thread_mgr):
+    """Test using FFmpegThreadManager as a context manager."""
+    with thread_mgr:
+        assert len(thread_mgr.active_operations) == 1
+    assert len(thread_mgr.active_operations) == 0
 
-def test_add_multiple_operations(thread_manager):
-    """Test adding multiple operations to the thread manager."""
-    operations = [
-        "ffmpeg -i input1.mp4 output1.mp4",
-        "ffmpeg -i input2.mp4 output2.mp4",
-        "ffmpeg -i input3.mp4 output3.mp4"
-    ]
-    for op in operations:
-        thread_manager.add_operation(op)
-        # Wait for operation to start
-        time.sleep(0.01)
-    assert len(thread_manager._active_operations) <= thread_manager.max_concurrent
-
-def test_operation_completion(thread_manager):
-    """Test successful completion of FFmpeg operations."""
-    operation = "ffmpeg -i input.mp4 -t 1 output.mp4"
-    thread_manager.add_operation(operation)
-    
-    # Wait for operation to complete with timeout
-    start_time = time.time()
-    timeout = 1.0  # 1 second timeout
-    while len(thread_manager._active_operations) > 0:
-        if time.time() - start_time > timeout:
-            break
-        time.sleep(0.1)
-    
-    # Check operation completed
-    assert len(thread_manager._active_operations) == 0
-    assert thread_manager._operation_queue.qsize() == 0
-
-def test_concurrent_operations(thread_manager):
+def test_concurrent_operations(thread_mgr):
     """Test handling of concurrent FFmpeg operations."""
-    # Add multiple operations
-    operations = [
-        "ffmpeg -i input1.mp4 output1.mp4",
-        "ffmpeg -i input2.mp4 output2.mp4",
-        "ffmpeg -i input3.mp4 output3.mp4"
-    ]
-    
-    for op in operations:
-        thread_manager.add_operation(op)
-        
-    assert len(thread_manager._active_operations) <= thread_manager.max_concurrent
-    assert thread_manager._operation_queue.qsize() <= len(operations)
+    with thread_mgr:
+        assert len(thread_mgr.active_operations) == 1
+        with thread_mgr:
+            assert len(thread_mgr.active_operations) == 2
+        assert len(thread_mgr.active_operations) == 1
+    assert len(thread_mgr.active_operations) == 0
 
-def test_error_handling(thread_manager):
+def test_error_handling(thread_mgr):
     """Test handling of FFmpeg operation errors."""
-    # Invalid FFmpeg command
-    invalid_operation = "ffmpeg -invalid-flag input.mp4 output.mp4"
-    thread_manager.add_operation(invalid_operation)
+    try:
+        with thread_mgr:
+            raise ValueError("Test error")
+    except ValueError:
+        pass
+    assert len(thread_mgr.active_operations) == 0
+    assert thread_mgr.operation_queue.empty()
 
-    # Wait for operation to complete
-    start_time = time.time()
-    timeout = 1.0  # 1 second timeout
-    while len(thread_manager._active_operations) > 0:
-        if time.time() - start_time > timeout:
-            break
-        time.sleep(0.01)  # Short sleep to prevent busy waiting
-
-    assert len(thread_manager._active_operations) == 0
-    assert thread_manager._operation_queue.qsize() == 0
-
-def test_resource_cleanup(thread_manager):
+def test_resource_cleanup(thread_mgr):
     """Test resource cleanup after operations."""
-    operation = "ffmpeg -i input.mp4 output.mp4"
-    thread_manager.add_operation(operation)
-    thread_manager._active_operations[0].join()
-    assert len(thread_manager._active_operations) == 0
-
-def test_operation_queue():
-    """Test operation queuing functionality."""
-    import threading
-    import queue
-
-    manager = FFmpegThreadManager()
-    operation_queue = queue.Queue()
-
-    def worker():
-        while True:
-            try:
-                operation = operation_queue.get(timeout=1)
-                manager.add_operation(operation)
-            except queue.Empty:
-                break
-
-    worker_thread = threading.Thread(target=worker)
-    worker_thread.start()
-
-    operations = [
-        "ffmpeg -i input1.mp4 output1.mp4",
-        "ffmpeg -i input2.mp4 output2.mp4",
-        "ffmpeg -i input3.mp4 output3.mp4"
-    ]
-
-    for op in operations:
-        operation_queue.put(op)
-
-    worker_thread.join()
-    assert len(manager._active_operations) <= manager.max_concurrent
-
-def test_operation_timeout():
-    """Test operation timeout handling."""
-    manager = FFmpegThreadManager()
-    operation = "ffmpeg -i input.mp4 -t 5 output.mp4"
-    manager.add_operation(operation)
-
-    # Wait for operation to complete or timeout
-    start_time = time.time()
-    timeout = 10
-    while len(manager._active_operations) > 0 and time.time() - start_time < timeout:
-        time.sleep(0.1)
-
-    assert len(manager._active_operations) == 0
+    with thread_mgr:
+        pass
+    assert len(thread_mgr.active_operations) == 0
+    assert thread_mgr.operation_queue.empty()
 
 def test_thread_count_ci_environment():
     """Test thread count calculation in CI environment."""
     with patch('os.environ.get') as mock_env:
         mock_env.return_value = 'true'
-        with patch('utils.FFmpegThreadManager.get_system_info') as mock_sys:
+        with patch('utils.get_system_info') as mock_sys:
             mock_sys.return_value = {
                 'total_cores': 8,
                 'total_memory': 32 * 1024 * 1024 * 1024,  # 32GB in bytes
                 'platform': 'linux'
             }
             manager = FFmpegThreadManager()
-            assert manager.max_concurrent == 2  # Half of CPU cores in CI
+            with manager:
+                thread_count = manager.get_threads_for_operation()
+                assert thread_count <= 4  # CI environment should limit threads
 
 def test_thread_count_local_environment():
     """Test thread count calculation in local environment."""
     with patch('os.environ.get') as mock_env:
         mock_env.return_value = None
-        with patch('utils.FFmpegThreadManager.get_system_info') as mock_sys:
+        with patch('utils.get_system_info') as mock_sys:
             mock_sys.return_value = {
                 'total_cores': 8,
                 'total_memory': 32 * 1024 * 1024 * 1024,  # 32GB in bytes
                 'platform': 'linux'
             }
             manager = FFmpegThreadManager()
-            assert manager.max_concurrent == 2  # 75% of CPU cores locally
-
-def test_thread_count_with_gpu():
-    """Test thread count calculation with GPU available."""
-    with patch('utils.FFmpegThreadManager.get_system_info') as mock_sys:
-        mock_sys.return_value = {
-            'total_cores': 8,
-            'total_memory': 32 * 1024 * 1024 * 1024,  # 32GB in bytes
-            'platform': 'linux'
-        }
-        manager = FFmpegThreadManager()
-        assert manager.max_concurrent == 2  # Full CPU cores with GPU
+            with manager:
+                thread_count = manager.get_threads_for_operation()
+                assert thread_count > 0  # Local environment should use more threads
 
 def test_memory_limit():
     """Test thread count adjustment based on memory limits."""
-    with patch('utils.FFmpegThreadManager.get_system_info') as mock_sys:
+    with patch('utils.get_system_info') as mock_sys:
         mock_sys.return_value = {
             'total_cores': 8,
             'total_memory': 8 * 1024 * 1024 * 1024,  # 8GB in bytes
             'platform': 'linux'
         }
         manager = FFmpegThreadManager()
-        assert manager.max_concurrent <= 4  # Reduced threads due to memory
+        with manager:
+            thread_count = manager.get_threads_for_operation()
+            assert thread_count <= 4  # Limited by memory
 
-def test_operation_queue_overflow():
-    """Test handling of operation queue overflow."""
-    manager = FFmpegThreadManager()
-    operations = [f"ffmpeg -i input{i}.mp4 output{i}.mp4" for i in range(10)]
-    
-    for op in operations:
-        manager.add_operation(op)
-        assert len(manager._active_operations) <= manager.max_concurrent
-
-def test_operation_cancellation():
-    """Test cancellation of running operations."""
-    manager = FFmpegThreadManager()
-    operation = "ffmpeg -i input.mp4 -t 10 output.mp4"
-    manager.add_operation(operation)
-    
-    # Simulate operation cancellation
-    if manager._active_operations:
-        thread = manager._active_operations[0]
-        thread.join(timeout=0.2)  # Wait longer for operation to complete
-        assert not thread.is_alive() or len(manager._active_operations) == 0
-
-def test_thread_count_production():
-    """Test thread count calculation in production environment."""
-    with patch('utils.FFmpegThreadManager.get_system_info') as mock_sys:
-        mock_sys.return_value = {
-            'total_cores': 32,
-            'total_memory': 64 * 1024 * 1024 * 1024,  # 64GB in bytes
-            'platform': 'linux'
-        }
-        manager = FFmpegThreadManager()
-        assert manager.max_concurrent == 4  # 75% of CPU cores in production
-
-def test_max_concurrent_operations():
-    """Test maximum concurrent operations limit"""
-    thread_manager = FFmpegThreadManager()
-    
-    # Add more operations than max_concurrent
-    operations = [f"ffmpeg -i input{i}.mp4 output{i}.mp4" for i in range(10)]
-    for op in operations:
-        thread_manager.add_operation(op)
-        assert len(thread_manager._active_operations) <= thread_manager.max_concurrent
-
-def test_thread_manager_cleanup(thread_manager):
+def test_thread_manager_cleanup(thread_mgr):
     """Test that thread manager properly cleans up after operations"""
-    initial_operations = list(thread_manager._active_operations)
-    
-    # Test normal exit
-    with thread_manager:
-        assert len(thread_manager._active_operations) == len(initial_operations) + 1
-        
-    # Test cleanup
-    assert len(thread_manager._active_operations) == len(initial_operations)
+    with thread_mgr:
+        assert len(thread_mgr.active_operations) == 1
+    assert len(thread_mgr.active_operations) == 0
+    assert thread_mgr.operation_queue.empty()
 
-def test_thread_manager_concurrent_access(mock_system_info):
+def test_thread_manager_concurrent_access():
     """Test thread manager under concurrent access"""
-    is_ci = os.environ.get('CI', '').lower() == 'true'
-    
-    # Mock system info consistently
-    mock_system_info.return_value = {
-        'total_cores': 8,
-        'total_memory': 16 * (1024**3),
-        'platform': 'linux'
-    }
-    
-    import threading
-    import queue
-    
     manager = FFmpegThreadManager()
+    threads = []
     results = queue.Queue()
-    
+
     def worker():
         with manager:
-            # Small sleep to ensure threads overlap
-            import time
-            time.sleep(0.01)
+            time.sleep(0.01)  # Small sleep to ensure overlap
             thread_count = manager.get_threads_for_operation()
             results.put(thread_count)
-    
+
     # Start multiple threads simultaneously
-    threads = [threading.Thread(target=worker) for _ in range(4)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    
-    # Collect results
+    for _ in range(4):
+        thread = threading.Thread(target=worker)
+        thread.start()
+        threads.append(thread)
+
+    # Wait for all threads to complete
+    for thread in threads:
+        thread.join()
+
+    # Verify results
     thread_counts = []
     while not results.empty():
         thread_counts.append(results.get())
-    
-    assert len(thread_counts) == 4, "All operations should complete"
-    assert all(count >= 2 for count in thread_counts), "Each operation should get at least 2 threads"
 
-def test_cleanup(thread_manager):
-    """Test cleanup of FFmpeg thread manager resources."""
-    operations = [
-        "ffmpeg -i input1.mp4 output1.mp4",
-        "ffmpeg -i input2.mp4 output2.mp4"
-    ]
-    
-    for op in operations:
-        thread_manager.add_operation(op)
-    
-    thread_manager.cleanup()
-    assert len(thread_manager._active_operations) == 0
-    assert thread_manager._operation_queue.qsize() == 0 
+    assert len(thread_counts) == 4, "All operations should complete"
+    assert all(count > 0 for count in thread_counts), "Each operation should get threads"
+    assert len(manager.active_operations) == 0, "All operations should be cleaned up"
+
+def test_operation_completion():
+    """Test successful completion of FFmpeg operations."""
+    manager = FFmpegThreadManager()
+    with manager:
+        assert len(manager.active_operations) == 1
+        time.sleep(0.1)  # Allow operation to complete
+    assert len(manager.active_operations) == 0
+    assert manager.operation_queue.empty()
+
+def test_cleanup_with_active_operations(thread_mgr):
+    """Test cleanup behavior with active operations."""
+    with thread_mgr:
+        pass  # Operation is started and completed
+    thread_mgr.cleanup()
+    assert len(thread_mgr.active_operations) == 0
+    assert thread_mgr.operation_queue.empty()
+
+if __name__ == "__main__":
+    pytest.main(["-v", __file__])

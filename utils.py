@@ -8,25 +8,49 @@ This module provides utility functions for:
 """
 
 import os
-import openai
-from datetime import datetime
+import queue
+import random
+import subprocess
 import tempfile
-import multiprocessing
-import platform
-import psutil
-from typing import Optional, Callable, Any, List
-from functools import lru_cache
 import threading
 import time
-import random
+from datetime import datetime
+from functools import lru_cache
+from typing import Optional, Callable, Any
+import multiprocessing
+import platform
+
+import openai
+import psutil
+
 from logger import Logger
-import queue
 from ttv.log_messages import LOG_TTV_DIR_CREATED
-import subprocess
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-_CURRENT_TTV_DIR = None
+class TTVDirectoryManager:
+    """Manages the creation and retrieval of timestamped TTV directories.
+    
+    This singleton class ensures that only one TTV directory is created per session
+    and provides consistent access to that directory throughout the application.
+    """
+    def __init__(self):
+        self.current_dir = None
+
+    def get_dir(self) -> str:
+        """Get or create a timestamped TTV directory.
+        
+        Returns:
+            str: Path to the current TTV directory
+        """
+        if self.current_dir is None:
+            timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+            self.current_dir = os.path.join(get_tempdir(), "ttv", timestamp)
+            os.makedirs(self.current_dir, exist_ok=True)
+            Logger.print_info(f"{LOG_TTV_DIR_CREATED}{self.current_dir}")
+        return self.current_dir
+
+ttv_dir_manager = TTVDirectoryManager()
 
 def get_tempdir():
     """
@@ -37,7 +61,7 @@ def get_tempdir():
     temp_dir = os.getenv('GANGLIA_TEMP_DIR', None)
 
     # otherwise, use the default temp directory and append GANGLIA
-    if temp_dir == None:
+    if temp_dir is None:
         temp_dir = os.path.join(tempfile.gettempdir(), 'GANGLIA')
     os.makedirs(temp_dir, exist_ok=True)
     Logger.print_info(f"{LOG_TTV_DIR_CREATED}{temp_dir}")
@@ -55,23 +79,14 @@ def get_timestamped_ttv_dir() -> str:
     Returns:
         str: Path to the timestamped directory
     """
-    global _CURRENT_TTV_DIR
-    
-    if _CURRENT_TTV_DIR is None:
-        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        _CURRENT_TTV_DIR = os.path.join(get_tempdir(), "ttv", timestamp)
-        os.makedirs(_CURRENT_TTV_DIR, exist_ok=True)
-        Logger.print_info(f"{LOG_TTV_DIR_CREATED}{_CURRENT_TTV_DIR}")
-    
-    return _CURRENT_TTV_DIR
+    return ttv_dir_manager.get_dir()
 
 def get_config_path():
     """Get the path to the config directory relative to the project root."""
     return os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'ganglia_config.json')
 
 def run_ffmpeg_command(ffmpeg_cmd):
-    """
-    Run an FFmpeg command with managed thread allocation.
+    """Run an FFmpeg command with managed thread allocation.
     
     Args:
         ffmpeg_cmd: List of command arguments for FFmpeg
@@ -81,9 +96,9 @@ def run_ffmpeg_command(ffmpeg_cmd):
     """
     try:
         # Use thread manager as context manager to track active operations
-        with ffmpeg_thread_manager as mgr:
+        with ffmpeg_thread_manager:
             # Get optimal thread count for this operation
-            thread_count = mgr.get_threads_for_operation()
+            thread_count = get_ffmpeg_thread_count()
 
             # Insert thread count argument right after ffmpeg command
             # Make a copy of the command to avoid modifying the original
@@ -91,13 +106,17 @@ def run_ffmpeg_command(ffmpeg_cmd):
             cmd.insert(1, "-threads")
             cmd.insert(2, str(thread_count))
 
-            Logger.print_info(f"Running ffmpeg command with {thread_count} threads: {' '.join(cmd)}")
-            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            Logger.print_info(
+                f"Running ffmpeg command with {thread_count} threads: {' '.join(cmd)}"
+            )
+            result = subprocess.run(
+                cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
             Logger.print_info(f"ffmpeg output: {result.stdout.decode('utf-8')}")
             return result
 
-    except subprocess.CalledProcessError as e:
-        Logger.print_error(f"ffmpeg failed with error: {e.stderr.decode('utf-8')}")
+    except subprocess.CalledProcessError as error:
+        Logger.print_error(f"ffmpeg failed with error: {error.stderr.decode('utf-8')}")
         Logger.print_error(f"ffmpeg command was: {' '.join(ffmpeg_cmd)}")
         return None
 
@@ -130,30 +149,31 @@ def get_ffmpeg_thread_count(is_ci: Optional[bool] = None) -> int:
     # Get system info from cached function
     system_info = get_system_info()
     cpu_count = system_info['total_cores']
-    
+    memory_gb = system_info['total_memory'] / (1024**3)
+
     # Check if running in CI environment
     if is_ci is None:
         ci_value = os.environ.get('CI', '')
         is_ci = ci_value.lower() == 'true' if ci_value is not None else False
-    
+
+    # Memory-based thread limiting for all environments
+    # Use fewer threads when memory is constrained
+    if memory_gb < 4:
+        return 2
+    elif memory_gb < 8:
+        return min(4, cpu_count)
+    elif memory_gb < 16:
+        return min(6, cpu_count)
+
+    # After memory checks, apply environment-specific limits
     if is_ci:
         # In CI: Use cpu_count/2 with min 2, max 4 threads
-        # Also consider memory constraints - reduce threads if < 4GB RAM
-        memory_gb = system_info['total_memory'] / (1024**3)
-        if memory_gb < 4:
-            return 2
-        
-        # For 1-2 cores, always use 2 threads
         if cpu_count <= 2:
             return 2
-        
-        # For 4 cores, use 4 threads
         if cpu_count == 4:
             return 4
-        
-        # For >4 cores, use cpu_count/2 but cap at 4
         return min(4, cpu_count // 2)
-    
+
     # In production: Use 1.5x CPU count, capped at 16 threads
     # For single core systems, use just 1 thread
     if cpu_count == 1:
@@ -168,7 +188,10 @@ class FFmpegOperation(threading.Thread):
         self.completed = False
         self.error = None
         self.daemon = True  # Allow the program to exit even if threads are running
-        self._manager = manager
+        self.manager = manager
+        self.lock = threading.Lock()
+        self.active_operations = []
+        self.operation_queue = queue.Queue()
 
     def run(self):
         try:
@@ -177,173 +200,100 @@ class FFmpegOperation(threading.Thread):
             if "-invalid-flag" in self.command:
                 raise ValueError("Invalid FFmpeg flag")
             self.completed = True
-        except Exception as e:
-            self.error = e
+        except Exception as error:
+            self.error = error
             self.completed = True  # Mark as completed even on error
             # Remove self from active operations immediately on error
-            with self._manager._lock:
-                if self in self._manager._active_operations:
-                    self._manager._active_operations.remove(self)
-                    # Also remove from queue if present
+            with self.lock:
+                if self in self.active_operations:
+                    self.active_operations.remove(self)
                     try:
-                        self._manager._operation_queue.get_nowait()
+                        self.operation_queue.get_nowait()
                     except queue.Empty:
                         pass
         finally:
             # Remove self from active operations when done
-            with self._manager._lock:
-                if self in self._manager._active_operations:
-                    self._manager._active_operations.remove(self)
-                    # Also remove from queue if present
+            with self.lock:
+                if self in self.active_operations:
+                    self.active_operations.remove(self)
                     try:
-                        self._manager._operation_queue.get_nowait()
+                        self.operation_queue.get_nowait()
                     except queue.Empty:
                         pass
 
 class FFmpegThreadManager:
-    """
-    Manages FFmpeg thread allocation across multiple concurrent operations.
-    Ensures we don't oversubscribe system resources.
-    """
+    """Manages FFmpeg thread allocation across multiple concurrent operations."""
     def __init__(self):
-        self._active_operations: List[FFmpegOperation] = []
-        self._operation_queue = queue.Queue()
-        self._lock = threading.Lock()
-    
-    @property
-    def max_concurrent(self) -> int:
-        """Maximum number of concurrent operations allowed."""
-        return self._determine_max_concurrent()
-    
-    def get_system_info(self):
-        """Get system information for the thread manager."""
-        return get_system_info()
-    
-    def _determine_max_concurrent(self) -> int:
-        """
-        Determine maximum number of concurrent FFmpeg operations based on system resources.
-        Following Jan Ozer's research and FFmpeg best practices:
-        - For x264/x265: Each encode should use ~1.5x the number of threads as physical cores
-        - Multiple concurrent encodes are more efficient than single heavily threaded encodes
-        - Leave some headroom for system operations
-        """
-        system_info = self.get_system_info()
-        cpu_count = system_info['total_cores']
-        
-        # Calculate available CPU resources
-        # Reserve 2 cores or 10% of cores (whichever is larger) for system operations
-        reserved_cores = max(2, int(cpu_count * 0.1))
-        available_cores = cpu_count - reserved_cores
-        
-        # Get the base thread count that would be used for a single operation
-        base_threads = get_ffmpeg_thread_count()
-        
-        # Calculate how many operations we can run concurrently
-        # based on available cores and thread usage per operation
-        max_concurrent = max(2, int(available_cores / base_threads))
-        
-        # Cap at 6 concurrent operations to prevent I/O bottlenecks
-        # This is based on common SSD IOPS limitations
-        return min(6, max_concurrent)
-    
+        self.lock = threading.Lock()
+        self.active_operations = []
+        self.operation_queue = queue.Queue()
+
     def get_threads_for_operation(self) -> int:
-        """
-        Get the number of threads to allocate for a new FFmpeg operation.
+        """Get the optimal number of threads for a new FFmpeg operation.
+        
         Takes into account current system load and concurrent operations.
         
         Returns:
             int: Number of threads to allocate for this operation
         """
-        with self._lock:
-            if len(self._active_operations) == 0:
+        with self.lock:
+            if not self.active_operations:
                 # First operation gets full thread count
                 return get_ffmpeg_thread_count()
-            
-            # Get base thread count for calculations
+
+            # For subsequent operations, use a reduced thread count
             base_thread_count = get_ffmpeg_thread_count()
-            max_concurrent = self._determine_max_concurrent()
-            
-            if len(self._active_operations) >= max_concurrent:
-                # If we're at max concurrent operations, use minimum viable threads
-                return max(2, int(base_thread_count / (len(self._active_operations) * 2)))
-            
-            # For operations up to max_concurrent, distribute threads geometrically
-            # This ensures each subsequent operation gets significantly fewer threads
-            divisor = 2 ** len(self._active_operations)
-            return max(2, int(base_thread_count / divisor))
-    
-    def add_operation(self, operation: str) -> None:
-        """
-        Add a new FFmpeg operation to be managed.
-        
-        Args:
-            operation: The FFmpeg command to execute
-        """
-        with self._lock:
-            # Wait if we're at max concurrent operations
-            while len(self._active_operations) >= self.max_concurrent:
-                # Check for completed operations
-                for op in list(self._active_operations):
-                    if op.completed:
-                        self._active_operations.remove(op)
-                time.sleep(0.01)  # Short sleep to prevent busy waiting
-            
-            thread = FFmpegOperation(operation, self)
-            self._active_operations.append(thread)
-            self._operation_queue.put(thread)
-            # Print the command that will be executed
-            Logger.print_debug(f"Executing ffmpeg command: {operation}")
-            thread.start()
-            
-            # Wait for thread to start
-            while not thread.is_alive():
-                time.sleep(0.01)
-    
+            return max(2, base_thread_count // (len(self.active_operations) + 1))
+
     def cleanup(self) -> None:
         """Clean up resources and reset state."""
-        with self._lock:
+        with self.lock:
             # Wait for all operations to complete with a timeout
-            for op in list(self._active_operations):  # Create a copy to avoid modification during iteration
+            for operation in list(self.active_operations):
                 try:
-                    op.join(timeout=0.1)
-                except:
-                    pass  # Ignore timeout errors
-            
-            self._active_operations.clear()
-            while not self._operation_queue.empty():
+                    operation.join(timeout=0.1)
+                except threading.ThreadError as error:
+                    Logger.print_error(f"Error during cleanup: {error}")
+
+            self.active_operations.clear()
+            while not self.operation_queue.empty():
                 try:
-                    self._operation_queue.get_nowait()
+                    self.operation_queue.get_nowait()
                 except queue.Empty:
                     break
-    
+
     def __enter__(self):
         """Context manager entry - register new FFmpeg operation"""
-        with self._lock:
+        with self.lock:
             thread = FFmpegOperation("context_manager_operation", self)
-            self._active_operations.append(thread)
+            self.active_operations.append(thread)
             thread.start()
-            
+
             # Wait for thread to start
             while not thread.is_alive():
                 time.sleep(0.01)
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - unregister FFmpeg operation"""
-        with self._lock:
-            if self._active_operations:
-                thread = self._active_operations.pop()
+        with self.lock:
+            if self.active_operations:
+                thread = self.active_operations.pop()
                 try:
                     thread.join(timeout=0.1)
-                except:
-                    pass  # Ignore timeout errors
+                except threading.ThreadError as error:
+                    Logger.print_error(f"Error during thread cleanup: {error}")
 
 # Global thread manager instance
 ffmpeg_thread_manager = FFmpegThreadManager()
 
-def exponential_backoff(func: Callable[..., Any], max_retries: int = 5, initial_delay: float = 1.0, thread_id: Optional[str] = None) -> Any:
-    """
-    Execute a function with exponential backoff retry logic and improved logging.
+def exponential_backoff(
+    func: Callable[..., Any],
+    max_retries: int = 5,
+    initial_delay: float = 1.0,
+    thread_id: Optional[str] = None
+) -> Any:
+    """Execute a function with exponential backoff retry logic and improved logging.
     
     Args:
         func: The function to execute
@@ -364,19 +314,24 @@ def exponential_backoff(func: Callable[..., Any], max_retries: int = 5, initial_
     while attempt <= max_retries:
         try:
             func_name = getattr(func, '__name__', '<unknown function>')
-            Logger.print_debug(f"{thread_prefix}Attempt {attempt}/{max_retries} calling {func_name}...")
+            Logger.print_debug(
+                f"{thread_prefix}Attempt {attempt}/{max_retries} calling {func_name}..."
+            )
             return func()
-        except Exception as e:
-            last_exception = e
+        except Exception as error:
+            last_exception = error
             if attempt == max_retries:
                 raise
-            
+
             delay = initial_delay * (2 ** (attempt - 1))
             # Add some jitter to prevent thundering herd
             delay = delay * (0.5 + random.random())
-            
+
             func_name = getattr(func, '__name__', '<unknown function>')
-            Logger.print_warning(f"{thread_prefix}Attempt {attempt}/{max_retries} calling {func_name} failed: {e}")
+            Logger.print_warning(
+                f"{thread_prefix}Attempt {attempt}/{max_retries} "
+                f"calling {func_name} failed: {error}"
+            )
             Logger.print_info(f"{thread_prefix}Retrying in {delay:.1f} seconds...")
             time.sleep(delay)
             attempt += 1

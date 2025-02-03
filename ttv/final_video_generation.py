@@ -10,15 +10,14 @@ This module handles the final stages of video generation, including:
 
 import os
 import subprocess
-import tempfile
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from logger import Logger
-
+from utils import run_ffmpeg_command
 from .audio_alignment import create_word_level_captions
 from .captions import CaptionEntry, create_dynamic_captions, create_static_captions
-from utils import run_ffmpeg_command
+
 from .log_messages import (
     LOG_CLOSING_CREDITS_DURATION,
     LOG_BACKGROUND_MUSIC_SUCCESS,
@@ -76,19 +75,19 @@ def concatenate_video_segments(
         if not video_segments:
             Logger.print_error("No video segments provided")
             return None
-            
+
         os.makedirs(output_dir, exist_ok=True)
 
         # Create output path
         output_path = os.path.join(output_dir, "main_video.mp4")
-            
+
         # Create temporary file list
         concat_list_path = os.path.join(output_dir, "concat_list.txt")
-        
+
         with open(concat_list_path, "w", encoding="utf-8") as f:
             for segment in video_segments:
                 f.write(f"file '{os.path.abspath(segment)}'\n")
-                
+
         # Run FFmpeg command to concatenate videos
         base_cmd = [
             "ffmpeg", "-y",
@@ -103,14 +102,14 @@ def concatenate_video_segments(
         else:
             # Just copy streams without re-encoding
             cmd = base_cmd + ["-c", "copy", output_path]
-        
+
         result = run_ffmpeg_command(cmd)
         if not result:
             Logger.print_error("Failed to concatenate video segments")
             return None
-            
+
         return output_path
-            
+
     except (OSError, IOError) as e:
         Logger.print_error(f"Error concatenating video segments: {str(e)}")
         return None
@@ -155,7 +154,7 @@ def add_background_music(
             # Mix the streams
             "[v][m]amix=inputs=2:duration=first:dropout_transition=2[aout]"
         )
-        
+
         # Run FFmpeg command
         base_cmd = [
             "ffmpeg", "-y",
@@ -166,9 +165,9 @@ def add_background_music(
             "-map", "[aout]",
             "-c:v", "copy"
         ]
-        
+
         cmd = base_cmd + AUDIO_ENCODING_ARGS + [output_path]
-        
+
         try:
             run_ffmpeg_command(cmd)
             Logger.print_info(LOG_BACKGROUND_MUSIC_SUCCESS)
@@ -176,7 +175,7 @@ def add_background_music(
         except (subprocess.CalledProcessError, OSError):
             Logger.print_error(LOG_BACKGROUND_MUSIC_FAILURE)
             return None
-            
+
     except Exception as e:
         Logger.print_error(f"Error adding background music: {str(e)}")
         return None
@@ -267,7 +266,7 @@ def assemble_final_video(
             final_output_path = main_video_with_background_music_path
 
         # Before leaving method, standardize the name of the final video to final_video.mp4 by renaming whatever final_output_path is to final_video.mp4
-        
+
         exit_output_path = os.path.join(output_dir, "final_video.mp4")
         if os.path.exists(final_output_path):
             os.rename(final_output_path, exit_output_path)
@@ -341,7 +340,7 @@ def generate_closing_credits(
             "-i", movie_poster_path,
             "-i", song_with_lyrics_path
         ]
-        
+
         # Add encoding arguments from constants
         cmd = base_cmd + SLIDESHOW_VIDEO_ARGS + AUDIO_ENCODING_ARGS + ["-shortest", initial_credits_video_path]
 
@@ -373,7 +372,7 @@ def generate_closing_credits(
             # Combine all captions into one for static display
             combined_text = " ".join(c.text for c in captions)
             static_captions = [CaptionEntry(combined_text, 0.0, duration)]
-            
+
             # Add static captions to the video
             captioned_path = create_static_captions(
                 input_video=initial_credits_video_path,
@@ -418,17 +417,17 @@ def get_video_duration(video_path: str) -> Optional[float]:
             "-of", "default=noprint_wrappers=1:nokey=1",
             video_path
         ]
-        
+
         result = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True
         )
-        
+
         duration = float(result.stdout.decode().strip())
         return duration
-            
+
     except (subprocess.CalledProcessError, ValueError, OSError) as e:
         Logger.print_error(f"Error getting video duration: {str(e)}")
         return None
@@ -439,17 +438,17 @@ def create_video_with_captions(
     thread_id: Optional[str] = None
 ) -> Optional[str]:
     """Create a video with captions from segments.
-    
+
     Args:
         segments: List of segment dictionaries with paths
         output_path: Path to save final video
         thread_id: Optional thread ID for logging
-        
+
     Returns:
         Optional[str]: Path to final video if successful
     """
     thread_prefix = f"{thread_id} " if thread_id else ""
-    
+
     try:
         # Create video segments
         video_segments = []
@@ -465,7 +464,7 @@ def create_video_with_captions(
                     raise ValueError(
                         f"Failed to generate captions for segment {i + 1}"
                     )
-                    
+
                 # Create video segment
                 video_path = create_video_segment(
                     image_path=segment["image"],
@@ -476,20 +475,20 @@ def create_video_with_captions(
                     raise ValueError(
                         f"Failed to create video for segment {i + 1}"
                     )
-                    
+
                 video_segments.append(video_path)
             except Exception as e:
                 Logger.print_error(f"{thread_prefix}Error creating video segment {i + 1}: {str(e)}")
                 return None
-                
+
         # Concatenate video segments
         result = concatenate_video_segments(video_segments, output_path)
         if not result:
             Logger.print_error(f"{thread_prefix}Failed to concatenate video segments")
             return None
-            
+
         return output_path
-            
+
     except Exception as e:
         Logger.print_error(f"{thread_prefix}Error creating video with captions: {str(e)}")
         return None

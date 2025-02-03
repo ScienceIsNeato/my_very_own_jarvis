@@ -14,4 +14,4 @@ LOG_BACKGROUND_MUSIC_SUCCESS = "Successfully added background music"
 LOG_BACKGROUND_MUSIC_FAILURE = "Failed to add background music"
 
 # Final video output
-LOG_FINAL_VIDEO_PATH = "Final video created at: output_path={}" 
+LOG_FINAL_VIDEO_PATH = "Final video created at: output_path={}"

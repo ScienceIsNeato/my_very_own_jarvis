@@ -9,14 +9,14 @@ and output validation.
 import logging
 import subprocess
 import sys
-import os
-import pathlib
 
 # Third-party imports
 import pytest
 
-# Local imports
+# Local application imports
+from utils import get_tempdir
 from ttv.ttv import text_to_video
+from ttv.log_messages import LOG_TTV_DIR_CREATED
 from tests.integration.test_helpers import (
     validate_segment_count,
     validate_audio_video_durations,
@@ -25,8 +25,6 @@ from tests.integration.test_helpers import (
     validate_closing_credits_duration,
     validate_background_music,
 )
-from utils import get_tempdir, get_timestamped_ttv_dir
-from ttv.log_messages import LOG_TTV_DIR_CREATED
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +36,11 @@ def test_generated_ttv_pipeline_with_config(tmp_path):
     # Create test audio files
     test_audio_dir = tmp_path / "test_audio"
     test_audio_dir.mkdir(parents=True)
-    
+
     # Create a simple audio file for testing
     background_music_path = test_audio_dir / "background_music.mp3"
     closing_credits_path = test_audio_dir / "closing_credits.mp3"
-    
+
     # Create dummy audio files using ffmpeg
     for audio_path in [background_music_path, closing_credits_path]:
         subprocess.run([
@@ -52,7 +50,7 @@ def test_generated_ttv_pipeline_with_config(tmp_path):
 
     # Create a test config file
     config_path = tmp_path / "test_config.json"
-    with open(config_path, "w") as f:
+    with open(config_path, "w", encoding="utf-8") as f:
         f.write(f"""
         {{
             "style": "test style",
@@ -104,7 +102,7 @@ def test_generated_pipeline_execution():
 
 
     # Save output to a file for debugging
-    with open(get_tempdir() + "/test_output.log", "w") as f:
+    with open(get_tempdir() + "/test_output.log", "w", encoding="utf-8") as f:
         f.write(output)
 
     # Get the output directory from the output by getting everything after the : following `Created TTV directory` from the output
